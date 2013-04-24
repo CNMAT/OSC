@@ -1,0 +1,25 @@
+#N canvas 297 117 450 300 10;
+#X declare -lib mrpeach;
+#X obj 99 120 comport;
+#X obj 251 231 import mrpeach;
+#X obj 95 179 mrpeach/slipdec 65536;
+#X obj 95 47 mrpeach/slipenc 65536;
+#X obj 303 65 loadbang;
+#X obj 299 22 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
+-1;
+#X obj 76 16 inlet;
+#X obj 74 240 outlet;
+#X msg 296 142 baud 115200;
+#X msg 132 95 devicename /dev/tty.usbmodem12341 \, pollintervall 1
+;
+#X obj 261 46 inlet;
+#X connect 0 0 2 0;
+#X connect 2 0 7 0;
+#X connect 3 0 0 0;
+#X connect 4 0 9 0;
+#X connect 4 0 8 0;
+#X connect 5 0 4 0;
+#X connect 6 0 3 0;
+#X connect 8 0 0 0;
+#X connect 9 0 0 0;
+#X connect 10 0 0 0;

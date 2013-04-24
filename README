@@ -1,0 +1,36 @@
+OSCuino is an Arduino and Teensy library implementation of the OSC encoding (http://opensoundcontrol.org)
+It was developed primarily by Yotam Mann at CNMAT where OSC was invented.
+It benefits from contributions from Adrian Freed, John MacCallum, Matt Wright and Andy Schmeder
+
+This first release:
+
+- Supports the four basic OSC data types (32-bit integers, 32-bit floats, strings, and blobs - arbitrary length byte sequences)
+- Sends and receives OSC packets over any transport layer that implements the Arduino  Stream - Class such as Serial, EthernetUdp, MIDI, and more.
+- Tested on Arduino Ethernet, Arduino Leonardo, Teensy
+- Address pattern matching
+- Dynamic memory allocation
+
+Features missing:
+- nested bundles
+- TCP/IP Examples
+- deadline scheduling of OSC 64-bit timetags
+
+
+////////////////////////////////////////////////////////////////////////
+SLIPSerial
+
+The library  includes extensions of the USB serial and Hardware serial functions of the Arduino which sends and receives data using the SLIP encoding This makes Max/MSP and PDintegration very simple using CNMAT's slipOSC object connected to the Serial object. The SLIPSerial library implements the same methods as the Serial object except for an additional "endPacket" method which transmits for marking the end of teach packet in a serial stream. 
+
+////////////////////////////////////////////////////////////////////////
+Installation
+
+Make sure you're using Arduino 1.0.4 or greater. Install oscuino in your "libraries" folder in your Arduino Sketch search path. After restarting the Arduino IDE, those libraries should be visible under the menu Sketch->Import Library. 
+
+The Applications folder contains examples for Max/MSP and PD that work with the example sketches. This will be expanded to include other applications like TouchOSC and Processing
+For the Max/MSP examples you will need to download the CNMAT max externals package that includes the odot objects available at http://cnmat.berkeley.edu/downloads
+////////////////////////////////////////////////////////////////////////
+Guide
+
+As well as many small examples illustrating the API, there is a larger application called "oscuino"
+which illustrates how to use OSC to simplify situations  Firmata and Maxuino  are typically used in.
+
