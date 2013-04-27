@@ -16,6 +16,8 @@ Features missing:
 - deadline scheduling of OSC 64-bit timetags
 
 
+API Documentation and examples are available at http://cnmat.berkeley.edu/oscuino
+
 ////////////////////////////////////////////////////////////////////////
 SLIPSerial
 
