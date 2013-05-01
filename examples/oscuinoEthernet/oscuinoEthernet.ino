@@ -372,6 +372,8 @@ void loop(){
  
    if( (size = Udp.parsePacket())>0)
    {
+       unsigned int outPort = Udp.remotePort();
+
      while(size--)
        bundleIN.fill(Udp.read());
 

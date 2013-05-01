@@ -20,7 +20,6 @@ IPAddress ip(128, 32, 122, 252);
 
 //port numbers
 const unsigned int inPort = 8888;
-const unsigned int outPort = 9999;
 
 //everything on the network needs a unique MAC 
 #if defined(__MK20DX128__)
@@ -132,6 +131,8 @@ void loop(){
  
    if( (size = Udp.parsePacket())>0)
    {
+     unsigned int outPort = Udp.remotePort();
+
      while(size--)
        bundleIN.fill(Udp.read());
 
@@ -140,7 +141,7 @@ void loop(){
           bundleIN.route("/analog", routeAnalog);
       }
     // send the response bundle back to where the request came from
-    Udp.beginPacket(Udp.remoteIP(), outPort); // would like to say Udp.remotePort() here
+    Udp.beginPacket(Udp.remoteIP(), outPort); 
     bundleOUT.send(Udp);
     Udp.endPacket();
     bundleOUT.empty(); // empty the bundle ready to use for new messages
