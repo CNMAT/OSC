@@ -18,6 +18,8 @@ IPAddress ip(128, 32, 122, 252);
 
 //port numbers
 const unsigned int inPort = 8888;
+const unsigned int outPort = 9999;
+
  byte mac[] = {  
   0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }; // you can find this written on the board of some Arduino Ethernets or shields
 void setup() {
@@ -31,7 +33,7 @@ void loop(){
    int size;
    if( (size = Udp.parsePacket())>0)
    {
-//     while(size--)
+     while(size--)
        bndl.fill(Udp.read());
 
     if(!bndl.hasError())
@@ -42,7 +44,7 @@ void loop(){
         // we can sneak an addition onto the end of the bundle
        bndl.add("/micros").add((int32_t)micros()); // (int32_t) is the type of OSC Integers
        
-        Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+        Udp.beginPacket(Udp.remoteIP(), outPort); // wanted to use  Udp.remotePort() here
         bndl.send(Udp);
         Udp.endPacket();     
      }

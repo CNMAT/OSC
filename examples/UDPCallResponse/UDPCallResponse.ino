@@ -16,11 +16,12 @@ Send responses to calls for information from a remote host
 EthernetUDP Udp;
 
 //the Arduino's IP
-// pull thise from board? xxx
 IPAddress ip(128, 32, 122, 252);
 
 //port numbers
 const unsigned int inPort = 8888;
+const unsigned int outPort = 9999;
+
 //everything on the network needs a unique MAC 
 #if defined(__MK20DX128__)
 // Teensy 3 has MAC burned in
@@ -139,7 +140,7 @@ void loop(){
           bundleIN.route("/analog", routeAnalog);
       }
     // send the response bundle back to where the request came from
-    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+    Udp.beginPacket(Udp.remoteIP(), outPort); // would like to say Udp.remotePort() here
     bundleOUT.send(Udp);
     Udp.endPacket();
     bundleOUT.empty(); // empty the bundle ready to use for new messages
