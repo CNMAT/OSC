@@ -52,12 +52,9 @@ void LEDcontrol(OSCMessage &msg)
 
 
 void setup() {
-  SLIPSerial.begin(115200);
-
-//    SoftPWMBegin();
-
-  while(!Serial)
-    ;   // Leonardo bug
+    SLIPSerial.begin(9600);   // set this as high as you can reliably run on your platform
+    while(!Serial)
+      ;   // Leonardo bug
 
 }
 //reads and dispatches the incoming message

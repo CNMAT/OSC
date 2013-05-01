@@ -76,16 +76,9 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
  * setup and loop, bundle receiving/sending, initial routing
  */
 void setup() {
-#ifdef USEETHERNET
-    //setup ethernet part
-    read_mac();
-  Ethernet.begin(mac,ip);
-  Udp.begin(inPort);
-#else
-  SLIPSerial.begin(115200);
+    SLIPSerial.begin(9600);   // set this as high as you can reliably run on your platform
     while(!Serial)
-    ;   // Leonardo bug
-#endif
+      ;   // Leonardo bug
 
 }
 

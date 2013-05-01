@@ -17,7 +17,7 @@ SLIPEncodedSerial SLIPSerial(Serial);
 
 void setup() {
   //begin SLIPSerial just like Serial
-  Serial.begin(38400);
+  Serial.begin(9600);   // set this as high as you can reliably run on your platform
   while(!Serial)
     ; //Leonardo "feature"
 }

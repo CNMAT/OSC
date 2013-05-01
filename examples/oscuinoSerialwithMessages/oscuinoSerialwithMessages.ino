@@ -326,9 +326,10 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
  * setup and loop, bundle receiving/sending, initial routing
  */
 void setup() {
-  SLIPSerial.begin(115200);
+    SLIPSerial.begin(9600);   // set this as high as you can reliably run on your platform
+
     while(!Serial)
-    ;   // Leonardo bug
+      ;   // Leonardo bug
 
 }
 
