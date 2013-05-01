@@ -2,7 +2,7 @@ OSCuino is an Arduino and Teensy library implementation of the OSC encoding (htt
 It was developed primarily by Yotam Mann at CNMAT where OSC was invented.
 It benefits from contributions from Adrian Freed, John MacCallum, Matt Wright and Andy Schmeder
 
-This first release:
+This release:
 
 - Supports the four basic OSC data types (32-bit integers, 32-bit floats, strings, and blobs - arbitrary length byte sequences)
 - Sends and receives OSC packets over any transport layer that implements the Arduino  Stream - Class such as Serial, EthernetUdp, MIDI, and more.
@@ -10,10 +10,12 @@ This first release:
 - Address pattern matching
 - Dynamic memory allocation
 
-Features missing:
+Features for next time:
 - nested bundles
 - TCP/IP Examples
 - deadline scheduling of OSC 64-bit timetags
+- Due support
+- ADK support
 
 
 API Documentation and examples are available at http://cnmat.berkeley.edu/oscuino
@@ -35,4 +37,17 @@ Guide
 
 As well as many small examples illustrating the API, there is a larger application called "oscuino"
 which illustrates how to use OSC to simplify situations  Firmata and Maxuino  are typically used in.
+////////////////////////////////////////////////////////////////////////
+Performance
 
+Currently best performance is achieved with Arduinos with built-in USB Serial, i.e. Teensy 3.0, Teensy 2.0 and 2.0++ and Leanardo variants (12Mbps max)
+
+This is because the Wiznet 5100 used in the Ethernet Arduino and shields uses really slow SPI (0.3Mbps)
+This will change as people retool to use the much faster Wiznet 5200 which has been measured with the Due at 6Mbps
+http://forum.pjrc.com/threads/17951-WIZ820io-Ethernet-and-2nd-power-supply-with-teensy-3-0
+http://arduino.cc/forum/index.php?topic=139147.0
+
+The oscuino serial examples use 9600 baud serial which is reliable on most of the FTDI based Arduinos.
+The slow rate is required for Arduino's without clock chips such as the TinyLili.
+Once you have established that things work at 9600 baud try increasing the rate.
+e.g. Serial.begin(345600);   // !! 115200, 230400, 345600,   460800 X
