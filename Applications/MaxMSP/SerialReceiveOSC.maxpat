@@ -30,14 +30,30 @@
 				"box" : 				{
 					"fontname" : "Andale Mono",
 					"fontsize" : 14.0,
+					"id" : "obj-1",
+					"linecount" : 6,
+					"maxclass" : "o.message",
+					"numinlets" : 2,
+					"numoutlets" : 1,
+					"outlettype" : [ "" ],
+					"patching_rect" : [ 91.0, 308.0, 298.0, 102.0 ],
+					"presentation_rect" : [ 21.0, 286.0, 0.0, 0.0 ],
+					"text" : "/ports \n/rate/output 0 \n/rate/input 0 \n/mediansize/received \n/port \"a\" \n/baudrate 9600 ",
+					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"fontname" : "Andale Mono",
+					"fontsize" : 14.0,
 					"id" : "obj-20",
 					"maxclass" : "o.message",
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 650.0, 194.0, 150.0, 24.0 ],
-					"presentation_rect" : [ 650.0, 194.0, 0.0, 0.0 ],
-					"text" : "/led 0.297101 \n",
+					"patching_rect" : [ 334.0, 183.0, 150.0, 22.0 ],
+					"text" : "/led 0.297101 ",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -52,7 +68,7 @@
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 809.0, 84.0, 156.0, 33.0 ],
+					"patching_rect" : [ 493.0, 73.0, 156.0, 33.0 ],
 					"text" : "PWM control of brightness of LED"
 				}
 
@@ -66,7 +82,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 519.0, 46.0, 32.5, 18.0 ],
+					"patching_rect" : [ 203.0, 35.0, 32.5, 18.0 ],
 					"text" : "on"
 				}
 
@@ -80,7 +96,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 409.0, 51.0, 32.5, 18.0 ],
+					"patching_rect" : [ 93.0, 40.0, 32.5, 18.0 ],
 					"text" : "off"
 				}
 
@@ -94,7 +110,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 774.0, 3.0, 20.0, 140.0 ],
+					"patching_rect" : [ 458.0, -8.0, 20.0, 140.0 ],
 					"setminmax" : [ 0.0, 1.0 ]
 				}
 
@@ -107,7 +123,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "int" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 634.0, 62.0, 20.0, 20.0 ]
+					"patching_rect" : [ 318.0, 51.0, 20.0, 20.0 ]
 				}
 
 			}
@@ -120,8 +136,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 600.0, 151.0, 150.0, 22.0 ],
-					"presentation_rect" : [ 593.0, 93.0, 0.0, 0.0 ],
+					"patching_rect" : [ 284.0, 140.0, 150.0, 22.0 ],
 					"text" : "/led \"$1\" ",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
@@ -136,7 +151,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 485.0, 169.0, 37.0, 18.0 ],
+					"patching_rect" : [ 169.0, 158.0, 37.0, 18.0 ],
 					"text" : "reset"
 				}
 
@@ -151,7 +166,7 @@
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 324.0, 233.0, 150.0, 54.0 ],
+					"patching_rect" : [ 520.0, 233.0, 150.0, 54.0 ],
 					"text" : "stats on serial OSC communications"
 				}
 
@@ -161,13 +176,13 @@
 					"fontname" : "Andale Mono",
 					"fontsize" : 14.0,
 					"id" : "obj-3",
-					"linecount" : 9,
+					"linecount" : 6,
 					"maxclass" : "o.message",
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 363.0, 321.0, 298.0, 149.0 ],
-					"text" : "/ports \"usbmodem1a21\" \"Bluetooth-PDA-Sync\" \"Bluetooth-Modem\" \"MotorolaPhone-DialupNet-1\" \n/rate/output 0 \n/rate/input 92 \n/mediansize/received \n/port \"a\" \n/baudrate 115200 \n",
+					"patching_rect" : [ 424.0, 312.0, 298.0, 103.0 ],
+					"text" : "/ports \n/rate/output 0 \n/rate/input 0 \n/mediansize/received \n/port \"a\" \n/baudrate 9600 \n",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -181,8 +196,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 2,
 					"outlettype" : [ "", "FullPacket" ],
-					"patching_rect" : [ 598.5, 250.0, 212.0, 22.0 ],
-					"text" : "o.io.slipserial a 115200"
+					"patching_rect" : [ 282.5, 239.0, 195.0, 22.0 ],
+					"text" : "o.io.slipserial a 9600"
 				}
 
 			}
@@ -202,6 +217,15 @@
 					"disabled" : 0,
 					"hidden" : 0,
 					"source" : [ "obj-15", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-1", 1 ],
+					"disabled" : 0,
+					"hidden" : 0,
+					"source" : [ "obj-26", 0 ]
 				}
 
 			}
@@ -262,8 +286,8 @@
  ],
 		"dependency_cache" : [ 			{
 				"name" : "o.io.slipserial.maxpat",
-				"bootpath" : "/Users/adrian/odot-MacOSX-1.2.7",
-				"patcherrelativepath" : "../../../../../odot-MacOSX-1.2.7",
+				"bootpath" : "/Users/adrian/Active/CNMAT2013/OSCuino/Applications/MaxMSP",
+				"patcherrelativepath" : "",
 				"type" : "JSON",
 				"implicit" : 1
 			}

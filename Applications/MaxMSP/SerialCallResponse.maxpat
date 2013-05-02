@@ -135,11 +135,11 @@
 					"patching_rect" : [ 180.0, 363.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
-							"parameter_unitstyle" : 0,
-							"parameter_mmax" : 1023.0,
 							"parameter_type" : 0,
 							"parameter_shortname" : "a",
-							"parameter_longname" : "a[37]"
+							"parameter_longname" : "a[37]",
+							"parameter_unitstyle" : 0,
+							"parameter_mmax" : 1023.0
 						}
 
 					}
@@ -218,11 +218,11 @@
 					"patching_rect" : [ 143.0, 363.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
-							"parameter_unitstyle" : 0,
-							"parameter_mmax" : 1023.0,
 							"parameter_type" : 0,
 							"parameter_shortname" : "a",
-							"parameter_longname" : "a[19]"
+							"parameter_longname" : "a[19]",
+							"parameter_unitstyle" : 0,
+							"parameter_mmax" : 1023.0
 						}
 
 					}
@@ -243,11 +243,11 @@
 					"patching_rect" : [ 110.0, 363.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
-							"parameter_unitstyle" : 0,
-							"parameter_mmax" : 1023.0,
 							"parameter_type" : 0,
 							"parameter_shortname" : "a",
-							"parameter_longname" : "a[20]"
+							"parameter_longname" : "a[20]",
+							"parameter_unitstyle" : 0,
+							"parameter_mmax" : 1023.0
 						}
 
 					}
@@ -268,11 +268,11 @@
 					"patching_rect" : [ 77.0, 363.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
-							"parameter_unitstyle" : 0,
-							"parameter_mmax" : 1023.0,
 							"parameter_type" : 0,
 							"parameter_shortname" : "a",
-							"parameter_longname" : "a[21]"
+							"parameter_longname" : "a[21]",
+							"parameter_unitstyle" : 0,
+							"parameter_mmax" : 1023.0
 						}
 
 					}
@@ -293,11 +293,11 @@
 					"patching_rect" : [ 44.0, 363.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
-							"parameter_unitstyle" : 0,
-							"parameter_mmax" : 1023.0,
 							"parameter_type" : 0,
 							"parameter_shortname" : "a",
-							"parameter_longname" : "a[22]"
+							"parameter_longname" : "a[22]",
+							"parameter_unitstyle" : 0,
+							"parameter_mmax" : 1023.0
 						}
 
 					}
@@ -318,11 +318,11 @@
 					"patching_rect" : [ 11.0, 363.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
-							"parameter_unitstyle" : 0,
-							"parameter_mmax" : 1023.0,
 							"parameter_type" : 0,
 							"parameter_shortname" : "a",
-							"parameter_longname" : "a[23]"
+							"parameter_longname" : "a[23]",
+							"parameter_unitstyle" : 0,
+							"parameter_mmax" : 1023.0
 						}
 
 					}
@@ -461,8 +461,8 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 228.0, 249.0, 150.0, 40.0 ],
-					"text" : "/analog/2 1021 \n/analog/3 1021 \n",
+					"patching_rect" : [ 228.0, 249.0, 150.0, 39.0 ],
+					"text" : "/analog/2 1021 \n/analog/3 1021 ",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -493,7 +493,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 403.0, 269.0, 298.0, 103.0 ],
-					"text" : "/ports \n/rate/output 27 \n/rate/input 26 \n/mediansize/received 29.5 \n/port \"a\" \n/baudrate 115200 \n",
+					"text" : "/ports \n/rate/output 0 \n/rate/input 0 \n/mediansize/received \n/port \"a\" \n/baudrate 115200 \n",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -536,8 +536,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 2,
 					"outlettype" : [ "", "FullPacket" ],
-					"patching_rect" : [ 228.5, 214.0, 212.0, 22.0 ],
-					"text" : "o.io.slipserial a 115200"
+					"patching_rect" : [ 228.5, 214.0, 195.0, 22.0 ],
+					"text" : "o.io.slipserial a 9600"
 				}
 
 			}
@@ -850,17 +850,17 @@
 			}
  ],
 		"parameters" : 		{
+			"obj-104" : [ "a[20]", "a", 0 ],
 			"obj-103" : [ "a[21]", "a", 0 ],
+			"obj-105" : [ "a[19]", "a", 0 ],
 			"obj-102" : [ "a[22]", "a", 0 ],
 			"obj-101" : [ "a[23]", "a", 0 ],
-			"obj-104" : [ "a[20]", "a", 0 ],
-			"obj-105" : [ "a[19]", "a", 0 ],
 			"obj-64" : [ "a[37]", "a", 0 ]
 		}
 ,
 		"dependency_cache" : [ 			{
 				"name" : "o.io.slipserial.maxpat",
-				"bootpath" : "/Users/adrian/Desktop/nearfinal/examples/Applications/MaxMSP",
+				"bootpath" : "/Users/adrian/Active/CNMAT2013/OSCuino/Applications/MaxMSP",
 				"patcherrelativepath" : "",
 				"type" : "JSON",
 				"implicit" : 1
