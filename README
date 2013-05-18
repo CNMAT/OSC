@@ -28,7 +28,12 @@ The library  includes extensions of the USB serial and Hardware serial functions
 ////////////////////////////////////////////////////////////////////////
 Installation
 
-Make sure you're using Arduino 1.0.4 or greater. Install oscuino in your "libraries" folder in your Arduino Sketch search path. After restarting the Arduino IDE, those libraries should be visible under the menu Sketch->Import Library. 
+Make sure you're using Arduino 1.0.4 or greater.
+Download the zip from github. Unzip it and remove text after the "-" in the name (i.e. -master) because
+Arduino doesn't allow some characters in library names.
+ Move the OSCuino folder into your "libraries" folder in your Arduino Sketch search path. 
+Now you will see OSCuino examples under the Examples menu of Arduino.
+
 
 The Applications folder contains examples for Max/MSP and PD that work with the example sketches. This will be expanded to include other applications like TouchOSC and Processing
 For the Max/MSP examples you will need to download the CNMAT max externals package that includes the odot objects available at http://cnmat.berkeley.edu/downloads
