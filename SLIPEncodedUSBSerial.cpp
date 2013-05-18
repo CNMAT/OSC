@@ -6,12 +6,12 @@
 //instantiate with the tranmission layer
 
 //different constructor for teensies
-#if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__)
+#if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__) || defined(__SAM3X8E__)
 
 
 //USB Serials
 SLIPEncodedUSBSerial::SLIPEncodedUSBSerial(
-#if !defined(CORE_TEENSY)
+#if !defined(CORE_TEENSY)|| defined(__SAM3X8E__)
 Serial_
 #else
 usb_serial_class
@@ -28,6 +28,8 @@ static const uint8_t slipescesc = 0335;
 /*
  SERIAL METHODS
  */
+//SLIP specific method which begins a transmitted packet
+void SLIPEncodedUSBSerial::beginPacket() {}
 bool SLIPEncodedUSBSerial::endofPacket()
 {
 	if(rstate == SECONDEOT)

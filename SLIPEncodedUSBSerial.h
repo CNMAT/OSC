@@ -7,12 +7,14 @@ Extends the Serial class to encode SLIP over serial
 #include <Arduino.h>
 #include <Stream.h>
 
-#if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__)
+#if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__) || defined(__SAM3X8E__)
 	//import the serial object
 #if defined (__MK20DX128__)
 #include <usb_serial.h>
 #elif defined(CORE_TEENSY)
 #include <usb_api.h>
+#elif defined(__SAM3X8E__)
+#include <USB/USBAPI.h>
 #else
 #include "Platform.h"
 #include "USBAPI.h"
@@ -28,7 +30,7 @@ class SLIPEncodedUSBSerial: public Stream{
 private:
 	enum erstate {CHAR, FIRSTEOT, SECONDEOT, SLIPESC } rstate;
 
-#if !defined(CORE_TEENSY)
+#if !defined(CORE_TEENSY) || defined(__SAM3X8E__)
 Serial_
 #else	
 	usb_serial_class
@@ -53,7 +55,8 @@ Serial_
 	
 	//same as Serial.begin
 	void begin(unsigned long);
-	
+    //SLIP specific method which begins a transmitted packet
+	void beginPacket();
 	//SLIP specific method which ends a transmittedpacket
 	void endPacket();
 	// SLIP specific method which indicates that an EOT was received 
