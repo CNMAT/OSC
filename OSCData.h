@@ -25,7 +25,13 @@
 
 #ifndef OSCDATA_h
 #define OSCDATA_h
-#include <Arduino.h>
+
+#if ARDUINO >= 100
+#include "Arduino.h"
+#else
+#include "WProgram.h"
+#endif
+
 #include <stdlib.h> 
 #include <stdint.h>
 #include <inttypes.h>

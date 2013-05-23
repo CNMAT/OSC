@@ -4,7 +4,11 @@ Extends the Serial class to encode SLIP over serial
 
 #ifndef SLIPEncodedSerial_h
 #define SLIPEncodedSerial_h
-#include <Arduino.h>
+#if ARDUINO >= 100
+#include "Arduino.h"
+#else
+#include "WProgram.h"
+#endif
 #include <Stream.h>
 #include <HardwareSerial.h>
 
@@ -31,6 +35,9 @@ public:
 	
 	//same as Serial.begin
 	void begin(unsigned long);
+    
+    //SLIP specific method which begins a transmitted packet
+	void beginPacket();
 	
 	//SLIP specific method which ends a transmittedpacket
 	void endPacket();

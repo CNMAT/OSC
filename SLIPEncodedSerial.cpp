@@ -161,11 +161,13 @@ size_t SLIPEncodedSerial::write(uint8_t b){
 void SLIPEncodedSerial::begin(unsigned long baudrate){
 	serial->begin(baudrate);
 }
+//SLIP specific method which begins a transmitted packet
+void SLIPEncodedSerial::beginPacket() { 	serial->write(eot); }
 
-//signify the end of the packet with two EOT's
+//signify the end of the packet with an EOT
 void SLIPEncodedSerial::endPacket(){
 	serial->write(eot);
-	serial->write(eot);
+
 }
 
 void SLIPEncodedSerial::flush(){

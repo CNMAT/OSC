@@ -4,7 +4,11 @@ Extends the Serial class to encode SLIP over serial
 
 #ifndef SLIPEncodedUSBSerial_h
 #define SLIPEncodedUSBSerial_h
-#include <Arduino.h>
+#if ARDUINO >= 100
+#include "Arduino.h"
+#else
+#include "WProgram.h"
+#endif
 #include <Stream.h>
 
 #if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__) || defined(__SAM3X8E__)

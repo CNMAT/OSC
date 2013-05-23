@@ -28,8 +28,7 @@ static const uint8_t slipescesc = 0335;
 /*
  SERIAL METHODS
  */
-//SLIP specific method which begins a transmitted packet
-void SLIPEncodedUSBSerial::beginPacket() {}
+
 bool SLIPEncodedUSBSerial::endofPacket()
 {
 	if(rstate == SECONDEOT)
@@ -175,10 +174,11 @@ size_t SLIPEncodedUSBSerial::write(uint8_t b){
 void SLIPEncodedUSBSerial::begin(unsigned long baudrate){
 	serial->begin(baudrate);
 }
+//SLIP specific method which begins a transmitted packet
+void SLIPEncodedUSBSerial::beginPacket() { 	serial->write(eot); }
 
-//signify the end of the packet with two EOT's
+//signify the end of the packet with an EOT
 void SLIPEncodedUSBSerial::endPacket(){
-	serial->write(eot);
 	serial->write(eot);
 #if defined(CORE_TEENSY)
     serial->send_now();
