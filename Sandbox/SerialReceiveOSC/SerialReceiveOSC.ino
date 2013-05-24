@@ -3,9 +3,9 @@
 * 
 */
 #include <OSCBundle.h>
+#if ! defined (__MK20DX128__)
 #include <SoftPWM.h>
-
-#include <stdlib.h>
+#endif
 
 
 #if !defined(CORE_TEENSY) && !defined(__AVR_ATmega32U4__)
@@ -19,7 +19,6 @@ SLIPEncodedUSBSerial SLIPSerial(Serial);
 
 void LEDcontrol(OSCMessage &msg)
 {
- // I had to add this to make it work on Leonardo: static const int LEDBUILTIN=13;
       if (msg.isInt(0))
       {
              pinMode(LED_BUILTIN, OUTPUT);
@@ -47,13 +46,15 @@ void LEDcontrol(OSCMessage &msg)
       else  if (msg.isFloat(0))
       {
         //test if that pin is a PWM
-        if (digitalPinHasPWM(LED_BUILTIN)) // missingn on leonardo
+        if (digitalPinHasPWM(LED_BUILTIN)) 
         {
           pinMode(LED_BUILTIN, OUTPUT);
           analogWrite(LED_BUILTIN, (int)(msg.getFloat(0)*127));
         }
+#if ! defined (__MK20DX128__)
         else
          SoftPWMSet(LED_BUILTIN, (int)(msg.getFloat(0)*127));
+#endif
       } 
    
 }
@@ -63,7 +64,7 @@ void LEDcontrol(OSCMessage &msg)
 
 
 void setup() {
-  SLIPSerial.begin(115200);
+  SLIPSerial.begin(9600);
 
     SoftPWMBegin();
 
