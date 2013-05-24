@@ -1,6 +1,6 @@
-OSCuino is an Arduino and Teensy library implementation of the OSC encoding (http://opensoundcontrol.org)
-It was developed primarily by Yotam Mann at CNMAT where OSC was invented.
-It benefits from contributions from Adrian Freed, John MacCallum, Matt Wright and Andy Schmeder
+This is an Arduino and Teensy library implementation of the OSC encoding (http://opensoundcontrol.org)
+It was developed primarily by Yotam Mann and Adrian Freed at CNMAT where OSC was invented.
+It benefits from contributions from  John MacCallum, Matt Wright and Andy Schmeder
 
 This release:
 
@@ -19,29 +19,33 @@ Features for next time:
 
 
 API Documentation and examples are available at http://cnmat.berkeley.edu/oscuino
+This location also points to the GIT repository where updates to the library are posted.
 
 ////////////////////////////////////////////////////////////////////////
 SLIPSerial
 
-The library  includes extensions of the USB serial and Hardware serial functions of the Arduino which sends and receives data using the SLIP encoding This makes Max/MSP and PDintegration very simple using CNMAT's slipOSC object connected to the Serial object. The SLIPSerial library implements the same methods as the Serial object except for an additional "endPacket" method which transmits for marking the end of teach packet in a serial stream. 
+The library  includes extensions of the USB serial and Hardware serial functions of the Arduino which sends and receives data using the SLIP encoding.
+This makes Max/MSP and PD integration very simple using CNMAT's o.io.slipserial.
+The SLIPSerial library implements the same methods as the Serial object except for an additional "beginPacket" and "endPacket" methods which 
+mark the boundaries of each packet in a serial stream. 
 
 ////////////////////////////////////////////////////////////////////////
 Installation
 
-Make sure you're using Arduino 1.0.4 or greater.
+You need Arduino 1.0.4 or greater.
 Download the zip from github. Unzip it and remove text after the "-" in the name (i.e. -master) because
 Arduino doesn't allow some characters in library names.
- Move the OSCuino folder into your "libraries" folder in your Arduino Sketch search path. 
-Now you will see OSCuino examples under the Examples menu of Arduino.
+Move the OSC folder into your "libraries" folder in your Arduino Sketch search path. 
+Now you will see OSC  examples under the Examples menu of Arduino.
 
 
 The Applications folder contains examples for Max/MSP and PD that work with the example sketches. This will be expanded to include other applications like TouchOSC and Processing
-For the Max/MSP examples you will need to download the CNMAT max externals package that includes the odot objects available at http://cnmat.berkeley.edu/downloads
+For the Max/MSP examples you will need to download the CNMAT max externals package that includes the "o." objects available at http://cnmat.berkeley.edu/downloads
 ////////////////////////////////////////////////////////////////////////
 Guide
 
 As well as many small examples illustrating the API, there is a larger application called "oscuino"
-which illustrates how to use OSC to simplify situations  Firmata and Maxuino  are typically used in.
+which illustrates how to use OSC to simplify situations Firmata and Maxuino  are typically used in.
 ////////////////////////////////////////////////////////////////////////
 Performance
 
