@@ -27,17 +27,26 @@ void setup() {
 }
 
 void loop(){
+ static int32_t sequencenumber=0;
  OSCBundle bndl;
+ int size;
  //receive a bundle
- while(SLIPSerial.available()){
-    bndl.fill(SLIPSerial.read());
- }
-  //and echo it back
- if (bndl.size()>0){
+
+  while(!SLIPSerial.endofPacket())
+    if( (size =SLIPSerial.available()) > 0)
+    {
+       while(size--)
+          bndl.fill(SLIPSerial.read());
+     }
+  
+  if(!bndl.hasError())
+  {
     // we can sneak an addition onto the end of the bundle
    bndl.add("/micros").add((int32_t)micros()); // (int32_t) is the type of OSC Integers
+   bndl.add("/sequencenumber").add(sequencenumber++);
+    SLIPSerial.beginPacket(); // mark the beginning of the OSC Packet
     bndl.send(SLIPSerial);
     SLIPSerial.endPacket();     
- }
+}
 }
 

@@ -5,7 +5,6 @@
 
 */
 #include <OSCBundle.h>
-#include <stdlib.h>
 
 
 #if !defined(CORE_TEENSY) && !defined(__AVR_ATmega32U4__)

@@ -4,10 +4,8 @@ Serial Call Response
 Send responses to calls for information from a remote host
 */
 
-#include <Arduino.h>  
 #include <OSCBundle.h>
 
-#include <stdlib.h>
 
 #if !defined(CORE_TEENSY) && !defined(__AVR_ATmega32U4__)
 #include <SLIPEncodedSerial.h>
@@ -81,10 +79,10 @@ void setup() {
       ;   // Leonardo bug
 
 }
+OSCBundle bundleIN;
 
 //reads and routes the incoming messages
 void loop(){ 
-    OSCBundle bundleIN;
    int size;
  
   while(!SLIPSerial.endofPacket())
@@ -97,9 +95,10 @@ void loop(){
      {
       bundleIN.route("/analog", routeAnalog);      
 //send the outgoing response message
+     SLIPSerial.beginPacket();
       bundleOUT.send(SLIPSerial);
       SLIPSerial.endPacket();
-        bundleOUT.empty(); // empty the bundle ready to use for new messages
+      bundleOUT.empty(); // empty the bundle ready to use for new messages
    }
 }
 

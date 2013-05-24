@@ -191,7 +191,7 @@ void loop(){
   bndl.add("/accelerometer/x").add(Esplora.readAccelerometer(X_AXIS)); 
   bndl.add("/accelerometer/y").add(Esplora.readAccelerometer(Y_AXIS)); 
   bndl.add("/accelerometer/z").add(Esplora.readAccelerometer(Z_AXIS)); 
- 
+  
 bndl.send(SLIPSerial); // send the bytes to the SLIP stream
   SLIPSerial.endPacket(); // mark the end of the OSC Packet
   bndl.empty();

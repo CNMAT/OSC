@@ -3,8 +3,9 @@
 		"fileversion" : 1,
 		"appversion" : 		{
 			"major" : 6,
-			"minor" : 0,
-			"revision" : 8
+			"minor" : 1,
+			"revision" : 2,
+			"architecture" : "x86"
 		}
 ,
 		"rect" : [ 189.0, 128.0, 1072.0, 480.0 ],
@@ -36,8 +37,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 91.0, 308.0, 298.0, 102.0 ],
-					"presentation_rect" : [ 21.0, 286.0, 0.0, 0.0 ],
+					"patching_rect" : [ 91.0, 308.0, 298.0, 101.0 ],
 					"text" : "/ports \n/rate/output 0 \n/rate/input 0 \n/mediansize/received \n/port \"a\" \n/baudrate 9600 ",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
@@ -53,7 +53,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 334.0, 183.0, 150.0, 22.0 ],
-					"text" : "/led 0.297101 ",
+					"text" : "/led 0.144928 \n",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -176,13 +176,13 @@
 					"fontname" : "Andale Mono",
 					"fontsize" : 14.0,
 					"id" : "obj-3",
-					"linecount" : 6,
+					"linecount" : 7,
 					"maxclass" : "o.message",
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 424.0, 312.0, 298.0, 103.0 ],
-					"text" : "/ports \n/rate/output 0 \n/rate/input 0 \n/mediansize/received \n/port \"a\" \n/baudrate 9600 \n",
+					"patching_rect" : [ 424.0, 312.0, 298.0, 117.0 ],
+					"text" : "/ports \"Bluetooth-PDA-Sync\" \"Bluetooth-Modem\" \"usbmodem101\" \n/rate/output 0 \n/rate/input 37 \n/mediansize/received -1 \n/port \"a\" \n/baudrate 9600 \n",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -197,7 +197,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "FullPacket" ],
 					"patching_rect" : [ 282.5, 239.0, 195.0, 22.0 ],
-					"text" : "o.io.slipserial a 9600"
+					"text" : "o.io.slipserial c 9600"
 				}
 
 			}
@@ -286,8 +286,8 @@
  ],
 		"dependency_cache" : [ 			{
 				"name" : "o.io.slipserial.maxpat",
-				"bootpath" : "/Users/adrian/Active/CNMAT2013/OSCuino/Applications/MaxMSP",
-				"patcherrelativepath" : "",
+				"bootpath" : "/Applications/Max 6.1/patches/CNMAT_Externals/odot/abstractions",
+				"patcherrelativepath" : "../../../../../../../Applications/Max 6.1/patches/CNMAT_Externals/odot/abstractions",
 				"type" : "JSON",
 				"implicit" : 1
 			}
@@ -297,6 +297,18 @@
 			}
 , 			{
 				"name" : "o.pack.mxo",
+				"type" : "iLaX"
+			}
+, 			{
+				"name" : "OpenSoundControl.mxo",
+				"type" : "iLaX"
+			}
+, 			{
+				"name" : "o.collect.mxo",
+				"type" : "iLaX"
+			}
+, 			{
+				"name" : "o.downcast.mxo",
 				"type" : "iLaX"
 			}
 , 			{

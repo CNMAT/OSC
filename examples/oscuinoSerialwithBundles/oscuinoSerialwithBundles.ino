@@ -1,6 +1,5 @@
 
 #include <OSCBundle.h>
-#include <stdlib.h>
 
 
 #if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__)
@@ -102,7 +101,7 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
       if (msg.isInt(0)){
         pinMode(analogInputToDigitalPin(pin), OUTPUT);
         digitalWrite(analogInputToDigitalPin(pin), (msg.getInt(0) > 0)? HIGH: LOW);
-      } //otherwise it's an analog read
+      } 
       else if(msg.isFloat(0)){
         analogWrite(pin, (int)(msg.getFloat(0)*255.0f));
       }
@@ -111,7 +110,7 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
         //set the pullup
 
         pinMode(analogInputToDigitalPin(pin), INPUT_PULLUP);
-
+//otherwise it's an analog read
         //setup the output address which should be /a/(pin)/u
         char outputAddress[9];
         strcpy(outputAddress, "/a");
@@ -122,7 +121,6 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
       } //else without a pullup   
       else {
         //set the pinmode
-        // This fails on Arduino 1.04 on Leanardo, I added this to fix it: #define analogInputToDigitalPin(p)  (p+18)
 
         pinMode(analogInputToDigitalPin(pin), INPUT);
         //setup the output address which should be /a/(pin)
@@ -342,30 +340,32 @@ void loop(){
    int size;
 
   while(!SLIPSerial.endofPacket())
-   if ((size =SLIPSerial.available()) > 0)
-    {
-       while(size--)
-          bundleIN.fill(SLIPSerial.read());
-     }
-   {
-if(!bundleIN.hasError())
- {
-    bundleIN.route("/s", routeSystem);
-    bundleIN.route("/a", routeAnalog);
-    bundleIN.route("/d", routeDigital);
-    bundleIN.route("/tone", routeTone);
+     if ((size =SLIPSerial.available()) > 0)
+      {
+         while(size--)
+            bundleIN.fill(SLIPSerial.read());
+      }
+  {
+      if(!bundleIN.hasError())
+       {
+          bundleIN.route("/s", routeSystem);
+          bundleIN.route("/a", routeAnalog);
+          bundleIN.route("/d", routeDigital);
+          bundleIN.route("/tone", routeTone);
 #ifdef TOUCHSUPPORT
-    bundleIN.route("/c", routeTouch);
+          bundleIN.route("/c", routeTouch);
 #endif
-}
- 
-//send the outgoing message
-  bundleOUT.send(SLIPSerial);
-  SLIPSerial.endPacket();
-  bundleOUT.empty();
+      }
+      bundleIN.empty();
+
+     
+    //send the outgoing message
+      SLIPSerial.beginPacket();
+      bundleOUT.send(SLIPSerial);
+      SLIPSerial.endPacket();
+      bundleOUT.empty();
    }
 }
-
 
 
 

@@ -3,11 +3,12 @@
 		"fileversion" : 1,
 		"appversion" : 		{
 			"major" : 6,
-			"minor" : 0,
-			"revision" : 8
+			"minor" : 1,
+			"revision" : 2,
+			"architecture" : "x86"
 		}
 ,
-		"rect" : [ 132.0, 44.0, 1266.0, 737.0 ],
+		"rect" : [ 731.0, 44.0, 1266.0, 737.0 ],
 		"bglocked" : 0,
 		"openinpresentation" : 0,
 		"default_fontsize" : 14.0,
@@ -135,11 +136,11 @@
 					"patching_rect" : [ 180.0, 363.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
+							"parameter_unitstyle" : 0,
+							"parameter_mmax" : 1023.0,
 							"parameter_type" : 0,
 							"parameter_shortname" : "a",
-							"parameter_longname" : "a[37]",
-							"parameter_unitstyle" : 0,
-							"parameter_mmax" : 1023.0
+							"parameter_longname" : "a[37]"
 						}
 
 					}
@@ -218,11 +219,11 @@
 					"patching_rect" : [ 143.0, 363.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
+							"parameter_unitstyle" : 0,
+							"parameter_mmax" : 1023.0,
 							"parameter_type" : 0,
 							"parameter_shortname" : "a",
-							"parameter_longname" : "a[19]",
-							"parameter_unitstyle" : 0,
-							"parameter_mmax" : 1023.0
+							"parameter_longname" : "a[19]"
 						}
 
 					}
@@ -243,11 +244,11 @@
 					"patching_rect" : [ 110.0, 363.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
+							"parameter_unitstyle" : 0,
+							"parameter_mmax" : 1023.0,
 							"parameter_type" : 0,
 							"parameter_shortname" : "a",
-							"parameter_longname" : "a[20]",
-							"parameter_unitstyle" : 0,
-							"parameter_mmax" : 1023.0
+							"parameter_longname" : "a[20]"
 						}
 
 					}
@@ -268,11 +269,11 @@
 					"patching_rect" : [ 77.0, 363.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
+							"parameter_unitstyle" : 0,
+							"parameter_mmax" : 1023.0,
 							"parameter_type" : 0,
 							"parameter_shortname" : "a",
-							"parameter_longname" : "a[21]",
-							"parameter_unitstyle" : 0,
-							"parameter_mmax" : 1023.0
+							"parameter_longname" : "a[21]"
 						}
 
 					}
@@ -293,11 +294,11 @@
 					"patching_rect" : [ 44.0, 363.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
+							"parameter_unitstyle" : 0,
+							"parameter_mmax" : 1023.0,
 							"parameter_type" : 0,
 							"parameter_shortname" : "a",
-							"parameter_longname" : "a[22]",
-							"parameter_unitstyle" : 0,
-							"parameter_mmax" : 1023.0
+							"parameter_longname" : "a[22]"
 						}
 
 					}
@@ -318,11 +319,11 @@
 					"patching_rect" : [ 11.0, 363.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
+							"parameter_unitstyle" : 0,
+							"parameter_mmax" : 1023.0,
 							"parameter_type" : 0,
 							"parameter_shortname" : "a",
-							"parameter_longname" : "a[23]",
-							"parameter_unitstyle" : 0,
-							"parameter_mmax" : 1023.0
+							"parameter_longname" : "a[23]"
 						}
 
 					}
@@ -456,13 +457,13 @@
 					"fontname" : "Andale Mono",
 					"fontsize" : 14.0,
 					"id" : "obj-2",
-					"linecount" : 2,
+					"linecount" : 6,
 					"maxclass" : "o.message",
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 228.0, 249.0, 150.0, 39.0 ],
-					"text" : "/analog/2 1021 \n/analog/3 1021 ",
+					"patching_rect" : [ 228.0, 249.0, 150.0, 101.0 ],
+					"text" : "/analog/0 213 \n/analog/1 135 \n/analog/2 181 \n/analog/3 149 \n/analog/4 163 \n/analog/5 218 \n",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -487,13 +488,13 @@
 					"fontname" : "Andale Mono",
 					"fontsize" : 14.0,
 					"id" : "obj-3",
-					"linecount" : 6,
+					"linecount" : 7,
 					"maxclass" : "o.message",
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 403.0, 269.0, 298.0, 103.0 ],
-					"text" : "/ports \n/rate/output 0 \n/rate/input 0 \n/mediansize/received \n/port \"a\" \n/baudrate 115200 \n",
+					"patching_rect" : [ 403.0, 269.0, 298.0, 117.0 ],
+					"text" : "/ports \"Bluetooth-PDA-Sync\" \"Bluetooth-Modem\" \"usbmodem101\" \n/rate/output 0 \n/rate/input 1 \n/mediansize/received -1 \n/port \"a\" \n/baudrate 9600 \n",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -522,7 +523,7 @@
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ -3.0, 112.0, 221.0, 55.0 ],
+					"patching_rect" : [ -3.0, 112.0, 221.0, 54.0 ],
 					"text" : "reconnect to the Arduino\n(needed after you reload Arduino code)"
 				}
 
@@ -537,7 +538,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "FullPacket" ],
 					"patching_rect" : [ 228.5, 214.0, 195.0, 22.0 ],
-					"text" : "o.io.slipserial a 9600"
+					"text" : "o.io.slipserial c 9600"
 				}
 
 			}
@@ -553,8 +554,9 @@
 						"fileversion" : 1,
 						"appversion" : 						{
 							"major" : 6,
-							"minor" : 0,
-							"revision" : 8
+							"minor" : 1,
+							"revision" : 2,
+							"architecture" : "x86"
 						}
 ,
 						"rect" : [ 25.0, 69.0, 738.0, 421.0 ],
@@ -850,18 +852,18 @@
 			}
  ],
 		"parameters" : 		{
-			"obj-104" : [ "a[20]", "a", 0 ],
-			"obj-103" : [ "a[21]", "a", 0 ],
-			"obj-105" : [ "a[19]", "a", 0 ],
 			"obj-102" : [ "a[22]", "a", 0 ],
 			"obj-101" : [ "a[23]", "a", 0 ],
-			"obj-64" : [ "a[37]", "a", 0 ]
+			"obj-64" : [ "a[37]", "a", 0 ],
+			"obj-104" : [ "a[20]", "a", 0 ],
+			"obj-103" : [ "a[21]", "a", 0 ],
+			"obj-105" : [ "a[19]", "a", 0 ]
 		}
 ,
 		"dependency_cache" : [ 			{
 				"name" : "o.io.slipserial.maxpat",
-				"bootpath" : "/Users/adrian/Active/CNMAT2013/OSCuino/Applications/MaxMSP",
-				"patcherrelativepath" : "",
+				"bootpath" : "/Applications/Max 6.1/patches/CNMAT_Externals/odot/abstractions",
+				"patcherrelativepath" : "../../../../../../../Applications/Max 6.1/patches/CNMAT_Externals/odot/abstractions",
 				"type" : "JSON",
 				"implicit" : 1
 			}
@@ -871,6 +873,18 @@
 			}
 , 			{
 				"name" : "o.pack.mxo",
+				"type" : "iLaX"
+			}
+, 			{
+				"name" : "OpenSoundControl.mxo",
+				"type" : "iLaX"
+			}
+, 			{
+				"name" : "o.collect.mxo",
+				"type" : "iLaX"
+			}
+, 			{
+				"name" : "o.downcast.mxo",
 				"type" : "iLaX"
 			}
 , 			{
