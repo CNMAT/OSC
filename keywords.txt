@@ -24,7 +24,7 @@ OSCBundle		KEYWORD1
 OSCMessage		KEYWORD1
 OSCMatch		KEYWORD1
 OSCData			KEYWORD1
-endTransmission	KEYWORD1
-endofTransmission KEYWORD1
-SLIPEncodedSerial KEYWORD1
-SLIPEncodedUSBSerial KEYWORD1
+endTransmission		KEYWORD1
+endofTransmission	KEYWORD1
+SLIPEncodedSerial	KEYWORD1
+SLIPEncodedUSBSerial	KEYWORD1
