@@ -125,5 +125,22 @@ static inline T BigEndian(const T& x)
     return ret;
 }
 
+// missing specs for Leonardo derived devices
+#if defined(__AVR_ATmega32U4__) && !defined(LED_BUILTIN)
+
+#if F_CPU==16000000
+// Leonardo and Esplora
+#define LED_BUILTIN  13
+#ifndef analogInputToDigitalPin
+#define analogInputToDigitalPin(p)  ((p < 12) ? (p) + 18 : -1)
+#endif
+#else
+//Lilypad USB and Flora (8Mhz)
+#define LED_BUILTIN  13  // its 7 on Flora but how do we detect this?
+#ifndef analogInputToDigitalPin
+#define analogInputToDigitalPin(p)  ((p < 12) ? (p) + 18 : -1)
+#endif
+#endif
+#endif
 
  #endif
