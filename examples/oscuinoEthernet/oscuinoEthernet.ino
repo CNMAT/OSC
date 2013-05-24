@@ -4,7 +4,6 @@
 #include <EthernetUdp.h>
 #include <SPI.h>    
 #include <OSCBundle.h>
-#include <stdlib.h>
 
 //UDP communication
 
@@ -12,7 +11,7 @@
 EthernetUDP Udp;
 
 //the Arduino's IP
-// pull thise from board? xxx
+
 IPAddress ip(128, 32, 122, 252);
 
 //port numbers
@@ -358,8 +357,8 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
  * setup and loop, bundle receiving/sending, initial routing
  */
 void setup() {
-    //setup ethernet part
-    read_mac();
+  //setup ethernet port
+  read_mac();
   Ethernet.begin(mac,ip);
   Udp.begin(inPort);
 
@@ -377,17 +376,17 @@ void loop(){
      while(size--)
        bundleIN.fill(Udp.read());
 
-if(!bundleIN.hasError())
- {
-    bundleIN.route("/s", routeSystem);
-    bundleIN.route("/a", routeAnalog);
-    bundleIN.route("/d", routeDigital);
-    bundleIN.route("/tone", routeTone);
-#ifdef TOUCHSUPPORT
-    bundleIN.route("/c", routeTouch);
-#endif
+    if(!bundleIN.hasError())
+     {
+        bundleIN.route("/s", routeSystem);
+        bundleIN.route("/a", routeAnalog);
+        bundleIN.route("/d", routeDigital);
+        bundleIN.route("/tone", routeTone);
+    #ifdef TOUCHSUPPORT
+        bundleIN.route("/c", routeTouch);
+    #endif
 
-}
+    }
     // send the response bundle back to where the request came from
     Udp.beginPacket(Udp.remoteIP(),outPort); 
     bundleOUT.send(Udp);

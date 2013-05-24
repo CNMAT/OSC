@@ -27,7 +27,9 @@ void loop(){
   //the message wants an OSC address as first argument
   OSCMessage msg("/analog/0");
   msg.add(analogRead(0));
-  msg.send(SLIPSerial); // send the bytes to the SLIP stream
+
+  SLIPSerial.beginPacket();  
+    msg.send(SLIPSerial); // send the bytes to the SLIP stream
   SLIPSerial.endPacket(); // mark the end of the OSC Packet
   msg.empty(); // free space occupied by message
 

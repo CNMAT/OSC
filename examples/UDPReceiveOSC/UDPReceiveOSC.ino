@@ -7,11 +7,8 @@
 
 /*
 * Set the LED according to incoming OSC control
-* This compiles correctly on Teensy 2.0 and fails
 * 
-
 */
-#include <stdlib.h>
 
 //UDP communication
 
@@ -29,32 +26,31 @@ const unsigned int inPort = 8888;
 
 void LEDcontrol(OSCMessage &msg)
 {
- // I had to add this to make it work on Leonardo: static const int LEDBUILTIN=13;
-      if (msg.isInt(0))
-      {
-             pinMode(LED_BUILTIN, OUTPUT);
-             digitalWrite(LED_BUILTIN, (msg.getInt(0) > 0)? HIGH: LOW);
-       }
-       else if(msg.isString(0))
+  if (msg.isInt(0))
+  {
+         pinMode(LED_BUILTIN, OUTPUT);
+         digitalWrite(LED_BUILTIN, (msg.getInt(0) > 0)? HIGH: LOW);
+   }
+   else if(msg.isString(0))
+   {
+     int length=msg.getDataLength(0);
+     if(length<5)
+     {
+       char str[length];
+       msg.getString(0,str,length);
+       if((strcmp("on", str)==0)|| (strcmp("On",str)==0))
        {
-         int length=msg.getDataLength(0);
-         if(length<5)
-         {
-           char str[length];
-           msg.getString(0,str,length);
-           if((strcmp("on", str)==0)|| (strcmp("On",str)==0))
-           {
-                pinMode(LED_BUILTIN, OUTPUT); 
-                digitalWrite(LED_BUILTIN, HIGH);
-           }
-           else if((strcmp("Of", str)==0)|| (strcmp("off",str)==0))
-           {
-                pinMode(LED_BUILTIN, OUTPUT); 
-                digitalWrite(LED_BUILTIN, LOW);
-           }
-         }
+            pinMode(LED_BUILTIN, OUTPUT); 
+            digitalWrite(LED_BUILTIN, HIGH);
        }
-     
+       else if((strcmp("Of", str)==0)|| (strcmp("off",str)==0))
+       {
+            pinMode(LED_BUILTIN, OUTPUT); 
+            digitalWrite(LED_BUILTIN, LOW);
+       }
+     }
+   }
+
 }
 
 

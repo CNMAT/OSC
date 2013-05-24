@@ -1,7 +1,7 @@
 /*
 
 Leverage the UDP source IP and port calls to 
-OSC information back
+return OSC information back
 
 This example can be extended to build routers and forwarders of OSC packets
 
@@ -10,7 +10,7 @@ This example can be extended to build routers and forwarders of OSC packets
 #include <EthernetUdp.h>
 #include <SPI.h>    
 #include <OSCBundle.h>
-#include <stdlib.h>
+
 EthernetUDP Udp;
 
 //the Arduino's IP
@@ -27,29 +27,33 @@ void setup() {
 }
 
 void loop(){
- OSCBundle bndl;
- //receive a bundle
+    OSCBundle bndl;
    int size;
+   
+    //receive a bundle
    if( (size = Udp.parsePacket())>0)
    {
-      unsigned int outPort = Udp.remotePort();
+        unsigned int outPort = Udp.remotePort();
 
-     while(size--)
-       bndl.fill(Udp.read());
+         while(size--)
+           bndl.fill(Udp.read());
 
-    if(!bndl.hasError())
-    {
-      //and echo it back
-     if(bndl.size() > 0)
-     {
-        // we can sneak an addition onto the end of the bundle
-       bndl.add("/micros").add((int32_t)micros()); // (int32_t) is the type of OSC Integers
-       
-        Udp.beginPacket(Udp.remoteIP(), outPort);
-        bndl.send(Udp);
-        Udp.endPacket();     
-     }
-    }
+        if(!bndl.hasError())
+        {
+              //and echo it back
+             if(bndl.size() > 0)
+             {
+                static int32_t sequencenumber=0;
+
+                // we can sneak an addition onto the end of the bundle
+               bndl.add("/micros").add((int32_t)micros()); // (int32_t) is the type of OSC Integers
+                bndl.add("/sequencenumber").add(sequencenumber++);
+
+                Udp.beginPacket(Udp.remoteIP(), outPort);
+                bndl.send(Udp);
+                Udp.endPacket();     
+             }
+        }
    }
 }
 

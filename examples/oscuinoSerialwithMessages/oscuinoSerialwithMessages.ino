@@ -6,7 +6,6 @@
  #include <SLIPEncodedSerial.h>
 #endif
 
-//outgoing messages
 
 #if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__)
 SLIPEncodedUSBSerial SLIPSerial(Serial);
@@ -14,7 +13,6 @@ SLIPEncodedUSBSerial SLIPSerial(Serial);
 SLIPEncodedSerial SLIPSerial(Serial);
 #endif
 
-#include <stdlib.h>
 
 
 //converts the pin to an osc address
@@ -65,7 +63,10 @@ void routeDigital(OSCMessage &msg, int addrOffset ){
         strcat(outputAddress, numToOSCAddress(pin));
         strcat(outputAddress,"/u");
         //do the digital read and send the results
-        { OSCMessage  msgOut(outputAddress); msgOut.add(digitalRead(pin));       SLIPSerial.beginPacket(); msgOut.send(SLIPSerial); SLIPSerial.endPacket(); } 
+        { 
+            OSCMessage  msgOut(outputAddress); msgOut.add(digitalRead(pin)); 
+            SLIPSerial.beginPacket(); msgOut.send(SLIPSerial); SLIPSerial.endPacket(); 
+        } 
       } //else without a pullup   
       else {
         //set the pinmode
@@ -75,7 +76,10 @@ void routeDigital(OSCMessage &msg, int addrOffset ){
         strcpy(outputAddress, "/d");
         strcat(outputAddress, numToOSCAddress(pin));
         //do the digital read and send the results
-        { OSCMessage  msgOut(outputAddress); msgOut.add(digitalRead(pin));        SLIPSerial.beginPacket(); msgOut.send(SLIPSerial); SLIPSerial.endPacket(); }  
+        {
+            OSCMessage  msgOut(outputAddress); msgOut.add(digitalRead(pin));
+            SLIPSerial.beginPacket(); msgOut.send(SLIPSerial); SLIPSerial.endPacket();
+        }  
       }
     }
   }
@@ -121,7 +125,10 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
         strcat(outputAddress, numToOSCAddress(pin));
         strcat(outputAddress,"/u");
         //do the analog read and send the results
-        { OSCMessage  msgOut(outputAddress); msgOut.add(analogRead(pin));      SLIPSerial.beginPacket();msgOut.send(SLIPSerial); SLIPSerial.endPacket(); }  
+        {
+            OSCMessage  msgOut(outputAddress); msgOut.add(analogRead(pin));
+            SLIPSerial.beginPacket();msgOut.send(SLIPSerial); SLIPSerial.endPacket();
+        }  
       } //else without a pullup   
       else {
         //set the pinmode
@@ -133,7 +140,10 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
         strcpy(outputAddress, "/a");
         strcat(outputAddress, numToOSCAddress(pin));
         //do the analog read and send the results
-        { OSCMessage  msgOut(outputAddress); msgOut.add(analogRead(pin));          SLIPSerial.beginPacket(); msgOut.send(SLIPSerial); SLIPSerial.endPacket(); }
+        {
+            OSCMessage  msgOut(outputAddress); msgOut.add(analogRead(pin));
+            SLIPSerial.beginPacket(); msgOut.send(SLIPSerial); SLIPSerial.endPacket();
+        }
       }
     }
   }
@@ -180,6 +190,7 @@ void routeTone(OSCMessage &msg, int addrOffset ){
     }
   }
 }
+
 #if defined (__MK20DX128__)
 #define TOUCHSUPPORT
 #endif
@@ -190,18 +201,21 @@ const int cpins[NTPINS] = {22,23,19,18,17,16,15,0,1,25,32, 33 };
 void routeTouch(OSCMessage &msg, int addrOffset )
 {
   for(int i=0;i<NTPINS;++i)
-   {
-const char *name = numToOSCAddress(cpins[i]);
-     int pinMatched = msg.match(name, addrOffset);
-    if(pinMatched)
     {
-       char outputAddress[9];
-        strcpy(outputAddress, "/c");
-        strcat(outputAddress, name);
-        { OSCMessage  msgOut(outputAddress); msgOut.add(touchRead(cpins[i]));  SLIPSerial.beginPacket(); msgOut.send(SLIPSerial); SLIPSerial.endPacket(); }
+        const char *name = numToOSCAddress(cpins[i]);
+    int pinMatched = msg.match(name, addrOffset);
+        if(pinMatched)
+        {
+           char outputAddress[9];
+            strcpy(outputAddress, "/c");
+            strcat(outputAddress, name);
+            {
+                OSCMessage  msgOut(outputAddress); msgOut.add(touchRead(cpins[i]));
+                SLIPSerial.beginPacket(); msgOut.send(SLIPSerial); SLIPSerial.endPacket();
+            }
 
+        }
     }
-   }
 }
 #endif
 
@@ -266,10 +280,10 @@ float getTemperature()
 {
         analogReference(INTERNAL);
         delay(1);
-    int val = analogRead(38); // seems to be flakey
-  analogReference(DEFAULT);
+        int val = analogRead(38); // seems to be flakey
+        analogReference(DEFAULT);
 
-  return val; //need to compute something here to get to degrees C
+        return val; //need to compute something here to get to degrees C
 }
 float getSupplyVoltage()
 {
@@ -311,12 +325,12 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
  // I had to add this to make it work on Leonardo: static const int LEDBUILTIN=13;
 
     if (msg.isInt(0)){
-             pinMode(LED_BUILTIN, OUTPUT);
-      int i = msg.getInt(0);
+         pinMode(LED_BUILTIN, OUTPUT);
+        int i = msg.getInt(0);
         pinMode(LED_BUILTIN, OUTPUT);
         digitalWrite(LED_BUILTIN, (i > 0)? HIGH: LOW);
         { OSCMessage  msgOut("/s/l"); msgOut.add(i);         SLIPSerial.beginPacket();msgOut.send(SLIPSerial); SLIPSerial.endPacket(); }
-      }
+        }
   }
 }
 
@@ -336,29 +350,25 @@ void setup() {
 
 //reads and routes the incoming messages
 void loop(){ 
-  OSCBundle bundleIN;
-   int size;
-  while(!SLIPSerial.endofPacket())
-   if ((size =SLIPSerial.available()) > 0)
-   {
-       while(size--)
-          bundleIN.fill(SLIPSerial.read());
-    }
-    
-   {
-        if(!bundleIN.hasError())
-         {
-            bundleIN.route("/s", routeSystem);
-            bundleIN.route("/a", routeAnalog);
-            bundleIN.route("/d", routeDigital);
-            bundleIN.route("/tone", routeTone);
-        #ifdef TOUCHSUPPORT
-            bundleIN.route("/c", routeTouch);
-        #endif
+    OSCBundle bundleIN;
+    int size;
+    while(!SLIPSerial.endofPacket())
+        if ((size =SLIPSerial.available()) > 0)
+        {
+           while(size--)
+              bundleIN.fill(SLIPSerial.read());
         }
 
-   }
-
+    if(!bundleIN.hasError())
+    {
+        bundleIN.route("/s", routeSystem);
+        bundleIN.route("/a", routeAnalog);
+        bundleIN.route("/d", routeDigital);
+        bundleIN.route("/tone", routeTone);
+#ifdef TOUCHSUPPORT
+    bundleIN.route("/c", routeTouch);
+#endif
+    }
 }
 
 

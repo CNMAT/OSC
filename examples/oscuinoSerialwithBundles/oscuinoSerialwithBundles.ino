@@ -11,8 +11,6 @@
 
 OSCBundle bundleOUT;
 
-
-
 //converts the pin to an osc address
 const char * numToOSCAddress( int pin){
   static char s[10] ="/";
@@ -110,7 +108,6 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
         //set the pullup
 
         pinMode(analogInputToDigitalPin(pin), INPUT_PULLUP);
-//otherwise it's an analog read
         //setup the output address which should be /a/(pin)/u
         char outputAddress[9];
         strcpy(outputAddress, "/a");
@@ -120,7 +117,8 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
         bundleOUT.add(outputAddress).add(analogRead(pin));       
       } //else without a pullup   
       else {
-        //set the pinmode
+         //otherwise it's an analog read
+       //set the pinmode
 
         pinMode(analogInputToDigitalPin(pin), INPUT);
         //setup the output address which should be /a/(pin)
@@ -184,19 +182,19 @@ void routeTone(OSCMessage &msg, int addrOffset ){
 const int cpins[NTPINS] = {22,23,19,18,17,16,15,0,1,25,32, 33 }; 
 void routeTouch(OSCMessage &msg, int addrOffset )
 {
-  for(int i=0;i<NTPINS;++i)
-   {
-const char *name = numToOSCAddress(cpins[i]);
-     int pinMatched = msg.match(name, addrOffset);
-    if(pinMatched)
+    for(int i=0;i<NTPINS;++i)
     {
-       char outputAddress[9];
-        strcpy(outputAddress, "/c");
-        strcat(outputAddress, name);
-        bundleOUT.add(outputAddress).add(touchRead(cpins[i]));
+        const char *name = numToOSCAddress(cpins[i]);
+        int pinMatched = msg.match(name, addrOffset);
+        if(pinMatched)
+        {
+           char outputAddress[9];
+            strcpy(outputAddress, "/c");
+            strcat(outputAddress, name);
+            bundleOUT.add(outputAddress).add(touchRead(cpins[i]));
 
+        }
     }
-   }
 }
 #endif
 
@@ -339,32 +337,32 @@ void loop(){
   OSCBundle bundleIN;
    int size;
 
-  while(!SLIPSerial.endofPacket())
+    while(!SLIPSerial.endofPacket())
      if ((size =SLIPSerial.available()) > 0)
       {
          while(size--)
             bundleIN.fill(SLIPSerial.read());
       }
-  {
-      if(!bundleIN.hasError())
-       {
-          bundleIN.route("/s", routeSystem);
-          bundleIN.route("/a", routeAnalog);
-          bundleIN.route("/d", routeDigital);
-          bundleIN.route("/tone", routeTone);
-#ifdef TOUCHSUPPORT
-          bundleIN.route("/c", routeTouch);
-#endif
-      }
-      bundleIN.empty();
+      
+    if(!bundleIN.hasError())
+    {
+      bundleIN.route("/s", routeSystem);
+      bundleIN.route("/a", routeAnalog);
+      bundleIN.route("/d", routeDigital);
+      bundleIN.route("/tone", routeTone);
+    #ifdef TOUCHSUPPORT
+      bundleIN.route("/c", routeTouch);
+    #endif
+    }
+    bundleIN.empty();
 
-     
-    //send the outgoing message
-      SLIPSerial.beginPacket();
-      bundleOUT.send(SLIPSerial);
-      SLIPSerial.endPacket();
-      bundleOUT.empty();
-   }
+ 
+//send the outgoing message
+  SLIPSerial.beginPacket();
+    bundleOUT.send(SLIPSerial);
+  SLIPSerial.endPacket();
+  bundleOUT.empty();
+
 }
 
 

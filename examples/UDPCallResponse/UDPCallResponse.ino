@@ -8,7 +8,6 @@ Send responses to calls for information from a remote host
 #include <EthernetUdp.h>
 #include <SPI.h>    
 #include <OSCBundle.h>
-#include <stdlib.h>
 
 //UDP communication
 
@@ -131,21 +130,20 @@ void loop(){
  
    if( (size = Udp.parsePacket())>0)
    {
-     unsigned int outPort = Udp.remotePort();
+         unsigned int outPort = Udp.remotePort();
 
-     while(size--)
-       bundleIN.fill(Udp.read());
+         while(size--)
+           bundleIN.fill(Udp.read());
 
-    if(!bundleIN.hasError())
-     {
-          bundleIN.route("/analog", routeAnalog);
-      }
-    // send the response bundle back to where the request came from
-    Udp.beginPacket(Udp.remoteIP(), outPort); 
-    bundleOUT.send(Udp);
-    Udp.endPacket();
-    bundleOUT.empty(); // empty the bundle ready to use for new messages
-   }
+        if(!bundleIN.hasError())
+              bundleIN.route("/analog", routeAnalog);
+
+        // send the response bundle back to where the request came from
+        Udp.beginPacket(Udp.remoteIP(), outPort); 
+        bundleOUT.send(Udp);
+        Udp.endPacket();
+        bundleOUT.empty(); // empty the bundle ready to use for new messages
+    }
 }
 
 
