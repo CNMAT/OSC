@@ -9,8 +9,9 @@ SLIPEncodedSerial SLIPSerial;
 
 void setup() {
   frameRate(200);
-  //  I use the first port which is usually the Arduino
-  arduino = new Serial(this, Serial.list()[0], 115200);
+  //  I use the first port which is often the Arduino
+  // try the third one on Mountain Lion
+  arduino = new Serial(this, Serial.list()[0], 9600);
   SLIPSerial= new SLIPEncodedSerial(arduino);
   //setup the drawing output
   size(320, 100);
