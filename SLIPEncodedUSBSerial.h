@@ -45,7 +45,7 @@ public:
 	
 //different constructor for teensies
 	SLIPEncodedUSBSerial(
-#if !defined(CORE_TEENSY)
+#if !defined(CORE_TEENSY) || defined(__SAM3X8E__)
 Serial_
 #else
 	usb_serial_class

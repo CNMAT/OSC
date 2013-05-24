@@ -26,11 +26,14 @@ bool SLIPEncodedSerial::endofPacket()
 	}
 	if (rstate==FIRSTEOT)
 	{
-		uint8_t c =serial->peek();
-		if(c==eot)
-		{
-			serial->read(); // throw it on the floor
-		}
+        if(serial->available())
+        {
+            uint8_t c =serial->peek();
+            if(c==eot)
+            {
+                serial->read(); // throw it on the floor
+            }
+        }
 		rstate = CHAR;
 		return true;
 	}
