@@ -78,10 +78,11 @@ void setup() {
       ;   // Leonardo bug
 
 }
-OSCBundle bundleIN;
 
 //reads and routes the incoming messages
 void loop(){ 
+    OSCBundle bundleIN;
+
    int size;
  
     while(!SLIPSerial.endofPacket())
