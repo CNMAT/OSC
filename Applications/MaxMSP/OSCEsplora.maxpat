@@ -3,8 +3,9 @@
 		"fileversion" : 1,
 		"appversion" : 		{
 			"major" : 6,
-			"minor" : 0,
-			"revision" : 8
+			"minor" : 1,
+			"revision" : 2,
+			"architecture" : "x86"
 		}
 ,
 		"rect" : [ 25.0, 69.0, 640.0, 480.0 ],
@@ -36,7 +37,6 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 201.0, 187.0, 150.0, 22.0 ],
-					"presentation_rect" : [ 261.0, 323.0, 0.0, 0.0 ],
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -93,7 +93,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "FullPacket" ],
 					"patching_rect" : [ 158.5, 90.0, 195.0, 22.0 ],
-					"text" : "o.io.slipserial a 9600"
+					"text" : "o.io.slipserial c 9600"
 				}
 
 			}
@@ -137,8 +137,8 @@
  ],
 		"dependency_cache" : [ 			{
 				"name" : "o.io.slipserial.maxpat",
-				"bootpath" : "/Users/adrian/odot-MacOSX-1.2.7",
-				"patcherrelativepath" : "../odot-MacOSX-1.2.7",
+				"bootpath" : "/Applications/Max 6.1/patches/CNMAT_Externals/odot/abstractions",
+				"patcherrelativepath" : "../../../../../../../Applications/Max 6.1/patches/CNMAT_Externals/odot/abstractions",
 				"type" : "JSON",
 				"implicit" : 1
 			}
@@ -148,6 +148,18 @@
 			}
 , 			{
 				"name" : "o.pack.mxo",
+				"type" : "iLaX"
+			}
+, 			{
+				"name" : "OpenSoundControl.mxo",
+				"type" : "iLaX"
+			}
+, 			{
+				"name" : "o.collect.mxo",
+				"type" : "iLaX"
+			}
+, 			{
+				"name" : "o.downcast.mxo",
 				"type" : "iLaX"
 			}
 , 			{
