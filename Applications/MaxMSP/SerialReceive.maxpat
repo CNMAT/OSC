@@ -8,7 +8,7 @@
 			"architecture" : "x86"
 		}
 ,
-		"rect" : [ 189.0, 128.0, 1072.0, 480.0 ],
+		"rect" : [ 630.0, 153.0, 1072.0, 480.0 ],
 		"bglocked" : 0,
 		"openinpresentation" : 0,
 		"default_fontsize" : 12.0,
@@ -37,7 +37,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 91.0, 308.0, 298.0, 101.0 ],
+					"patching_rect" : [ 88.0, 345.0, 298.0, 101.0 ],
 					"text" : "/ports \n/rate/output 0 \n/rate/input 0 \n/mediansize/received \n/port \"a\" \n/baudrate 9600 ",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
@@ -52,8 +52,8 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 334.0, 183.0, 150.0, 22.0 ],
-					"text" : "/led 0.144928 \n",
+					"patching_rect" : [ 331.0, 220.0, 150.0, 22.0 ],
+					"text" : "/led 0.376812 \n",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -68,7 +68,7 @@
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 493.0, 73.0, 156.0, 33.0 ],
+					"patching_rect" : [ 490.0, 110.0, 156.0, 33.0 ],
 					"text" : "PWM control of brightness of LED"
 				}
 
@@ -82,7 +82,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 203.0, 35.0, 32.5, 18.0 ],
+					"patching_rect" : [ 200.0, 72.0, 32.5, 18.0 ],
 					"text" : "on"
 				}
 
@@ -96,7 +96,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 93.0, 40.0, 32.5, 18.0 ],
+					"patching_rect" : [ 90.0, 77.0, 32.5, 18.0 ],
 					"text" : "off"
 				}
 
@@ -110,7 +110,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 458.0, -8.0, 20.0, 140.0 ],
+					"patching_rect" : [ 455.0, 29.0, 20.0, 140.0 ],
 					"setminmax" : [ 0.0, 1.0 ]
 				}
 
@@ -123,7 +123,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "int" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 318.0, 51.0, 20.0, 20.0 ]
+					"patching_rect" : [ 315.0, 88.0, 20.0, 20.0 ]
 				}
 
 			}
@@ -136,7 +136,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 284.0, 140.0, 150.0, 22.0 ],
+					"patching_rect" : [ 281.0, 177.0, 150.0, 22.0 ],
 					"text" : "/led \"$1\" ",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
@@ -151,7 +151,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 169.0, 158.0, 37.0, 18.0 ],
+					"patching_rect" : [ 166.0, 195.0, 37.0, 18.0 ],
 					"text" : "reset"
 				}
 
@@ -166,7 +166,7 @@
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 520.0, 233.0, 150.0, 54.0 ],
+					"patching_rect" : [ 517.0, 270.0, 150.0, 54.0 ],
 					"text" : "stats on serial OSC communications"
 				}
 
@@ -181,8 +181,8 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 424.0, 312.0, 298.0, 117.0 ],
-					"text" : "/ports \"Bluetooth-PDA-Sync\" \"Bluetooth-Modem\" \"usbmodem101\" \n/rate/output 0 \n/rate/input 37 \n/mediansize/received -1 \n/port \"a\" \n/baudrate 9600 \n",
+					"patching_rect" : [ 421.0, 349.0, 298.0, 117.0 ],
+					"text" : "/ports \"Bluetooth-PDA-Sync\" \"Bluetooth-Modem\" \"usbmodem101\" \n/rate/output 0 \n/rate/input 13 \n/mediansize/received -1 \n/port \"a\" \n/baudrate 9600 \n",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -196,7 +196,7 @@
 					"numinlets" : 1,
 					"numoutlets" : 2,
 					"outlettype" : [ "", "FullPacket" ],
-					"patching_rect" : [ 282.5, 239.0, 195.0, 22.0 ],
+					"patching_rect" : [ 279.5, 276.0, 195.0, 22.0 ],
 					"text" : "o.io.slipserial c 9600"
 				}
 
