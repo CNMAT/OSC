@@ -1,51 +1,63 @@
+OSC for Arduino 1.1
+
 This is an Arduino and Teensy library implementation of the OSC encoding (http://opensoundcontrol.org)
 It was developed primarily by Yotam Mann and Adrian Freed at CNMAT where OSC was invented.
 It benefits from contributions from  John MacCallum, Matt Wright and Andy Schmeder
+and many beta testers.
 
 This release:
 
 - Supports the four basic OSC data types (32-bit integers, 32-bit floats, strings, and blobs - arbitrary length byte sequences)
-- Sends and receives OSC packets over any transport layer that implements the Arduino  Stream - Class such as Serial, EthernetUdp, MIDI, and more.
-- Tested on Arduino Ethernet, Arduino Leonardo, Teensy
+- Sends and receives OSC packets over transport layers that implements the Arduino  Stream - Class such as Serial and  Ethernet UDP
+- It has been tested on Basic Arduinos, Lilypads, Flora, Arduino Ethernet, Arduino Leonardo, Teensy primarily with the Wiznet W5100 chip
 - Address pattern matching
 - Dynamic memory allocation
 
-Features for next time:
+Features for next release:
 - nested bundles
 - TCP/IP Examples
+- examples for more applications (i.e. TouchOSC, Processing with SLIP)
 - deadline scheduling of OSC 64-bit timetags
 - Due support
 - ADK support
 
 
 API Documentation and examples are available at http://cnmat.berkeley.edu/oscuino
-This location also points to the GIT repository where updates to the library are posted.
+This is an active development and research project sponsored by the US Government, a consortium
+of semiconductor companies and  Meyer Sound. THe best version of the library may therefor be
+found directly on the GIT repository: https://github.com/CNMAT/OSC. We welcome your contributions and
+feedback there.
+
+Our primary test platform for new development is the Teensy 3.0 which currently offers the best performance
+of any of the Arduinos and variants. We greatly appreciate Paul Stoffregen's ongoing work
+with "best practice" engineering of high performance microcontrollers.
+
 
 ////////////////////////////////////////////////////////////////////////
 SLIPSerial
 
-The library  includes extensions of the USB serial and Hardware serial functions of the Arduino which sends and receives data using the SLIP encoding.
+The OSC for Arduino library  includes extensions of the USB serial and Hardware serial functions of the Arduino core that sends and receives data using the SLIP encoding.
 This makes Max/MSP and PD integration very simple using CNMAT's o.io.slipserial.
-The SLIPSerial library implements the same methods as the Serial object except for an additional "beginPacket" and "endPacket" methods which 
+The SLIPSerial library implements the same methods as the Serial object with additional "beginPacket" and "endPacket" methods to 
 mark the boundaries of each packet in a serial stream. 
 
 ////////////////////////////////////////////////////////////////////////
-Installation
+Installation from GitHub
 
-You need Arduino 1.0.4 or greater.
+You need Arduino 1.0.4 or greater and Teensyduino 1.13 or later if you use the Teensy.
 Download the zip from github. Unzip it and remove text after the "-" in the name (i.e. -master) because
 Arduino doesn't allow some characters in library names.
 Move the OSC folder into your "libraries" folder in your Arduino Sketch search path. 
-Now you will see OSC  examples under the Examples menu of Arduino.
+Now you will see OSC examples under the Examples menu of Arduino.
 
 
-The Applications folder contains examples for Max/MSP and PD that work with the example sketches. This will be expanded to include other applications like TouchOSC and Processing
+The Applications folder contains examples for Max/MSP and PD and Processing that work with the example sketches. This will be expanded to include other applications like TouchOSC and Processing
 For the Max/MSP examples you will need to download the CNMAT max externals package that includes the "o." objects available at http://cnmat.berkeley.edu/downloads
 ////////////////////////////////////////////////////////////////////////
 Guide
 
 As well as many small examples illustrating the API, there is a larger application called "oscuino"
-which illustrates how to use OSC to simplify situations Firmata and Maxuino  are typically used in.
+that illustrates how to use OSC to simplify situations Firmata and Maxuino  are typically used in.
 ////////////////////////////////////////////////////////////////////////
 Performance
 
@@ -56,7 +68,7 @@ This will change as people retool to use the much faster Wiznet 5200 which has b
 http://forum.pjrc.com/threads/17951-WIZ820io-Ethernet-and-2nd-power-supply-with-teensy-3-0
 http://arduino.cc/forum/index.php?topic=139147.0
 
-The oscuino serial examples use 9600 baud serial which is reliable on most of the FTDI based Arduinos.
+The serial examples use a 9600 baud rate which is reliable on most of the FTDI based Arduinos.
 The slow rate is required for Arduino's without clock chips such as the TinyLili.
-Once you have established that things work at 9600 baud try increasing the rate.
+Once you have established that things work at 9600 baud you will find it very beneficial to increase the rate.
 e.g. Serial.begin(345600);   // !! 115200, 230400, 345600,   460800 X
