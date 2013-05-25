@@ -19,6 +19,8 @@ IPAddress ip(128, 32, 122, 252);
 
 //port numbers
 const unsigned int inPort = 8888;
+const unsigned int outPort = 9999;
+
 
 //everything on the network needs a unique MAC 
 #if defined(__MK20DX128__)
@@ -130,7 +132,7 @@ void loop(){
  
    if( (size = Udp.parsePacket())>0)
    {
-         unsigned int outPort = Udp.remotePort();
+//         unsigned int outPort = Udp.remotePort();
 
          while(size--)
            bundleIN.fill(Udp.read());
