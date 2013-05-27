@@ -1,4 +1,4 @@
-OSC for Arduino 1.1
+OSC for Arduino 1.2
 
 This is an Arduino and Teensy library implementation of the OSC encoding (http://opensoundcontrol.org)
 It was developed primarily by Yotam Mann and Adrian Freed at CNMAT where OSC was invented.
@@ -10,6 +10,8 @@ This release:
 - Supports the four basic OSC data types (32-bit integers, 32-bit floats, strings, and blobs - arbitrary length byte sequences)
 - Sends and receives OSC packets over transport layers that implements the Arduino  Stream - Class such as Serial and  Ethernet UDP
 - It has been tested on Basic Arduinos, Lilypads, Flora, Arduino Ethernet, Arduino Leonardo, Teensy primarily with the Wiznet W5100 chip
+- Now works on the Due
+- Sketches compile also in MPIDE for PIC32's there has been limited testing on the Fubarino MINI
 - Address pattern matching
 - Dynamic memory allocation
 
@@ -18,7 +20,6 @@ Features for next release:
 - TCP/IP Examples
 - examples for more applications (i.e. TouchOSC, Processing with SLIP)
 - deadline scheduling of OSC 64-bit timetags
-- Due support
 - ADK support
 
 
