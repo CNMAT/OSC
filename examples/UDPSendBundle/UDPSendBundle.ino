@@ -34,8 +34,8 @@ void loop(){
     OSCBundle bndl;
 
     //BOSCBundle's add' returns the OSCMessage so the message's 'add' can be composed together
-    bndl.add("/analog/0").add(analogRead(0));
-    bndl.add("/analog/1").add(analogRead(1));
+    bndl.add("/analog/0").add((int32_t)analogRead(0));
+    bndl.add("/analog/1").add((int32_t)analogRead(1));
     bndl.add("/digital/5").add((digitalRead(5)==HIGH)?"HIGH":"LOW");
 
     Udp.beginPacket(outIp, outPort);
@@ -43,7 +43,7 @@ void loop(){
     Udp.endPacket(); // mark the end of the OSC Packet
     bndl.empty(); // empty the bundle to free room for a new one
 
-    bndl.add("/mouse/step").add(analogRead(0)).add(analogRead(1));
+    bndl.add("/mouse/step").add((int32_t)analogRead(0)).add((int32_t)analogRead(1));
     bndl.add("/units").add("pixels");
 
     Udp.beginPacket(outIp, outPort);

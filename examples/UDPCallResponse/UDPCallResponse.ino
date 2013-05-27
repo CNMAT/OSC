@@ -8,10 +8,9 @@ Send responses to calls for information from a remote host
 #include <EthernetUdp.h>
 #include <SPI.h>    
 #include <OSCBundle.h>
+#include <OSCBoards.h>
 
 //UDP communication
-
-
 EthernetUDP Udp;
 
 //the Arduino's IP
@@ -53,13 +52,21 @@ void read_mac() {}
 OSCBundle bundleOUT;
 
 //converts the pin to an osc address
-const char * numToOSCAddress( int pin){
-  static char s[10] ="/";
-   
-   itoa(pin, s+1, 10);
-   return s;
+char * numToOSCAddress( int pin){
+    static char s[10];
+    int i = 9;
+	
+    s[i--]= '\0';
+	do
+    {
+		s[i] = "0123456789"[pin % 10];
+                --i;
+                pin /= 10;
+    }
+    while(pin && i);
+    s[i] = '/';
+    return &s[i];
 }
-
 
 /**
  * ANALOG
@@ -78,37 +85,37 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
     if(pinMatched){   
       if (msg.fullMatch("/u", pinMatched+addrOffset)) pinMode(analogInputToDigitalPin(0), INPUT_PULLUP); //set the pullup
         //do the analog read and send the results
-        bundleOUT.add("/analog/0").add(analogRead(0));         
+        bundleOUT.add("/analog/0").add((int32_t)analogRead(0));         
      }
     pinMatched = msg.match("/1", addrOffset);
     if(pinMatched){   
       if (msg.fullMatch("/u", pinMatched+addrOffset)) pinMode(analogInputToDigitalPin(1), INPUT_PULLUP); //set the pullup
         //do the analog read and send the results
-        bundleOUT.add("/analog/1").add(analogRead(1));         
+        bundleOUT.add("/analog/1").add((int32_t)analogRead(1));         
      }
     pinMatched = msg.match("/2", addrOffset);
     if(pinMatched){   
       if (msg.fullMatch("/u", pinMatched+addrOffset)) pinMode(analogInputToDigitalPin(2), INPUT_PULLUP); //set the pullup
         //do the analog read and send the results
-        bundleOUT.add("/analog/2").add(analogRead(2));         
+        bundleOUT.add("/analog/2").add((int32_t)analogRead(2));         
      }
     pinMatched = msg.match("/3", addrOffset);
     if(pinMatched){   
       if (msg.fullMatch("/u", pinMatched+addrOffset)) pinMode(analogInputToDigitalPin(3), INPUT_PULLUP); //set the pullup
         //do the analog read and send the results
-        bundleOUT.add("/analog/3").add(analogRead(3));         
+        bundleOUT.add("/analog/3").add((int32_t)analogRead(3));         
      }
     pinMatched = msg.match("/4", addrOffset);
     if(pinMatched){   
       if (msg.fullMatch("/u", pinMatched+addrOffset)) pinMode(analogInputToDigitalPin(4), INPUT_PULLUP); //set the pullup
         //do the analog read and send the results
-        bundleOUT.add("/analog/4").add(analogRead(4));         
+        bundleOUT.add("/analog/4").add((int32_t)analogRead(4));         
      }
     pinMatched = msg.match("/5", addrOffset);
     if(pinMatched){   
       if (msg.fullMatch("/u", pinMatched+addrOffset)) pinMode(analogInputToDigitalPin(5), INPUT_PULLUP); //set the pullup
         //do the analog read and send the results
-        bundleOUT.add("/analog/5").add(analogRead(5));         
+        bundleOUT.add("/analog/5").add((int32_t)analogRead(5));         
      }
 }
 

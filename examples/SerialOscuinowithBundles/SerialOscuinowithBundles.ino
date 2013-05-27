@@ -1,20 +1,34 @@
 
 #include <OSCBundle.h>
+#include <OSCBoards.h>
 
-#if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__)
+#ifdef BOARD_HAS_USB_SERIAL
 #include <SLIPEncodedUSBSerial.h>
+SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
 #else
 #include <SLIPEncodedSerial.h>
+ SLIPEncodedSerial SLIPSerial(Serial);
 #endif
+
+//outgoing messages
 
 OSCBundle bundleOUT;
 
 //converts the pin to an osc address
-const char * numToOSCAddress( int pin){
-  static char s[10] ="/";
-   
-   itoa(pin, s+1, 10);
-   return s;
+char * numToOSCAddress( int pin){
+    static char s[10];
+    int i = 9;
+	
+    s[i--]= '\0';
+	do
+    {
+		s[i] = "0123456789"[pin % 10];
+                --i;
+                pin /= 10;
+    }
+    while(pin && i);
+    s[i] = '/';
+    return &s[i];
 }
 
 /**
@@ -101,19 +115,23 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
       else if(msg.isFloat(0)){
         analogWrite(pin, (int)(msg.getFloat(0)*255.0f));
       }
-      //with a pullup?
+#ifdef BOARD_HAS_ANALOG_PULLUP
+    //with a pullup?
       else if (msg.fullMatch("/u", pinMatched+addrOffset)){
         //set the pullup
 
         pinMode(analogInputToDigitalPin(pin), INPUT_PULLUP);
+
         //setup the output address which should be /a/(pin)/u
         char outputAddress[9];
         strcpy(outputAddress, "/a");
         strcat(outputAddress, numToOSCAddress(pin));
         strcat(outputAddress,"/u");
-        //do the analog read and send the results
-        bundleOUT.add(outputAddress).add(analogRead(pin));       
-      } //else without a pullup   
+       //do the analog read and send the results
+        bundleOUT.add(outputAddress).add((int32_t)analogRead(pin));       
+      } //else without a pullup 
+#endif
+
       else {
          //otherwise it's an analog read
        //set the pinmode
@@ -124,13 +142,13 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
         strcpy(outputAddress, "/a");
         strcat(outputAddress, numToOSCAddress(pin));
         //do the analog read and send the results
-        bundleOUT.add(outputAddress).add(analogRead(pin));         
+        bundleOUT.add(outputAddress).add((int32_t)analogRead(pin));         
       }
     }
   }
 }
 
-
+#ifdef BOARD_HAS_TONE
 /**
  * TONE
  * 
@@ -170,11 +188,10 @@ void routeTone(OSCMessage &msg, int addrOffset ){
     }
   }
 }
-#if defined (__MK20DX128__)
-#define TOUCHSUPPORT
 #endif
 
-#ifdef TOUCHSUPPORT
+
+#ifdef BOARD_HAS_CAPACITANCE_SENSING
 #define NTPINS 12
 const int cpins[NTPINS] = {22,23,19,18,17,16,15,0,1,25,32, 33 }; 
 void routeTouch(OSCMessage &msg, int addrOffset )
@@ -195,8 +212,15 @@ void routeTouch(OSCMessage &msg, int addrOffset )
 }
 #endif
 
-#if !defined(__AVR_ATmega8__) && !defined(__MK20DX128__)
+#ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
+#if defined(__MK20DX128__)
+float getSupplyVoltage()
+{
+  int val = analogRead(39); 
+  return val>0? (1.20f*1023/val):0.0f; 
+}
 
+#else
 // power supply measurement on some Arduinos 
 float getSupplyVoltage(){
     // powersupply
@@ -223,11 +247,27 @@ float getSupplyVoltage(){
     float supplyvoltage = 1.1264f *1023 / result;
     return supplyvoltage;	
 }
+#endif
 
+#endif
+
+#ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
+
+
+#if defined(__MK20DX128__)
+float getTemperature()
+{
+        analogReference(INTERNAL);
+        delay(1);
+        int val = analogRead(38); // seems to be flakey
+        analogReference(DEFAULT);
+
+        return val; //need to compute something here to get to degrees C
+}
+#else
 // temperature
 float getTemperature(){	
 	int result;
-#if defined(__AVR_ATmega32U4__) ||    (!defined(__AVR_ATmega1280__) && !defined(__AVR_ATmega8__) && !defined(__AVR_AT90USB646__) && !defined(__AVR_AT90USB1286__) &&! defined(__AVR_ATmega2560__))
 	
 #if defined(__AVR_ATmega32U4__)
 	ADMUX =  _BV(REFS1) | _BV(REFS0) | _BV(MUX2) | _BV(MUX1) | _BV(MUX0);
@@ -244,27 +284,8 @@ float getTemperature(){
 	analogReference(DEFAULT);
 	
 	return  result/1023.0f;
-#else
-      return 0.0f;
-#endif	
 }
 #endif  
-
-#if defined(__MK20DX128__)
-float getTemperature()
-{
-        analogReference(INTERNAL);
-        delay(1);
-    int val = analogRead(38); // seems to be flakey
-  analogReference(DEFAULT);
-
-  return val; //need to compute something here to get to degrees C
-}
-float getSupplyVoltage()
-{
-  int val = analogRead(39); 
-  return val>0? (1.20f*1023/val):0.0f; 
-}
 
 #endif
 /**
@@ -281,12 +302,16 @@ float getSupplyVoltage()
  */
 // 
 void routeSystem(OSCMessage &msg, int addrOffset ){
+#ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
   if (msg.fullMatch("/t", addrOffset)){
     bundleOUT.add("/s/t").add(getTemperature());
   }
+#endif 
+#ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
   if (msg.fullMatch("/s", addrOffset)){
     bundleOUT.add("/s/s").add(getSupplyVoltage());
   }
+#endif
   if (msg.fullMatch("/m", addrOffset)){
     bundleOUT.add("/s/m").add((int32_t)micros());
   }
@@ -297,8 +322,6 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
     bundleOUT.add("/s/a").add(NUM_ANALOG_INPUTS);
   }
   if (msg.fullMatch("/l", addrOffset)){
- // I had to add this to make it work on Leonardo: static const int LEDBUILTIN=13;
-
     if (msg.isInt(0)){
              pinMode(LED_BUILTIN, OUTPUT);
       int i = msg.getInt(0);
@@ -314,18 +337,14 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
  * 
  * setup and loop, bundle receiving/sending, initial routing
  */
- 
-#if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__)
-SLIPEncodedUSBSerial SLIPSerial(Serial);
-#else
-SLIPEncodedSerial SLIPSerial(Serial);
-#endif
 
 
 void setup() {
     SLIPSerial.begin(9600);   // set this as high as you can reliably run on your platform
+#if ARDUINO >= 100
     while(!Serial)
       ;   // Leonardo bug
+#endif
 
 }
 
@@ -346,10 +365,12 @@ void loop(){
       bundleIN.route("/s", routeSystem);
       bundleIN.route("/a", routeAnalog);
       bundleIN.route("/d", routeDigital);
+#ifdef BOARD_HAS_TONE
       bundleIN.route("/tone", routeTone);
-    #ifdef TOUCHSUPPORT
+#endif
+#ifdef TOUCHSUPPORT
       bundleIN.route("/c", routeTouch);
-    #endif
+#endif
     }
     bundleIN.empty();
 

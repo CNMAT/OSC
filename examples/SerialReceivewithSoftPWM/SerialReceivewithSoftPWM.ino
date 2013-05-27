@@ -3,15 +3,16 @@
 * 
 */
 #include <OSCBundle.h>
+#include <OSCBoards.h>
 #include <SoftPWM.h>
 
 
-#if !defined(CORE_TEENSY) && !defined(__AVR_ATmega32U4__)
-#include <SLIPEncodedSerial.h>
-SLIPEncodedSerial SLIPSerial(Serial);
-#else
+#ifdef BOARD_HAS_USB_SERIAL
 #include <SLIPEncodedUSBSerial.h>
-SLIPEncodedUSBSerial SLIPSerial(Serial);
+SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
+#else
+#include <SLIPEncodedSerial.h>
+ SLIPEncodedSerial SLIPSerial(Serial);
 #endif
 
 
@@ -55,17 +56,16 @@ void LEDcontrol(OSCMessage &msg)
    
 }
 
-
-
-
-
 void setup() {
   SLIPSerial.begin(9600);
 
     SoftPWMBegin();
 
-  while(!Serial)
-    ;   // Leonardo needs this
+#if ARDUINO >= 100
+    while(!Serial)
+      ;   // Leonardo bug
+#endif
+
 
 }
 //reads and dispatches the incoming message
