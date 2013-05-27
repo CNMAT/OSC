@@ -37,6 +37,16 @@
 #include <inttypes.h>
 #include <string.h>
 
+#if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_)) || defined(BOARD_maple_mini)
+
+#define BOARD_HAS_USB_SERIAL
+#endif
+
+#if defined(__SAM3X8E__)
+#define thisBoardsSerialUSB SerialUSB
+#else
+#define thisBoardsSerialUSB Serial
+#endif
 
 //ERRORS/////////////////////////////////////////////////
 typedef enum { OSC_OK = 0,
@@ -125,22 +135,4 @@ static inline T BigEndian(const T& x)
     return ret;
 }
 
-// missing specs for Leonardo derived devices
-#if defined(__AVR_ATmega32U4__) && !defined(LED_BUILTIN)
-
-#if F_CPU==16000000
-// Leonardo and Esplora
-#define LED_BUILTIN  13
-#ifndef analogInputToDigitalPin
-#define analogInputToDigitalPin(p)  ((p < 12) ? (p) + 18 : -1)
 #endif
-#else
-//Lilypad USB and Flora (8Mhz)
-#define LED_BUILTIN  13  // its 7 on Flora but how do we detect this?
-#ifndef analogInputToDigitalPin
-#define analogInputToDigitalPin(p)  ((p < 12) ? (p) + 18 : -1)
-#endif
-#endif
-#endif
-
- #endif
