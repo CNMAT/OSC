@@ -46,7 +46,7 @@ public:
 	
 	
 //the arduino and wiring libraries have different return types for the write function
-#ifdef WIRING
+#if defined(WIRING) || defined(BOARD_DEFS_H)
 	void write(uint8_t b);
 #else
 	//overrides the Stream's write function to encode SLIP

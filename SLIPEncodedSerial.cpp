@@ -130,7 +130,7 @@ int SLIPEncodedSerial::peek(){
 }
 
 //the arduino and wiring libraries have different return types for the write function
-#ifdef WIRING
+#if defined(WIRING) || defined(BOARD_DEFS_H)
 
 //encode SLIP
  void SLIPEncodedSerial::write(uint8_t b){

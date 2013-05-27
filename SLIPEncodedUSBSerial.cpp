@@ -5,18 +5,23 @@
  */
 //instantiate with the tranmission layer
 
-#if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__) || defined(__SAM3X8E__)
+#if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_)) || defined(BOARD_maple_mini)
 
-//different constructor for teensies
+
 
 //USB Serials
 SLIPEncodedUSBSerial::SLIPEncodedUSBSerial(
-#if !defined(CORE_TEENSY)|| defined(__SAM3X8E__)
-Serial_
+
+#if  defined(CORE_TEENSY)
+                                           usb_serial_class
+#elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__)
+                                           Serial_
+#elif defined(__PIC32MX__) || defined(BOARD_maple_mini)
+                                           USBSerial
 #else
-usb_serial_class
+#error unknown platform
 #endif
-														&s){
+                                           &s){
 	serial = &s;
 	rstate = CHAR;
 }
@@ -143,7 +148,7 @@ int SLIPEncodedUSBSerial::peek(){
 }
 
 //the arduino and wiring libraries have different return types for the write function
-#ifdef WIRING
+#if defined(WIRING) || defined(BOARD_DEFS_H)
 
 //encode SLIP
  void SLIPEncodedUSBSerial::write(uint8_t b){
