@@ -234,8 +234,8 @@ void loop(){
     bndl.add("/joystick/forward").add((int32_t)Esplora.readButton(JOYSTICK_UP)?released:pressed); 
     bndl.add("/joystick/right").add((int32_t)Esplora.readButton(JOYSTICK_RIGHT)?released:pressed); 
     bndl.add("/mic/loudness").add(Esplora.readMicrophone()/1023.0f);
-    bndl.add("/temp/fahrenheit").add((float)Esplora.readTemperature(DEGREES_F));
-    bndl.add("/temp/celsius").add((float)Esplora.readTemperature(DEGREES_C));
+    bndl.add("/temperature/fahrenheit").add((float)Esplora.readTemperature(DEGREES_F));
+    bndl.add("/temperature/celsius").add((float)Esplora.readTemperature(DEGREES_C));
     bndl.add("/slider/horizontal").add(1.0f - Esplora.readSlider()/1023.0f);   
     bndl.add("/32u4/supplyVoltage").add(getSupplyVoltage());
     //   bndl.add("/32u4/temperature").add(getTemperature());
