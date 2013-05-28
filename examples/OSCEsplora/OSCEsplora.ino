@@ -159,6 +159,7 @@ unsigned int myReadChannel(byte channel) {
 
   return analogRead(MUX_COM_PIN);
 }
+
 void setup() {
   //begin SLIPSerial just like Serial
   SLIPSerial.begin(9600);   // set this as high as you can reliably run on your platform
@@ -170,35 +171,37 @@ void loop(){
   OSCBundle bndl;
   if(!SLIPSerial.available())
   {
+    
     // The RAW OSC address space and parameter mappngs try to capture
     // the data at lowest level without calibration or scaling
     // The names are chosen to match what is on the silkscreen of the board where it is found
-#define xRAW
-#ifdef RAW  
-    SLIPSerial.beginPacket(); 
-    bndl.add("/mic").add((int32_t)Esplora.readMicrophone());
-    bndl.add("/temp/sensor/celsius").add((int32_t)Esplora.readTemperature(DEGREES_C));
-    bndl.add("/temp/sensor/fahrenheit").add((int32_t)Esplora.readTemperature(DEGREES_F));
-    bndl.add("/linear/potentiometer").add((int32_t)Esplora.readSlider());
-    bndl.add("/light/sensor").add((int32_t)Esplora.readLightSensor());
-    bndl.add("/switch/1").add((int32_t)Esplora.readButton(SWITCH_1)); 
-    bndl.add("/switch/2").add((int32_t)Esplora.readButton(SWITCH_2)); 
-    bndl.add("/switch/3").add((int32_t)Esplora.readButton(SWITCH_3)); 
-    bndl.add("/switch/4").add((int32_t)Esplora.readButton(SWITCH_4)); 
-    bndl.add("/joystick/X").add((int32_t)Esplora.readJoystickX());    
-    bndl.add("/joystick/Y").add((int32_t)Esplora.readJoystickY());      
-    bndl.add("/joystick/switch").add((int32_t)Esplora.readJoystickSwitch());  
-    bndl.add("/joystick/switch/1").add((int32_t)Esplora.readButton(JOYSTICK_DOWN)); 
-    bndl.add("/joystick/switch/2").add((int32_t)Esplora.readButton(JOYSTICK_LEFT)); 
-    bndl.add("/joystick/switch/3").add((int32_t)Esplora.readButton(JOYSTICK_UP)); 
-    bndl.add("/joystick/switch/4").add((int32_t)Esplora.readButton(JOYSTICK_RIGHT)); 
-    bndl.add("/accelerometer/x").add(Esplora.readAccelerometer(X_AXIS)); 
-    bndl.add("/accelerometer/y").add(Esplora.readAccelerometer(Y_AXIS)); 
-    bndl.add("/accelerometer/z").add(Esplora.readAccelerometer(Z_AXIS)); 
-    bndl.send(SLIPSerial); // send the bytes to the SLIP stream
-    SLIPSerial.endPacket(); // mark the end of the OSC Packet
-    bndl.empty();
-#endif //RAW
+    #define RAW
+    #ifdef RAW  
+      SLIPSerial.beginPacket(); 
+      bndl.add("/mic").add((int32_t)Esplora.readMicrophone());
+      bndl.add("/temp/sensor/celsius").add((int32_t)Esplora.readTemperature(DEGREES_C));
+      bndl.add("/temp/sensor/fahrenheit").add((int32_t)Esplora.readTemperature(DEGREES_F));
+      bndl.add("/linear/potentiometer").add((int32_t)Esplora.readSlider());
+      bndl.add("/light/sensor").add((int32_t)Esplora.readLightSensor());
+      bndl.add("/switch/1").add((int32_t)Esplora.readButton(SWITCH_1)); 
+      bndl.add("/switch/2").add((int32_t)Esplora.readButton(SWITCH_2)); 
+      bndl.add("/switch/3").add((int32_t)Esplora.readButton(SWITCH_3)); 
+      bndl.add("/switch/4").add((int32_t)Esplora.readButton(SWITCH_4)); 
+      bndl.add("/joystick/X").add((int32_t)Esplora.readJoystickX());    
+      bndl.add("/joystick/Y").add((int32_t)Esplora.readJoystickY());      
+      bndl.add("/joystick/switch").add((int32_t)Esplora.readJoystickSwitch());  
+      bndl.add("/joystick/switch/1").add((int32_t)Esplora.readButton(JOYSTICK_DOWN)); 
+      bndl.add("/joystick/switch/2").add((int32_t)Esplora.readButton(JOYSTICK_LEFT)); 
+      bndl.add("/joystick/switch/3").add((int32_t)Esplora.readButton(JOYSTICK_UP)); 
+      bndl.add("/joystick/switch/4").add((int32_t)Esplora.readButton(JOYSTICK_RIGHT)); 
+      bndl.add("/accelerometer/x").add(Esplora.readAccelerometer(X_AXIS)); 
+      bndl.add("/accelerometer/y").add(Esplora.readAccelerometer(Y_AXIS)); 
+      bndl.add("/accelerometer/z").add(Esplora.readAccelerometer(Z_AXIS)); 
+      bndl.send(SLIPSerial); // send the bytes to the SLIP stream
+      SLIPSerial.endPacket(); // mark the end of the OSC Packet
+      bndl.empty();
+    #endif //RAW
+    
 
     // The COOKED OSC address space and parameter mappings 
     // encode data for ease of use and legibility at the host. Unit intervals replace integers
@@ -234,23 +237,21 @@ void loop(){
     bndl.send(SLIPSerial); // send the bytes to the SLIP stream
     SLIPSerial.endPacket(); // mark the end of the OSC Packet
     bndl.empty();
-#endif
-
-#define STATE
-#ifdef STATE
+  #endif
+  
+  #define STATE
+  #ifdef STATE
     SLIPSerial.beginPacket(); // mark the beginning of the OSC Packet
     bndl.add("/led/red").add((int32_t)Esplora.readRed());
     bndl.add("/led/green").add((int32_t)Esplora.readGreen());
     bndl.add("/led/blue").add((int32_t)Esplora.readBlue());
     bndl.add("/led/rgb").add((int32_t)Esplora.readRed()).add((int32_t)Esplora.readGreen()).add((int32_t)Esplora.readBlue());
-
-    bndl.add("/out/a").add((digitalRead(3)==HIGH)?1:0);
-    bndl.add("/out/b").add((digitalRead(11)==HIGH)?1:0);
+    bndl.add("/connector/orange/right").add((digitalRead(3)==HIGH)?1:0);
+    bndl.add("/connector/orange/left").add((digitalRead(11)==HIGH)?1:0);
     bndl.send(SLIPSerial); // send the bytes to the SLIP stream
     SLIPSerial.endPacket(); // mark the end of the OSC Packet
     bndl.empty();
-
-#endif
+  #endif
   }
   else
   {
@@ -266,7 +267,7 @@ void loop(){
     {
       if(!bundleIN.hasError())
       {
-        bundleIN.route("/led/onboard", routeLed);
+        bundleIN.route("/led", routeLed);
         bundleIN.route("/L", routeLed);    // this is how it is marked on the silkscreen
 
         bundleIN.route("/out", routeOut);   // for the TinkerIt output connectors
