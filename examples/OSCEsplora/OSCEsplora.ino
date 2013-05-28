@@ -176,34 +176,25 @@ void loop(){
 #define xRAW
 #ifdef RAW  
     SLIPSerial.beginPacket(); 
-
     bndl.add("/mic").add((int32_t)Esplora.readMicrophone());
-
     bndl.add("/temp/sensor/celsius").add((int32_t)Esplora.readTemperature(DEGREES_C));
     bndl.add("/temp/sensor/fahrenheit").add((int32_t)Esplora.readTemperature(DEGREES_F));
-
     bndl.add("/linear/potentiometer").add((int32_t)Esplora.readSlider());
     bndl.add("/light/sensor").add((int32_t)Esplora.readLightSensor());
-
     bndl.add("/switch/1").add((int32_t)Esplora.readButton(SWITCH_1)); 
     bndl.add("/switch/2").add((int32_t)Esplora.readButton(SWITCH_2)); 
     bndl.add("/switch/3").add((int32_t)Esplora.readButton(SWITCH_3)); 
     bndl.add("/switch/4").add((int32_t)Esplora.readButton(SWITCH_4)); 
-
-
     bndl.add("/joystick/X").add((int32_t)Esplora.readJoystickX());    
     bndl.add("/joystick/Y").add((int32_t)Esplora.readJoystickY());      
     bndl.add("/joystick/switch").add((int32_t)Esplora.readJoystickSwitch());  
-
     bndl.add("/joystick/switch/1").add((int32_t)Esplora.readButton(JOYSTICK_DOWN)); 
     bndl.add("/joystick/switch/2").add((int32_t)Esplora.readButton(JOYSTICK_LEFT)); 
     bndl.add("/joystick/switch/3").add((int32_t)Esplora.readButton(JOYSTICK_UP)); 
     bndl.add("/joystick/switch/4").add((int32_t)Esplora.readButton(JOYSTICK_RIGHT)); 
-
     bndl.add("/accelerometer/x").add(Esplora.readAccelerometer(X_AXIS)); 
     bndl.add("/accelerometer/y").add(Esplora.readAccelerometer(Y_AXIS)); 
     bndl.add("/accelerometer/z").add(Esplora.readAccelerometer(Z_AXIS)); 
-
     bndl.send(SLIPSerial); // send the bytes to the SLIP stream
     SLIPSerial.endPacket(); // mark the end of the OSC Packet
     bndl.empty();
@@ -211,7 +202,6 @@ void loop(){
 
     // The COOKED OSC address space and parameter mappings 
     // encode data for ease of use and legibility at the host. Unit intervals replace integers
-    //
     // The names are chosen to clarify usage rather than adherance to the silkscreen
     // also values are acquired as close together as reasonably possible to increase
     // their usability in sensor fusion contexts, i.e. in this case with the accelerometer
