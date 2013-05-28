@@ -221,30 +221,31 @@ void loop(){
     bndl.add("/acceleration/x").add(Esplora.readAccelerometer(X_AXIS)/512.0f); 
     bndl.add("/acceleration/y").add(Esplora.readAccelerometer(Y_AXIS)/512.0f); 
     bndl.add("/acceleration/z").add(Esplora.readAccelerometer(Z_AXIS)/512.0f); 
-    bndl.add("/luminance").add(Esplora.readLightSensor()/1023.0f);
+    bndl.add("/photoresistor").add(Esplora.readLightSensor()/1023.0f);
     bndl.add("/joystick/horizontal").add((int32_t)Esplora.readJoystickX()/512.0f);    
     bndl.add("/joystick/vertical").add((int32_t)Esplora.readJoystickY()/512.0f);      
     bndl.add("/joystick/button").add(Esplora.readJoystickSwitch()>0? released:pressed); 
-    bndl.add("/buttons/backward").add((int32_t)Esplora.readButton(SWITCH_1)?released:pressed); 
-    bndl.add("/buttons/left").add((int32_t)Esplora.readButton(SWITCH_2)?released:pressed); 
-    bndl.add("/buttons/forward").add((int32_t)Esplora.readButton(SWITCH_3)?released:pressed); 
-    bndl.add("/buttons/right").add((int32_t)Esplora.readButton(SWITCH_4)?released:pressed); 
+    bndl.add("/diamond/backward").add((int32_t)Esplora.readButton(SWITCH_1)?released:pressed); 
+    bndl.add("/diamond/left").add((int32_t)Esplora.readButton(SWITCH_2)?released:pressed); 
+    bndl.add("/diamond/forward").add((int32_t)Esplora.readButton(SWITCH_3)?released:pressed); 
+    bndl.add("/diamond/right").add((int32_t)Esplora.readButton(SWITCH_4)?released:pressed); 
     bndl.add("/joystick/backward").add((int32_t)Esplora.readButton(JOYSTICK_DOWN)?released:pressed); 
     bndl.add("/joystick/left").add((int32_t)Esplora.readButton(JOYSTICK_LEFT)?released:pressed); 
     bndl.add("/joystick/forward").add((int32_t)Esplora.readButton(JOYSTICK_UP)?released:pressed); 
     bndl.add("/joystick/right").add((int32_t)Esplora.readButton(JOYSTICK_RIGHT)?released:pressed); 
-    bndl.add("/mic/loudness").add(Esplora.readMicrophone()/1023.0f);
+    bndl.add("/microphone/loudness").add(Esplora.readMicrophone()/1023.0f);
     bndl.add("/temperature/fahrenheit").add((float)Esplora.readTemperature(DEGREES_F));
     bndl.add("/temperature/celsius").add((float)Esplora.readTemperature(DEGREES_C));
     bndl.add("/slider/horizontal").add(1.0f - Esplora.readSlider()/1023.0f);   
-    bndl.add("/32u4/supplyVoltage").add(getSupplyVoltage());
+    //   bndl.add("/32u4/supplyVoltage").add(getSupplyVoltage());
     //   bndl.add("/32u4/temperature").add(getTemperature());
-    bndl.add("/in/a").add(myReadChannel(CH_MIC  +1)/1023.0);
-    bndl.add("/in/b").add(myReadChannel(CH_MIC  +2)/1023.0);
+    bndl.add("/connector/white/left").add(myReadChannel(CH_MIC  +1)/1023.0);
+    bndl.add("/connector/white/right").add(myReadChannel(CH_MIC  +2)/1023.0);
     bndl.send(SLIPSerial); // send the bytes to the SLIP stream
     SLIPSerial.endPacket(); // mark the end of the OSC Packet
     bndl.empty();
 #endif
+
 #define STATE
 #ifdef STATE
     SLIPSerial.beginPacket(); // mark the beginning of the OSC Packet
