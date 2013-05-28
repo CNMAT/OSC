@@ -96,7 +96,7 @@ private:
 	bool testType(int position, char type);
 
 	//returns the number of bytes to pad to make it 4-bit aligned
-	int padSize(int bytes);
+    //	int padSize(int bytes);
     
 public:
 

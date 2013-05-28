@@ -282,7 +282,7 @@ int OSCMessage::getAddress(char * buffer, int offset, int len){
 
 void OSCMessage::setAddress(const char * _address){
     //free the previous address
-    free(address);
+    free(address); // are we sure address was allocated?
     //copy the address
 	char * addressMemory = (char *) malloc( (strlen(_address) + 1) * sizeof(char) );
 	if (addressMemory == NULL){
@@ -298,12 +298,15 @@ void OSCMessage::setAddress(const char * _address){
 	SIZE
 =============================================================================*/
 
+#ifdef SLOWpadcalculation
 int OSCMessage::padSize(int _bytes){
     int space = (_bytes + 3) / 4;
     space *= 4;
 	return space - _bytes;
 }
-
+#else
+static inline  int padSize(int bytes) { return (4- (bytes&03))&3; }
+#endif
 //returns the number of OSCData in the OSCMessage
 int OSCMessage::size(){
 	return dataCount;
@@ -322,9 +325,9 @@ int OSCMessage::bytes(){
     //add the types
     messageSize += dataCount;
     //pad the types
-    int typePad = padSize(dataCount + 1);
+    int typePad = padSize(dataCount + 1);   //for the comma
     if (typePad == 0){
-        typePad = 4;
+         typePad = 4; // to make sure the type string is null terminated
     }
     messageSize+=typePad;
     //then the data
@@ -377,13 +380,27 @@ void OSCMessage::send(Print &p){
     //add the comma seperator
     p.write((uint8_t) ',');
     //add the types
+#ifdef PAULSSUGGESTION
+    // Paul suggested buffering on the stack
+    // to improve performance. The problem is this could exhaust the stack
+    // for long complex messages
+    {
+        uint8_t typstr[dataCount];
+    
+        for (int i = 0; i < dataCount; i++){
+            typstr[i] =  getType(i);
+        }
+        p.write(typstr,dataCount);
+    }
+#else
     for (int i = 0; i < dataCount; i++){
         p.write((uint8_t) getType(i));
     }
+#endif
     //pad the types
-    int typePad = padSize(dataCount + 1);
+    int typePad = padSize(dataCount + 1); // 1 is for the comma
     if (typePad == 0){
-        typePad = 4;
+            typePad = 4;  // This is because the type string has to be null terminated
     }
     while(typePad--){
         p.write(nullChar);
@@ -391,13 +408,7 @@ void OSCMessage::send(Print &p){
     //write the data
     for (int i = 0; i < dataCount; i++){
         OSCData * datum = getOSCData(i);
-        if (datum->type == 's'){
-            p.write(datum->data.b, datum->bytes);
-            int dataPad = padSize(datum->bytes);
-            while(dataPad--){
-                p.write(nullChar);
-            }
-        } else if(datum->type == 'b'){
+        if ((datum->type == 's') || (datum->type == 'b')){
             p.write(datum->data.b, datum->bytes);
             int dataPad = padSize(datum->bytes);
             while(dataPad--){
@@ -407,7 +418,7 @@ void OSCMessage::send(Print &p){
             double d = BigEndian(datum->data.d);
             uint8_t * ptr = (uint8_t *) &d;
             p.write(ptr, 8);
-        } else {
+        } else { // float or int
             uint32_t i = BigEndian(datum->data.i);
             uint8_t * ptr = (uint8_t *) &i;
             p.write(ptr, datum->bytes);
@@ -560,9 +571,9 @@ void OSCMessage::decode(uint8_t incomingByte){
 		case TYPES_PADDING: {
                 //compute the padding size for the types
                 //to determine the start of the data section
-                int typePad = padSize(dataCount + 1);
+            int typePad = padSize(dataCount + 1); // 1 is the comma
                 if (typePad == 0){
-                    typePad = 4;
+                    typePad = 4;     // to make sure it will be null terminated
                 }
                 if (incomingBufferSize == (typePad + dataCount)){
                     clearIncomingBuffer();
