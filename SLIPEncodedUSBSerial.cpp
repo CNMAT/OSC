@@ -163,6 +163,8 @@ int SLIPEncodedUSBSerial::peek(){
 	}	
 }
 
+void SLIPEncodedUSBSerial::write(const uint8_t *buffer, size_t size) {  serial->write(buffer, size); }
+
 #else
 //encode SLIP
 size_t SLIPEncodedUSBSerial::write(uint8_t b){
@@ -176,7 +178,7 @@ size_t SLIPEncodedUSBSerial::write(uint8_t b){
 		return serial->write(b);
 	}	
 }
-
+size_t SLIPEncodedUSBSerial::write(const uint8_t *buffer, size_t size) { return serial->write(buffer, size); }
 #endif
 
 void SLIPEncodedUSBSerial::begin(unsigned long baudrate){
