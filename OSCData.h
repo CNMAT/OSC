@@ -95,6 +95,7 @@ public:
 	OSCData (uint8_t *, int);
     //accepts another OSCData objects and clones it
 	OSCData (OSCData *);
+    OSCData  (bool);
 
 	//destructor
 	~OSCData();
@@ -105,6 +106,7 @@ public:
     double getDouble();
     int getString(char *, int);
     int getBlob(uint8_t *, int);
+    bool getBoolean();
     
     //constructor from byte array with type and length
 	OSCData(char, uint8_t *, int);

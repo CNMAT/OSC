@@ -238,6 +238,7 @@ public:
 	int32_t getInt(int);
 	float getFloat(int);
 	double getDouble(int);
+    bool getBoolean(int);
 
 	//return the copied string's length
 	int getString(int, char *, int);
@@ -269,6 +270,7 @@ public:
 	bool isChar(int);
 	bool isString(int);
 	bool isDouble(int);
+    bool isBoolean(int);
 		
 /*=============================================================================
 	PATTERN MATCHING

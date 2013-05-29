@@ -47,6 +47,12 @@ OSCData::OSCData(float f){
 	data.f = f;	
 }
 
+OSCData::OSCData(bool b){
+	error = OSC_OK;
+	type = b?'T':'F';
+	bytes = 0;
+}
+
 
 OSCData::OSCData(double d){
 	error = OSC_OK;
@@ -71,16 +77,22 @@ OSCData::OSCData(uint8_t * b, int len){
     len32 = BigEndian(len32);
 	uint8_t * lenPtr = (uint8_t *) (& len32);
 	//own the data
-	uint8_t * mem = (uint8_t * ) malloc(bytes);
-	if (mem == NULL){
-		error = ALLOCFAILED;
-	} else {
-		//copy over the blob length
-		memcpy(mem, lenPtr, 4);
-		//copy over the blob data
-		memcpy(mem + 4, b, len);
-        data.b = mem;
-	}
+	if(bytes>0)
+    {
+            
+        uint8_t * mem = (uint8_t * ) malloc(bytes);
+        if (mem == NULL){
+            error = ALLOCFAILED;
+        } else {
+            //copy over the blob length
+            memcpy(mem, lenPtr, 4);
+            //copy over the blob data
+            memcpy(mem + 4, b, len);
+            data.b = mem;
+        }
+    }
+    else
+        data.b = 0;
 }
 
 OSCData::OSCData (OSCData * datum){
@@ -152,6 +164,10 @@ double OSCData::getDouble(){
     } else {
         return NULL;
     }
+}
+bool OSCData::getBoolean(){
+    
+    return type=='T';
 }
 
 int OSCData::getString(char * strBuffer, int length){

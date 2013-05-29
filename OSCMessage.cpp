@@ -222,6 +222,9 @@ bool OSCMessage::isString(int position){
 bool OSCMessage::isDouble(int position){
 	return testType(position, 'd');
 }
+bool OSCMessage::isBoolean(int position){
+	return testType(position, 'T') || testType(position, 'F');
+}
 
 
 /*=============================================================================
@@ -426,7 +429,9 @@ void OSCMessage::send(Print &p){
             double d = BigEndian(datum->data.d);
             uint8_t * ptr = (uint8_t *) &d;
             p.write(ptr, 8);
-        } else { // float or int
+        } else if (datum->type == 'T' || datum->type == 'F')
+                    { }
+        else { // float or int
             uint32_t i = BigEndian(datum->data.i);
             uint8_t * ptr = (uint8_t *) &i;
             p.write(ptr, datum->bytes);
