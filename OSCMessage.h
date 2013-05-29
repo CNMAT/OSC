@@ -73,7 +73,8 @@ private:
     
     //stores incoming bytes until they can be decoded
     uint8_t * incomingBuffer;
-    int incomingBufferSize;
+    int incomingBufferSize; // how many bytes are stored
+    int incomingBufferFree; // how many bytes are allocated but unused
     
     //adds a byte to the buffer
     void addToIncomingBuffer(uint8_t);

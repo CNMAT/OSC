@@ -62,6 +62,8 @@ void OSCMessage::setupMessage(){
     //setup for filling the message
     incomingBuffer = NULL;
     incomingBufferSize = 0;
+    incomingBufferFree = 0;
+    clearIncomingBuffer();
     //set the decode state
     decodeState = STANDBY;
 }
@@ -414,6 +416,12 @@ void OSCMessage::send(Print &p){
             while(dataPad--){
                 p.write(nullChar);
             }
+        } else if(datum->type == 'b'){
+            p.write(datum->data.b, datum->bytes);
+            int dataPad = padSize(datum->bytes);
+            while(dataPad--){
+                p.write(nullChar);
+            }
         } else if (datum->type == 'd'){
             double d = BigEndian(datum->data.d);
             uint8_t * ptr = (uint8_t *) &d;
@@ -608,19 +616,35 @@ void OSCMessage::decode(uint8_t incomingByte){
 /*=============================================================================
     INCOMING BUFFER MANAGEMENT
  =============================================================================*/
-
+#define OSCPREALLOCATEIZE 16
 void OSCMessage::addToIncomingBuffer(uint8_t incomingByte){
     //realloc some space for the new byte and stick it on the end
-	incomingBuffer = (uint8_t *) realloc ( incomingBuffer, incomingBufferSize + 1);
-	if (incomingBuffer != NULL){
-		incomingBuffer[incomingBufferSize++] = incomingByte;
-	} else {
-		error = ALLOCFAILED;
-	}
+    if(incomingBufferFree>0)
+    {
+            incomingBuffer[incomingBufferSize++] = incomingByte;
+            incomingBufferFree--;
+    }
+    else
+	{
+
+        incomingBuffer = (uint8_t *) realloc ( incomingBuffer, incomingBufferSize + 1 + OSCPREALLOCATEIZE);
+        if (incomingBuffer != NULL){
+            incomingBuffer[incomingBufferSize++] = incomingByte;
+            incomingBufferFree = OSCPREALLOCATEIZE;
+        } else {
+            error = ALLOCFAILED;
+        }
+    }
 }
 
 void OSCMessage::clearIncomingBuffer(){
+    incomingBuffer = (uint8_t *) realloc ( incomingBuffer, OSCPREALLOCATEIZE);
+	if (incomingBuffer != NULL){
+		incomingBufferFree = OSCPREALLOCATEIZE;
+	} else {
+		error = ALLOCFAILED;
+        incomingBuffer = NULL;
+
+	}    
     incomingBufferSize = 0;
-    free(incomingBuffer);
-    incomingBuffer = NULL;
 }
