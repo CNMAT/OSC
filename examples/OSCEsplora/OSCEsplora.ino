@@ -201,7 +201,6 @@ void loop(){
       SLIPSerial.endPacket(); // mark the end of the OSC Packet
       bndl.empty();
     #endif //RAW
-    
 
     // The COOKED OSC address space and parameter mappings 
     // encode data for ease of use and legibility at the host. Unit intervals replace integers
