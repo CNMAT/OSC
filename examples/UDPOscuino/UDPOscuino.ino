@@ -4,10 +4,11 @@
 // Yotam Mann and Adrian Freed
 
 
-#include <Ethernet.h>
-#include <EthernetUdp.h>
+#include <Ethernet.h>  //<EthernetV1_0.h>
+#include <EthernetUdp.h> //<EthernetUdpV1_0.h>
 #include <SPI.h>    
 #include <OSCBundle.h>
+#include <OSCBoards.h>
 
 EthernetUDP Udp;
 
@@ -50,11 +51,20 @@ void read_mac() {}
 OSCBundle bundleOUT;
 
 //converts the pin to an osc address
-const char * numToOSCAddress( int pin){
-  static char s[10] ="/";
-   
-   itoa(pin, s+1, 10);
-   return s;
+char * numToOSCAddress( int pin){
+    static char s[10];
+    int i = 9;
+	
+    s[i--]= '\0';
+	do
+    {
+		s[i] = "0123456789"[pin % 10];
+                --i;
+                pin /= 10;
+    }
+    while(pin && i);
+    s[i] = '/';
+    return &s[i];
 }
 
 /**
@@ -141,7 +151,8 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
       else if(msg.isFloat(0)){
         analogWrite(pin, (int)(msg.getFloat(0)*255.0f));
       }
-      //with a pullup?
+#ifdef BOARD_HAS_ANALOG_PULLUP
+    //with a pullup?
       else if (msg.fullMatch("/u", pinMatched+addrOffset)){
         //set the pullup
 
@@ -152,12 +163,13 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
         strcpy(outputAddress, "/a");
         strcat(outputAddress, numToOSCAddress(pin));
         strcat(outputAddress,"/u");
+        strcat(outputAddress,"/u");
         //do the analog read and send the results
-        bundleOUT.add(outputAddress).add(analogRead(pin));       
+        bundleOUT.add(outputAddress).add((int32_t)analogRead(pin));
       } //else without a pullup   
+#endif
       else {
         //set the pinmode
-        // This fails on Arduino 1.04 on Leanardo, I added this to fix it: #define analogInputToDigitalPin(p)  (p+18)
 
         pinMode(analogInputToDigitalPin(pin), INPUT);
         //setup the output address which should be /a/(pin)
@@ -165,12 +177,13 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
         strcpy(outputAddress, "/a");
         strcat(outputAddress, numToOSCAddress(pin));
         //do the analog read and send the results
-        bundleOUT.add(outputAddress).add(analogRead(pin));         
+        bundleOUT.add(outputAddress).add((int32_t)analogRead(pin));
       }
     }
   }
 }
 
+#ifdef BOARD_HAS_TONE
 
 /**
  * TONE
@@ -211,11 +224,10 @@ void routeTone(OSCMessage &msg, int addrOffset ){
     }
   }
 }
-#if defined (__MK20DX128__)
-#define TOUCHSUPPORT
+
 #endif
 
-#ifdef TOUCHSUPPORT
+#ifdef BOARD_HAS_CAPACITANCE_SENSING
 #define NTPINS 12
 const int cpins[NTPINS] = {22,23,19,18,17,16,15,0,1,25,32, 33 }; 
 void routeTouch(OSCMessage &msg, int addrOffset )
@@ -236,8 +248,16 @@ const char *name = numToOSCAddress(cpins[i]);
 }
 #endif
 
-#if !defined(__AVR_ATmega8__) && !defined(__MK20DX128__)
 
+#ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
+#if defined(__MK20DX128__)
+float getSupplyVoltage()
+{
+  int val = analogRead(39); 
+  return val>0? (1.20f*1023/val):0.0f; 
+}
+
+#else
 // power supply measurement on some Arduinos 
 float getSupplyVoltage(){
     // powersupply
@@ -264,11 +284,27 @@ float getSupplyVoltage(){
     float supplyvoltage = 1.1264f *1023 / result;
     return supplyvoltage;	
 }
+#endif
 
+#endif
+
+#ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
+
+
+#if defined(__MK20DX128__)
+float getTemperature()
+{
+        analogReference(INTERNAL);
+        delay(1);
+        int val = analogRead(38); // seems to be flakey
+        analogReference(DEFAULT);
+
+        return val; //need to compute something here to get to degrees C
+}
+#else
 // temperature
 float getTemperature(){	
 	int result;
-#if defined(__AVR_ATmega32U4__) ||    (!defined(__AVR_ATmega1280__) && !defined(__AVR_ATmega8__) && !defined(__AVR_AT90USB646__) && !defined(__AVR_AT90USB1286__) &&! defined(__AVR_ATmega2560__))
 	
 #if defined(__AVR_ATmega32U4__)
 	ADMUX =  _BV(REFS1) | _BV(REFS0) | _BV(MUX2) | _BV(MUX1) | _BV(MUX0);
@@ -285,27 +321,8 @@ float getTemperature(){
 	analogReference(DEFAULT);
 	
 	return  result/1023.0f;
-#else
-      return 0.0f;
-#endif	
 }
 #endif  
-
-#if defined(__MK20DX128__)
-float getTemperature()
-{
-        analogReference(INTERNAL);
-        delay(1);
-    int val = analogRead(38); // seems to be flakey
-  analogReference(DEFAULT);
-
-  return val; //need to compute something here to get to degrees C
-}
-float getSupplyVoltage()
-{
-  int val = analogRead(39); 
-  return val>0? (1.20f*1023/val):0.0f; 
-}
 
 #endif
 /**
@@ -322,12 +339,17 @@ float getSupplyVoltage()
  */
 // 
 void routeSystem(OSCMessage &msg, int addrOffset ){
+
+#ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
   if (msg.fullMatch("/t", addrOffset)){
     bundleOUT.add("/s/t").add(getTemperature());
   }
+#endif 
+#ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT  
   if (msg.fullMatch("/s", addrOffset)){
     bundleOUT.add("/s/s").add(getSupplyVoltage());
   }
+#endif
   if (msg.fullMatch("/m", addrOffset)){
     bundleOUT.add("/s/m").add((int32_t)micros());
   }
@@ -337,9 +359,11 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
   if (msg.fullMatch("/a", addrOffset)){
     bundleOUT.add("/s/a").add(NUM_ANALOG_INPUTS);
   }
-#ifdef ENABLE_LED
+  
 // this is disabled because many ethernet boards use the
-// LED pin for ethernet pin CS
+// LED pin for ethernet pin 13
+#if LED_BUILTIN!=13
+
   if (msg.fullMatch("/l", addrOffset)){
 
     if (msg.isInt(0)){
@@ -383,7 +407,10 @@ void loop(){
         bundleIN.route("/s", routeSystem);
         bundleIN.route("/a", routeAnalog);
         bundleIN.route("/d", routeDigital);
+#ifdef BOARD_HAS_TONE
         bundleIN.route("/tone", routeTone);
+#endif
+
 #ifdef TOUCHSUPPORT
         bundleIN.route("/c", routeTouch);
 #endif

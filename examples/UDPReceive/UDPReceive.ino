@@ -4,6 +4,7 @@
 #include <SPI.h>    
 
 #include <OSCBundle.h>
+#include <OSCBoards.h>
 
 /*
 * UDPReceiveOSC
@@ -25,12 +26,22 @@ IPAddress ip(128, 32, 122, 252);
 const unsigned int inPort = 8888;
 
 //converts the pin to an osc address
-const char * numToOSCAddress( int pin){
-  static char s[10] ="/";
-   
-   itoa(pin, s+1, 10);
-   return s;
+char * numToOSCAddress( int pin){
+    static char s[10];
+    int i = 9;
+	
+    s[i--]= '\0';
+	do
+    {
+		s[i] = "0123456789"[pin % 10];
+                --i;
+                pin /= 10;
+    }
+    while(pin && i);
+    s[i] = '/';
+    return &s[i];
 }
+
 /**
  * TONE
  * 

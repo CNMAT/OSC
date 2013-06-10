@@ -1,6 +1,9 @@
-
 #include <OSCBundle.h>
 #include <OSCBoards.h>
+
+// tested on Fubarino with MpIDE 0023-macosx-20130514-test
+// analalogRead() has a strange interpretation of its arguments
+// they think you are supposed to pass digital pin numbers???
 
 #ifdef BOARD_HAS_USB_SERIAL
 #include <SLIPEncodedUSBSerial.h>
@@ -10,30 +13,30 @@ SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
  SLIPEncodedSerial SLIPSerial(Serial);
 #endif
 
+OSCBundle bundleOUT;
 
 //converts the pin to an osc address
-char * numToOSCAddress( int pin){
-    static char s[10];
-    int i = 9;
-	
-    s[i--]= '\0';
+ char * numToOSCAddress( int pin){
+  static char s[10];
+   int i = 9;
+	s[i--]= '\0';
 	do
-    {
+{
 		s[i] = "0123456789"[pin % 10];
                 --i;
                 pin /= 10;
-    }
-    while(pin && i);
-    s[i] = '/';
-    return &s[i];
 }
+        while(pin && i);
+s[i] = '/';
+return &s[i];
+}
+
 /**
  * ROUTES
  * 
  * these are where the routing functions go
  * 
  */
-
 /**
  * DIGITAL
  * 
@@ -52,7 +55,14 @@ void routeDigital(OSCMessage &msg, int addrOffset ){
     //match against the pin number strings
     int pinMatched = msg.match(numToOSCAddress(pin), addrOffset);
     if(pinMatched){
-      //if it has an int, then it's a digital write
+     switch(pin)
+    {
+      // fubarino MINI
+      // these are used for clocks and USB and Program switch and shouldn't be written to
+      // unless you know what you are doing
+      case 3: case 14: case 15: case 23: case 16: case 31:case 32: goto out;
+    }
+     //if it has an int, then it's a digital write
       if (msg.isInt(0)){
         pinMode(pin, OUTPUT);
         digitalWrite(pin, (msg.getInt(0)>0) ? HIGH:LOW);
@@ -86,9 +96,10 @@ void routeDigital(OSCMessage &msg, int addrOffset ){
         }  
       }
     }
+    out: ;
   }
 }
-
+ 
 /**
  * ANALOG
  * 
@@ -154,7 +165,9 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
     }
   }
 }
+
 #ifdef BOARD_HAS_TONE
+
 /**
  * TONE
  * 
@@ -195,6 +208,7 @@ void routeTone(OSCMessage &msg, int addrOffset ){
   }
 }
 #endif
+
 
 
 #ifdef BOARD_HAS_CAPACITANCE_SENSING
@@ -312,16 +326,16 @@ float getTemperature(){
 // 
 void routeSystem(OSCMessage &msg, int addrOffset ){
   
-#ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
+ #ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
   if (msg.fullMatch("/t", addrOffset)){
     { OSCMessage  msgOut("/s/t"); msgOut.add(getTemperature());         SLIPSerial.beginPacket();msgOut.send(SLIPSerial); SLIPSerial.endPacket(); }
   }
-#endif 
-#ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
+ #endif 
+ #ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
   if (msg.fullMatch("/s", addrOffset)){
     { OSCMessage  msgOut("/s/s"); msgOut.add(getSupplyVoltage());         SLIPSerial.beginPacket();msgOut.send(SLIPSerial); SLIPSerial.endPacket(); }
   }
-#endif
+ #endif
   if (msg.fullMatch("/m", addrOffset)){
     { OSCMessage  msgOut("/s/m"); msgOut.add((int32_t)micros());         SLIPSerial.beginPacket();msgOut.send(SLIPSerial); SLIPSerial.endPacket(); }
   }
@@ -348,14 +362,14 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
  * 
  * setup and loop, bundle receiving/sending, initial routing
  */
+ 
 void setup() {
     SLIPSerial.begin(9600);   // set this as high as you can reliably run on your platform
-#if ARDUINO >= 100
-    while(!Serial)
+ #if ARDUINO >= 100
+   while(!Serial)
       ;   // Leonardo bug
-#endif
+ #endif
 }
-
 
 //reads and routes the incoming messages
 void loop(){ 
@@ -380,10 +394,8 @@ void loop(){
     bundleIN.route("/c", routeTouch);
 #endif
     }
+
 }
-
-
-
 
 
 

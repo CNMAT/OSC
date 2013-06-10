@@ -8,21 +8,22 @@ This example can be extended to build routers and forwarders of OSC packets
 #include <OSCBundle.h>
 
 
-//Teensy and Leonardo variants have special USB serial
-#if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__)
+#ifdef BOARD_HAS_USB_SERIAL
 #include <SLIPEncodedUSBSerial.h>
-SLIPEncodedUSBSerial SLIPSerial(Serial);
+SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
 #else
-// any hardware serial port
 #include <SLIPEncodedSerial.h>
-SLIPEncodedSerial SLIPSerial(Serial);
+ SLIPEncodedSerial SLIPSerial(Serial);
 #endif
 
 void setup() {
     //begin SLIPSerial just like Serial
     SLIPSerial.begin(9600);   // set this as high as you can reliably run on your platform
+#if ARDUINO >= 100
     while(!Serial)
-      ; //Leonardo "feature"
+      ;   // Leonardo bug
+#endif
+
 }
 
 void loop(){
@@ -43,6 +44,8 @@ void loop(){
         // we can sneak an addition onto the end of the bundle
         bndl.add("/micros").add((int32_t)micros()); // (int32_t) is the type of OSC Integers
         bndl.add("/sequencenumber").add(sequencenumber++);
+        bndl.add("/digital/5").add(digitalRead(5)==HIGH);
+        bndl.add("/lsb").add((sequencenumber &1)==1);
         SLIPSerial.beginPacket(); // mark the beginning of the OSC Packet
             bndl.send(SLIPSerial);
         SLIPSerial.endPacket();     

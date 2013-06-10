@@ -30,7 +30,7 @@ void setup() {
 void loop(){
   //the message wants an OSC address as first argument
   OSCMessage msg("/analog/0");
-  msg.add(analogRead(0));
+  msg.add((int32_t)analogRead(0));
   
   Udp.beginPacket(outIp, outPort);
     msg.send(Udp); // send the bytes to the SLIP stream

@@ -1,26 +1,30 @@
-OSC for Arduino 1.1
+OSC for Arduino 1.2rc2
 
 This is an Arduino and Teensy library implementation of the OSC encoding (http://opensoundcontrol.org)
 It was developed primarily by Yotam Mann and Adrian Freed at CNMAT where OSC was invented.
 It benefits from contributions from  John MacCallum, Matt Wright and Andy Schmeder
 and many beta testers.
 
-This release:
-
 - Supports the four basic OSC data types (32-bit integers, 32-bit floats, strings, and blobs - arbitrary length byte sequences)
-- Sends and receives OSC packets over transport layers that implements the Arduino  Stream - Class such as Serial and  Ethernet UDP
-- It has been tested on Basic Arduinos, Lilypads, Flora, Arduino Ethernet, Arduino Leonardo, Teensy primarily with the Wiznet W5100 chip
 - Address pattern matching
 - Dynamic memory allocation
+- Sends and receives OSC packets over transport layers that implements the Arduino  Stream - Class such as Serial and  Ethernet UDP
+- It has been tested on Basic Arduinos, Lilypads, Flora, Arduino Ethernet, Arduino Leonardo, Teensy primarily with the Wiznet W5100 chip
 
-Features for next release:
+This release:
+
+- Now works on the Due with Arduino 1.5 beta (serial is tested but not UDP yet)
+- Sketches compile also in MPIDE for PIC32's there has been limited testing on the Fubarino MINI
+(watch out on this platform: it connects and numbers digital pins in use for USB and clock XTAL!)
+- Added Boolean type according to OSC 1.0 optional type spec. (lightly tested)
+
+
+Features for future releases:
 - nested bundles
 - TCP/IP Examples
 - examples for more applications (i.e. TouchOSC, Processing with SLIP)
 - deadline scheduling of OSC 64-bit timetags
-- Due support
 - ADK support
-
 
 API Documentation and examples are available at http://cnmat.berkeley.edu/oscuino
 This is an active development and research project sponsored by the US Government, a consortium
@@ -44,9 +48,9 @@ mark the boundaries of each packet in a serial stream.
 ////////////////////////////////////////////////////////////////////////
 Installation from GitHub
 
-You need Arduino 1.0.4 or greater and Teensyduino 1.13 or later if you use the Teensy.
+We recommend Arduino 1.0.5 or greater and Teensyduino 1.14 or later if you use the Teensy.
 Download the zip from github. Unzip it and remove text after the "-" in the name (i.e. -master) because
-Arduino doesn't allow some characters in library names.
+the Arduino IDE doesn't allow certain characters in library names.
 Move the OSC folder into your "libraries" folder in your Arduino Sketch search path. 
 Now you will see OSC examples under the Examples menu of Arduino.
 

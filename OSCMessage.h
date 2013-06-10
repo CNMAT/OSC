@@ -73,7 +73,8 @@ private:
     
     //stores incoming bytes until they can be decoded
     uint8_t * incomingBuffer;
-    int incomingBufferSize;
+    int incomingBufferSize; // how many bytes are stored
+    int incomingBufferFree; // how many bytes are allocated but unused
     
     //adds a byte to the buffer
     void addToIncomingBuffer(uint8_t);
@@ -96,7 +97,7 @@ private:
 	bool testType(int position, char type);
 
 	//returns the number of bytes to pad to make it 4-bit aligned
-	int padSize(int bytes);
+    //	int padSize(int bytes);
     
 public:
 
@@ -237,6 +238,7 @@ public:
 	int32_t getInt(int);
 	float getFloat(int);
 	double getDouble(int);
+    bool getBoolean(int);
 
 	//return the copied string's length
 	int getString(int, char *, int);
@@ -268,6 +270,7 @@ public:
 	bool isChar(int);
 	bool isString(int);
 	bool isDouble(int);
+    bool isBoolean(int);
 		
 /*=============================================================================
 	PATTERN MATCHING
