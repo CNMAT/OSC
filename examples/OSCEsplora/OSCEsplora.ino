@@ -162,7 +162,7 @@ unsigned int myReadChannel(byte channel) {
 
 void setup() {
   //begin SLIPSerial just like Serial
-  SLIPSerial.begin(9600);   // set this as high as you can reliably run on your platform
+  SLIPSerial.begin(115200);   // set this as high as you can reliably run on your platform
   while(!Serial)
     ; //Leonardo "feature" (also needed on Esplora?)
 }
@@ -172,6 +172,7 @@ void loop(){
   if(!SLIPSerial.available())
   {
     
+    /*
     // The RAW OSC address space and parameter mappngs try to capture
     // the data at lowest level without calibration or scaling
     // The names are chosen to match what is on the silkscreen of the board where it is found
@@ -201,6 +202,7 @@ void loop(){
       SLIPSerial.endPacket(); // mark the end of the OSC Packet
       bndl.empty();
     #endif //RAW
+    */
 
     // The COOKED OSC address space and parameter mappings 
     // encode data for ease of use and legibility at the host. Unit intervals replace integers
@@ -225,17 +227,25 @@ void loop(){
     bndl.add("/joystick/left").add((int32_t)Esplora.readButton(JOYSTICK_LEFT)?released:pressed); 
     bndl.add("/joystick/forward").add((int32_t)Esplora.readButton(JOYSTICK_UP)?released:pressed); 
     bndl.add("/joystick/right").add((int32_t)Esplora.readButton(JOYSTICK_RIGHT)?released:pressed); 
+    
+    bndl.send(SLIPSerial); // send the bytes to the SLIP stream
+    SLIPSerial.endPacket(); // mark the end of the OSC Packet
+    bndl.empty();  //bundle ending early due to current memory limitations
+
+    //secondary bundle init
     bndl.add("/microphone/loudness").add(Esplora.readMicrophone()/1023.0f);
     bndl.add("/temperature/fahrenheit").add((float)Esplora.readTemperature(DEGREES_F));
     bndl.add("/temperature/celsius").add((float)Esplora.readTemperature(DEGREES_C));
-    bndl.add("/slider/horizontal").add(1.0f - Esplora.readSlider()/1023.0f);   
+    bndl.add("/slider/horizontal").add(1.0f - ((float)Esplora.readSlider()/1023.0f));   
     //   bndl.add("/32u4/supplyVoltage").add(getSupplyVoltage());
     //   bndl.add("/32u4/temperature").add(getTemperature());
     bndl.add("/connector/white/left").add(myReadChannel(CH_MIC  +1)/1023.0);
     bndl.add("/connector/white/right").add(myReadChannel(CH_MIC  +2)/1023.0);
+
     bndl.send(SLIPSerial); // send the bytes to the SLIP stream
     SLIPSerial.endPacket(); // mark the end of the OSC Packet
     bndl.empty();
+
   #endif
   
   #define STATE
