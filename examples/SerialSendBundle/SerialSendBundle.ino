@@ -35,6 +35,7 @@ void loop(){
     bndl.add("/analog/1").add((int32_t)analogRead(1));
     bndl.add("/digital/5").add((digitalRead(5)==HIGH)?"HIGH":"LOW");
 
+
     SLIPSerial.beginPacket();
         bndl.send(SLIPSerial); // send the bytes to the SLIP stream
     SLIPSerial.endPacket(); // mark the end of the OSC Packet
