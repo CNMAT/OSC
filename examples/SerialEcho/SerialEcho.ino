@@ -5,8 +5,7 @@ Serial USB ports are bidirectional.
 This example can be extended to build routers and forwarders of OSC packets
 */
 
-#include "OSCBundle.h"
-
+#include <OSCBundle.h>
 
 #ifdef BOARD_HAS_USB_SERIAL
 #include <SLIPEncodedUSBSerial.h>
