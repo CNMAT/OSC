@@ -480,11 +480,11 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                     if (incomingBufferSize == 4){
                         //parse the buffer as an int
                         union {
-                            uint32_t i;
+                            int32_t i;
                             uint8_t b[4];
                         } u;
                         memcpy(u.b, incomingBuffer, 4);
-                        int dataVal = BigEndian(u.i);
+                        int32_t dataVal = BigEndian(u.i);
                         set(i, dataVal);
                         clearIncomingBuffer();
                     }
@@ -531,7 +531,7 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                             uint8_t b[4];
                         } u;
                         memcpy(u.b, incomingBuffer, 4);
-                        int blobLength = BigEndian(u.i);
+                        uint32_t blobLength = BigEndian(u.i);
                         if (incomingBufferSize == blobLength + 4){
                             set(i, incomingBuffer + 4, blobLength);
                             clearIncomingBuffer();
