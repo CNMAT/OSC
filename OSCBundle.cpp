@@ -58,8 +58,7 @@ void OSCBundle::empty(){
     }
     free(messages);
     messages = NULL;
-    free(incomingBuffer);
-    incomingBuffer = NULL;
+    clearIncomingBuffer();
     numMessages = 0;
 }
 
