@@ -3,9 +3,9 @@
 Bidirectional Esplora OSC communications 
  using SLIP
  
- Adrian Freed 2013
+ Adrian Freed, Jeff Lubow 2013
  
- Includes ome examples of common "best practices" for OSC name space and parameter 
+ Includes some examples of common "best practices" for OSC name space and parameter 
  mapping design.
  
  Todo:
@@ -15,18 +15,16 @@ Bidirectional Esplora OSC communications
  Debounce the switches
  sliding window for the accelerometer, joystick and slider
  
- */
+*/
+
 #include <Esplora.h>
 #include <OSCBundle.h>
-
 //Teensy and Leonardo variants have special USB serial
 #include <SLIPEncodedUSBSerial.h>
-
 
 #if !defined(__AVR_ATmega32U4__)
 #error select Arduino Esplora in board menu
 #endif
-
 
 // temperature
 float getTemperature(){	
@@ -41,10 +39,9 @@ float getTemperature(){
   result |= ADCH<<8;
 
   analogReference(DEFAULT);
-
   return  result/1023.0f;
-
 }
+
 float getSupplyVoltage(){
   // powersupply
   int result;
@@ -59,6 +56,7 @@ float getSupplyVoltage(){
   float supplyvoltage = 1.1264f *1023 / result;
   return supplyvoltage;	
 }
+
 // Esplora has  a dinky green led at the top left and a big RGB led at the bottom right
 void routeLed(OSCMessage &msg, int addrOffset ){
   if(msg.match("/red", addrOffset)) {
@@ -87,8 +85,8 @@ void routeLed(OSCMessage &msg, int addrOffset ){
       digitalWrite(13, msg.getInt(0)>0?HIGH:LOW);
     }
   }
-
 }
+
 // Esplora has  a dinky green led at the top left and a big RGB led at the bottom right
 void routeOut(OSCMessage &msg, int addrOffset ){
   if(msg.match("/B", addrOffset) || msg.match("/b", addrOffset)) {
@@ -108,8 +106,8 @@ void routeOut(OSCMessage &msg, int addrOffset ){
     else    
       pinMode(3,INPUT);   // add pull up logic some day     
   }
-
 }
+
 /**
  * TONE
  * 
@@ -141,7 +139,6 @@ void routeTone(OSCMessage &msg, int addrOffset ){
     else
       Esplora.tone( frequency);
   }
-
 }
 const char *released = "released";
 const char *pressed = "pressed";
@@ -167,11 +164,16 @@ void setup() {
     ; //Leonardo "feature" (also needed on Esplora?)
 }
 
+int32_t counter = 0; 
+int32_t serialnumber = 1;   //hard coded; beware
+int32_t num_components = 3;  //currently break the bundle up into 3 components
+
 void loop(){
   OSCBundle bndl;
+  int32_t manifest_count = 1;
+
   if(!SLIPSerial.available())
   {
-    
     /*
     // The RAW OSC address space and parameter mappngs try to capture
     // the data at lowest level without calibration or scaling
@@ -209,15 +211,14 @@ void loop(){
     // The names are chosen to clarify usage rather than adherance to the silkscreen
     // also values are acquired as close together as reasonably possible to increase
     // their usability in sensor fusion contexts, i.e. in this case with the accelerometer
-#define COOKED
-#ifdef COOKED
+
     SLIPSerial.beginPacket(); // mark the beginning of the OSC Packet
     bndl.add("/acceleration/x").add(Esplora.readAccelerometer(X_AXIS)/512.0f); 
     bndl.add("/acceleration/y").add(Esplora.readAccelerometer(Y_AXIS)/512.0f); 
     bndl.add("/acceleration/z").add(Esplora.readAccelerometer(Z_AXIS)/512.0f); 
     bndl.add("/photoresistor").add(Esplora.readLightSensor()/1023.0f);
-    bndl.add("/joystick/horizontal").add((int32_t)Esplora.readJoystickX()/512.0f);    
-    bndl.add("/joystick/vertical").add((int32_t)Esplora.readJoystickY()/512.0f);      
+    bndl.add("/joystick/horizontal").add(-1.0 * (int32_t)Esplora.readJoystickX()/512.0f);    
+    bndl.add("/joystick/vertical").add(-1.0 * (int32_t)Esplora.readJoystickY()/512.0f);      
     bndl.add("/joystick/button").add(Esplora.readJoystickSwitch()>0? released:pressed); 
     bndl.add("/diamond/backward").add((int32_t)Esplora.readButton(SWITCH_1)?released:pressed); 
     bndl.add("/diamond/left").add((int32_t)Esplora.readButton(SWITCH_2)?released:pressed); 
@@ -227,7 +228,11 @@ void loop(){
     bndl.add("/joystick/left").add((int32_t)Esplora.readButton(JOYSTICK_LEFT)?released:pressed); 
     bndl.add("/joystick/forward").add((int32_t)Esplora.readButton(JOYSTICK_UP)?released:pressed); 
     bndl.add("/joystick/right").add((int32_t)Esplora.readButton(JOYSTICK_RIGHT)?released:pressed); 
-    
+    bndl.add("/manifest").add(manifest_count++).add(num_components).add(counter);
+    bndl.add("/serialnumber").add(serialnumber);
+    bndl.add("/vendor").add("Arduino");
+    bndl.add("/productname").add("Esplora");
+
     bndl.send(SLIPSerial); // send the bytes to the SLIP stream
     SLIPSerial.endPacket(); // mark the end of the OSC Packet
     bndl.empty();  //bundle ending early due to current memory limitations
@@ -241,15 +246,15 @@ void loop(){
     //   bndl.add("/32u4/temperature").add(getTemperature());
     bndl.add("/connector/white/left").add(myReadChannel(CH_MIC  +1)/1023.0);
     bndl.add("/connector/white/right").add(myReadChannel(CH_MIC  +2)/1023.0);
-
+    bndl.add("/manifest").add(manifest_count++).add(num_components).add(counter);
+    bndl.add("/serialnumber").add(serialnumber);
+    bndl.add("/vendor").add("Arduino");
+    bndl.add("/productname").add("Esplora");
+    
     bndl.send(SLIPSerial); // send the bytes to the SLIP stream
     SLIPSerial.endPacket(); // mark the end of the OSC Packet
     bndl.empty();
-
-  #endif
   
-  #define STATE
-  #ifdef STATE
     SLIPSerial.beginPacket(); // mark the beginning of the OSC Packet
     bndl.add("/led/red").add((int32_t)Esplora.readRed());
     bndl.add("/led/green").add((int32_t)Esplora.readGreen());
@@ -257,10 +262,17 @@ void loop(){
     bndl.add("/led/rgb").add((int32_t)Esplora.readRed()).add((int32_t)Esplora.readGreen()).add((int32_t)Esplora.readBlue());
     bndl.add("/connector/orange/right").add((digitalRead(3)==HIGH)?1:0);
     bndl.add("/connector/orange/left").add((digitalRead(11)==HIGH)?1:0);
+    bndl.add("/manifest").add(manifest_count++).add(num_components).add(counter);
+    bndl.add("/serialnumber").add(serialnumber);
+    bndl.add("/vendor").add("Arduino");
+    bndl.add("/productname").add("Esplora");
+
     bndl.send(SLIPSerial); // send the bytes to the SLIP stream
     SLIPSerial.endPacket(); // mark the end of the OSC Packet
-    bndl.empty();
-  #endif
+    bndl.empty();    
+  
+  counter += 1;
+
   }
   else
   {
@@ -278,14 +290,11 @@ void loop(){
       {
         bundleIN.route("/led", routeLed);
         bundleIN.route("/L", routeLed);    // this is how it is marked on the silkscreen
-
         bundleIN.route("/out", routeOut);   // for the TinkerIt output connectors
         bundleIN.route("/tone", routeTone);
         bundleIN.route("/squarewave", routeTone);
         bundleIN.route("/notone", routeTone);
-
       }
-
     }
   }
 }
