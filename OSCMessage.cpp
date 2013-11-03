@@ -128,7 +128,14 @@ int32_t OSCMessage::getInt(int position){
         return NULL;
     }
 }
-
+int64_t OSCMessage::getTime(int position){
+	OSCData * datum = getOSCData(position);
+	if (!hasError()){
+		return datum->getTime();
+    } else {
+        return NULL;
+    }
+}
 float OSCMessage::getFloat(int position){
 	OSCData * datum = getOSCData(position);
 	if (!hasError()){
@@ -203,6 +210,11 @@ bool OSCMessage::testType(int position, char type){
 bool OSCMessage::isInt(int position){
 	return testType(position, 'i');
 }
+
+bool OSCMessage::isTime(int position){
+	return testType(position, 't');
+}
+
 
 bool OSCMessage::isFloat(int position){
 	return testType(position, 'f');
@@ -430,6 +442,11 @@ void OSCMessage::send(Print &p){
             double d = BigEndian(datum->data.d);
             uint8_t * ptr = (uint8_t *) &d;
             p.write(ptr, 8);
+        } else if (datum->type == 't'){
+            int64_t d = BigEndian(datum->data.l);
+            uint8_t * ptr = (uint8_t *) &d;
+            p.write(ptr, 8);
+
         } else if (datum->type == 'T' || datum->type == 'F')
                     { }
         else { // float or int
@@ -516,6 +533,20 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                         clearIncomingBuffer();
                     }
                     break;
+                case 't':
+                    if (incomingBufferSize == 8){
+                        //parse the buffer as an int
+                        union {
+                            int64_t d;
+                            uint8_t b[8];
+                        } u;
+                        memcpy(u.b, incomingBuffer, 8);
+                         int64_t dataVal = BigEndian(u.d);
+                        set(i, dataVal);
+                        clearIncomingBuffer();
+                    }
+                    break;
+
                 case 's':
                     if (incomingByte == 0){
                         char * str = (char *) incomingBuffer;

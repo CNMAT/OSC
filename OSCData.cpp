@@ -47,6 +47,12 @@ OSCData::OSCData(float f){
 	data.f = f;	
 }
 
+OSCData::OSCData(int64_t t){
+	error = OSC_OK;
+	type = 't';
+	bytes = sizeof(int64_t );
+	data.l = t;
+}
 OSCData::OSCData(bool b){
 	error = OSC_OK;
 	type = b?'T':'F';
@@ -99,7 +105,7 @@ OSCData::OSCData (OSCData * datum){
 	error = OSC_OK;
 	type = datum->type;
 	bytes = datum->bytes;
-	if (type == 'i' || type == 'f' || type == 'd'){
+	if (type == 'i' || type == 'f' || type == 'd'|| type == 'y'){
 		data = datum->data;
 	} else if (type == 's' || type == 'b'){
 		//allocate a new peice of memory
@@ -149,7 +155,13 @@ int32_t OSCData::getInt(){
         return NULL;
     }
 }
-
+int64_t OSCData::getTime(){
+    if (type == 't'){
+        return data.l;
+    } else {
+        return NULL;
+    }
+}
 float OSCData::getFloat(){
     if (type == 'f'){
         return data.f;

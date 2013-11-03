@@ -236,6 +236,8 @@ public:
 =============================================================================*/
 
 	int32_t getInt(int);
+    int64_t getTime(int);
+
 	float getFloat(int);
 	double getDouble(int);
     bool getBoolean(int);
@@ -271,6 +273,7 @@ public:
 	bool isString(int);
 	bool isDouble(int);
     bool isBoolean(int);
+    bool isTime(int);
 		
 /*=============================================================================
 	PATTERN MATCHING
