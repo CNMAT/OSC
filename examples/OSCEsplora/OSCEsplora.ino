@@ -1,4 +1,4 @@
-
+  
 /*
 Bidirectional Esplora OSC communications 
  using SLIP
@@ -165,7 +165,7 @@ void setup() {
 }
 
 int32_t counter = 0; 
-int32_t serialnumber = 1;   //hard coded; beware
+int32_t serialnumber = 2;   //hard coded; beware
 int32_t num_components = 3;  //currently break the bundle up into 3 components
 
 void loop(){
@@ -212,7 +212,10 @@ void loop(){
     // also values are acquired as close together as reasonably possible to increase
     // their usability in sensor fusion contexts, i.e. in this case with the accelerometer
 
-    SLIPSerial.beginPacket(); // mark the beginning of the OSC Packet
+    
+    SLIPSerial.beginPacket(); // mark the beginning of the OSC Packet    
+    
+    //bundle 1
     bndl.add("/acceleration/x").add(Esplora.readAccelerometer(X_AXIS)/512.0f); 
     bndl.add("/acceleration/y").add(Esplora.readAccelerometer(Y_AXIS)/512.0f); 
     bndl.add("/acceleration/z").add(Esplora.readAccelerometer(Z_AXIS)/512.0f); 
@@ -220,58 +223,51 @@ void loop(){
     bndl.add("/joystick/horizontal").add(-1.0 * (int32_t)Esplora.readJoystickX()/512.0f);    
     bndl.add("/joystick/vertical").add(-1.0 * (int32_t)Esplora.readJoystickY()/512.0f);      
     bndl.add("/joystick/button").add(Esplora.readJoystickSwitch()>0? released:pressed); 
-    bndl.add("/diamond/backward").add((int32_t)Esplora.readButton(SWITCH_1)?released:pressed); 
-    bndl.add("/diamond/left").add((int32_t)Esplora.readButton(SWITCH_2)?released:pressed); 
-    bndl.add("/diamond/forward").add((int32_t)Esplora.readButton(SWITCH_3)?released:pressed); 
-    bndl.add("/diamond/right").add((int32_t)Esplora.readButton(SWITCH_4)?released:pressed); 
     bndl.add("/joystick/backward").add((int32_t)Esplora.readButton(JOYSTICK_DOWN)?released:pressed); 
     bndl.add("/joystick/left").add((int32_t)Esplora.readButton(JOYSTICK_LEFT)?released:pressed); 
     bndl.add("/joystick/forward").add((int32_t)Esplora.readButton(JOYSTICK_UP)?released:pressed); 
-    bndl.add("/joystick/right").add((int32_t)Esplora.readButton(JOYSTICK_RIGHT)?released:pressed); 
-    bndl.add("/manifest").add(manifest_count++).add(num_components).add(counter);
-    bndl.add("/serialnumber").add(serialnumber);
-    bndl.add("/vendor").add("Arduino");
-    bndl.add("/productname").add("Esplora");
-
+    bndl.add("/joystick/right").add((int32_t)Esplora.readButton(JOYSTICK_RIGHT)?released:pressed);     
+    bndl.add("/serialnumber").add(serialnumber);    
+    //bndl.add("/manifest").add(manifest_count++).add(num_components).add(counter);
     bndl.send(SLIPSerial); // send the bytes to the SLIP stream
     SLIPSerial.endPacket(); // mark the end of the OSC Packet
     bndl.empty();  //bundle ending early due to current memory limitations
 
-    //secondary bundle init
+    //bundle 2
+    bndl.add("/diamond/backward").add((int32_t)Esplora.readButton(SWITCH_1)?released:pressed); 
+    bndl.add("/diamond/left").add((int32_t)Esplora.readButton(SWITCH_2)?released:pressed); 
+    bndl.add("/diamond/forward").add((int32_t)Esplora.readButton(SWITCH_3)?released:pressed); 
+    bndl.add("/diamond/right").add((int32_t)Esplora.readButton(SWITCH_4)?released:pressed); 
     bndl.add("/microphone/loudness").add(Esplora.readMicrophone()/1023.0f);
     bndl.add("/temperature/fahrenheit").add((float)Esplora.readTemperature(DEGREES_F));
     bndl.add("/temperature/celsius").add((float)Esplora.readTemperature(DEGREES_C));
     bndl.add("/slider/horizontal").add(1.0f - ((float)Esplora.readSlider()/1023.0f));   
-    //   bndl.add("/32u4/supplyVoltage").add(getSupplyVoltage());
-    //   bndl.add("/32u4/temperature").add(getTemperature());
-    bndl.add("/connector/white/left").add(myReadChannel(CH_MIC  +1)/1023.0);
-    bndl.add("/connector/white/right").add(myReadChannel(CH_MIC  +2)/1023.0);
-    bndl.add("/manifest").add(manifest_count++).add(num_components).add(counter);
-    bndl.add("/serialnumber").add(serialnumber);
-    bndl.add("/vendor").add("Arduino");
-    bndl.add("/productname").add("Esplora");
-    
+    bndl.add("/serialnumber").add(serialnumber);    
+    //bndl.add("/manifest").add(manifest_count++).add(num_components).add(counter);
     bndl.send(SLIPSerial); // send the bytes to the SLIP stream
     SLIPSerial.endPacket(); // mark the end of the OSC Packet
-    bndl.empty();
-  
-    SLIPSerial.beginPacket(); // mark the beginning of the OSC Packet
+    bndl.empty();  //bundle ending early due to current memory limitations
+ 
+    //bundle 3
+    bndl.add("/connector/white/left").add(myReadChannel(CH_MIC  +1)/1023.0);
+    bndl.add("/connector/white/right").add(myReadChannel(CH_MIC  +2)/1023.0);
     bndl.add("/led/red").add((int32_t)Esplora.readRed());
     bndl.add("/led/green").add((int32_t)Esplora.readGreen());
     bndl.add("/led/blue").add((int32_t)Esplora.readBlue());
     bndl.add("/led/rgb").add((int32_t)Esplora.readRed()).add((int32_t)Esplora.readGreen()).add((int32_t)Esplora.readBlue());
     bndl.add("/connector/orange/right").add((digitalRead(3)==HIGH)?1:0);
     bndl.add("/connector/orange/left").add((digitalRead(11)==HIGH)?1:0);
-    bndl.add("/manifest").add(manifest_count++).add(num_components).add(counter);
-    bndl.add("/serialnumber").add(serialnumber);
     bndl.add("/vendor").add("Arduino");
     bndl.add("/productname").add("Esplora");
-
+    bndl.add("/serialnumber").add(serialnumber);    
+    //bndl.add("/manifest").add(manifest_count++).add(num_components).add(counter);
     bndl.send(SLIPSerial); // send the bytes to the SLIP stream
     SLIPSerial.endPacket(); // mark the end of the OSC Packet
-    bndl.empty();    
+    bndl.empty();
   
   counter += 1;
+    //   bndl.add("/32u4/supplyVoltage").add(getSupplyVoltage());
+    //   bndl.add("/32u4/temperature").add(getTemperature());
 
   }
   else
