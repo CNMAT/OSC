@@ -30,7 +30,7 @@
 	CONSTRUCTORS / DESTRUCTOR
 =============================================================================*/
 
-OSCBundle::OSCBundle(int64_t _timetag){
+OSCBundle::OSCBundle(uint64_t _timetag){
     setTimetag(_timetag);
     numMessages = 0;
     error = OSC_OK;
@@ -198,7 +198,7 @@ void OSCBundle::send(Print &p){
     static uint8_t header[] = {'#', 'b', 'u', 'n', 'd', 'l', 'e', 0};
     p.write(header, 8);
     //write the timetag
-    int64_t t64 = BigEndian(timetag);
+    uint64_t t64 = BigEndian(timetag);
     uint8_t * tptr = (uint8_t *) &t64;
     p.write(tptr, 8);
     //send the messages
@@ -206,7 +206,7 @@ void OSCBundle::send(Print &p){
         OSCMessage * msg = getOSCMessage(i);
         int msgSize = msg->bytes();
         //turn the message size into a pointer
-        uint64_t s32 = BigEndian((uint32_t) msgSize);
+        uint32_t s32 = BigEndian((uint32_t) msgSize);
         uint8_t * sptr = (uint8_t *) &s32;
         //write the messsage size
         p.write(sptr, 4);

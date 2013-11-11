@@ -43,7 +43,7 @@ private:
 	//the number of messages in the array
 	int numMessages;
     
-    int64_t timetag;
+    uint64_t timetag;
     
     //error codes
     OSCErrorCode error;
@@ -90,7 +90,7 @@ public:
 =============================================================================*/
 		
     //default timetag of 1
-  	OSCBundle(int64_t = 1);
+  	OSCBundle(uint64_t = 1);
 
 	//DESTRUCTOR
 	~OSCBundle();
@@ -110,7 +110,7 @@ public:
     
     template <typename T>
     void setTimetag(T t){
-        timetag = (int64_t) t;
+        timetag = (uint64_t) t;
     }
     //sets the timetag from a buffer
     void setTimetag(uint8_t * buff){

@@ -236,7 +236,7 @@ public:
 =============================================================================*/
 
 	int32_t getInt(int);
-    int64_t getTime(int);
+    uint64_t getTime(int);
 
 	float getFloat(int);
 	double getDouble(int);

@@ -47,10 +47,10 @@ OSCData::OSCData(float f){
 	data.f = f;	
 }
 
-OSCData::OSCData(int64_t t){
+OSCData::OSCData(uint64_t t){
 	error = OSC_OK;
 	type = 't';
-	bytes = sizeof(int64_t );
+	bytes = sizeof(uint64_t );
 	data.l = t;
 }
 OSCData::OSCData(bool b){
@@ -155,7 +155,7 @@ int32_t OSCData::getInt(){
         return NULL;
     }
 }
-int64_t OSCData::getTime(){
+uint64_t OSCData::getTime(){
     if (type == 't'){
         return data.l;
     } else {

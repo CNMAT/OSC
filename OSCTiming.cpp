@@ -25,17 +25,17 @@
 
 
 #include "OSCTiming.h"
-#include <stdlib.h>
+#include "OSCBoards.h"
 
 #if defined(__MK20DX128__)
 extern volatile uint32_t systick_millis_count;
-static uint32_t count, current;
+static uint32_t savedcount, savedcurrent;
 
 static void latchOscTime()
 {
     
 	uint32_t istatus;
-    
+    uint32_t count, current;
     
 	__disable_irq();
 	current = SYST_CVR;
@@ -47,11 +47,13 @@ static void latchOscTime()
     //systick_istatus = istatus & SCB_ICSR_PENDSTSET ? 1 : 0;
 	if ((istatus & SCB_ICSR_PENDSTSET) && current > 50) count++;
 	current = ((F_CPU / 1000) - 1) - current;
+    savedcount=count; savedcurrent=current;
 }
 static uint64_t computeOscTime()
-{
+{ //4,294,967,296
+    return  ((( uint64_t)(savedcount/1000))   <<  32 ) +
     
-    return  ((long long)(count/1000)<<32) +(((long long) 4294967295)*(count * 1000 + current / (F_CPU / 1000000)))/1000000;
+    ( (uint64_t)(4294967295) *  (  (savedcount * 1000 + savedcurrent / (F_CPU / 1000000UL))    % 1000000)   ) /1000000;
 }
 
 uint64_t oscTime()
@@ -59,6 +61,86 @@ uint64_t oscTime()
     latchOscTime();
     return computeOscTime();
 }
+
+#elif defined(CORE_TEENSY) 
+extern volatile uint32_t timer0_millis_count;
+static uint32_t savedcount, savedmicros;
+
+static void latchOscTime()
+{
+      cli();
+    savedcount = timer0_millis_count;
+    savedmicros = micros();
+       sei();
+}
+
+static uint64_t computeOscTime()
+{ //4,294,967,296
+    union
+    {
+        struct { uint32_t lsw, hsw; } split;
+        uint64_t t;
+    } tt;
+    savedmicros %= 1000000;
+    tt.split.lsw  = (67108864ULL * savedmicros) / 15625 ; // 2^32/1000000
+    tt.split.hsw = savedcount/1000;
+    return tt.t;
+#ifdef ddfgsdfgsdfgsdfg
+    return ((savedcount/1000)<<32) + ( (4294967295ULL) *  (  (savedcount * 1000ULL + savedmicros)    % 1000000ULL)   ) /1000000ULL
+    
+    ;
+#endif
+
+    
+}
+uint64_t oscTime()
+{
+    latchOscTime();
+    return computeOscTime();
+
+}
+#elif defined(AVR)
+static uint32_t savedcount, savedmicros;
+
+static void latchOscTime()
+{
+    cli();
+    savedcount = millis();
+    savedmicros = micros();
+    sei();
+}
+
+static uint64_t computeOscTime()
+{ //4,294,967,296
+    union
+    {
+        struct { uint32_t lsw, hsw; } split;
+        uint64_t t;
+    } tt;
+    savedmicros %= 1000000;
+    tt.split.lsw  = (67108864ULL * savedmicros) / 15625 ; // 2^32/1000000
+    tt.split.hsw = savedcount/1000;
+    return tt.t;
+
+    
+    
+}
+uint64_t oscTime()
+{
+    latchOscTime();
+    return computeOscTime();
+}
+#else
+
+static void latchOscTime()
+{
+}
+
+uint64_t oscTime()
+{
+    return 1;
+}
+#endif
 
 int adcRead(int pin, uint64_t *t)
 {
@@ -68,7 +150,7 @@ int adcRead(int pin, uint64_t *t)
     *t = oscTime();
     return v;
 }
-
+#ifdef BOARD_HAS_CAPACITANCE_SENSING
 int capacitanceRead(int pin, uint64_t *t)
 {
     latchOscTime();
@@ -77,13 +159,12 @@ int capacitanceRead(int pin, uint64_t *t)
     *t = oscTime();
     return v;
 }
+#endif
 int inputRead(int pin, uint64_t *t)
 {
     
     int v =digitalRead(pin);
     *t = oscTime();
     
-    return v; 
+    return v;
 }
-
-#endif

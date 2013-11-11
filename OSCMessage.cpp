@@ -128,7 +128,7 @@ int32_t OSCMessage::getInt(int position){
         return NULL;
     }
 }
-int64_t OSCMessage::getTime(int position){
+uint64_t OSCMessage::getTime(int position){
 	OSCData * datum = getOSCData(position);
 	if (!hasError()){
 		return datum->getTime();
@@ -443,8 +443,8 @@ void OSCMessage::send(Print &p){
             uint8_t * ptr = (uint8_t *) &d;
             p.write(ptr, 8);
         } else if (datum->type == 't'){
-            int64_t d = BigEndian(datum->data.l);
-            uint8_t * ptr = (uint8_t *) &d;
+            uint64_t d = BigEndian(datum->data.l);
+            uint8_t * ptr = (uint8_t *)    &d;
             p.write(ptr, 8);
 
         } else if (datum->type == 'T' || datum->type == 'F')
@@ -537,11 +537,11 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                     if (incomingBufferSize == 8){
                         //parse the buffer as an int
                         union {
-                            int64_t d;
+                            uint64_t d;
                             uint8_t b[8];
                         } u;
                         memcpy(u.b, incomingBuffer, 8);
-                         int64_t dataVal = BigEndian(u.d);
+                         uint64_t dataVal = BigEndian(u.d);
                         set(i, dataVal);
                         clearIncomingBuffer();
                     }
