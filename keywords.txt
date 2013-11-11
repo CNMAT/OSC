@@ -28,3 +28,7 @@ endTransmission		KEYWORD1
 endofTransmission	KEYWORD1
 SLIPEncodedSerial	KEYWORD1
 SLIPEncodedUSBSerial	KEYWORD1
+oscTime		       KEYWORD1
+adcRead	KEYWORD1
+capacitanceRead	KEYWORD1
+inputRead	KEYWORD1
