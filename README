@@ -20,8 +20,13 @@ New in this release:
 (watch out on this platform: it connects and numbers digital pins in use for USB and clock XTAL!)
 - Added Boolean type according to OSC 1.0 optional type spec. (lightly tested)
 
-
-Features for future releases:
+Goals  for next release:
+- Unit testing
+- Better Time Tags that avoid the overflow limitation of Arduino timer code
+- Time Tag synchronization
+- Support for the Yun and Spark Core
+- Support for Arduino WiFi
+Goals for future releases:
 - nested bundles
 - TCP/IP Examples
 - examples for more applications (i.e. TouchOSC, Processing with SLIP)
