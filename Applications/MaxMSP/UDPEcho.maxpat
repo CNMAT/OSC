@@ -4,11 +4,11 @@
 		"appversion" : 		{
 			"major" : 6,
 			"minor" : 1,
-			"revision" : 2,
+			"revision" : 3,
 			"architecture" : "x86"
 		}
 ,
-		"rect" : [ 86.0, 57.0, 703.0, 393.0 ],
+		"rect" : [ 460.0, 61.0, 703.0, 393.0 ],
 		"bglocked" : 0,
 		"openinpresentation" : 0,
 		"default_fontsize" : 14.0,
@@ -51,7 +51,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 233.0, 158.0, 150.0, 20.0 ],
-					"text" : "/ping 100 ",
+					"text" : "/ping 100",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -87,13 +87,11 @@
 					"fontname" : "Andale Mono",
 					"fontsize" : 14.0,
 					"id" : "obj-2",
-					"linecount" : 4,
 					"maxclass" : "o.message",
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 302.0, 251.0, 150.0, 69.0 ],
-					"text" : "/ping 100 \n/micros 68226221 \n/sequencenumber 99 \n",
+					"patching_rect" : [ 302.0, 251.0, 150.0, 22.0 ],
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -107,8 +105,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 228.5, 214.0, 288.0, 22.0 ],
-					"text" : "o.io.udp 128.32.122.252 8888 9999"
+					"patching_rect" : [ 228.5, 214.0, 279.0, 22.0 ],
+					"text" : "o.io.udp 128.32.122.26 8888 9999"
 				}
 
 			}
@@ -159,14 +157,10 @@
 
 			}
  ],
-		"parameters" : 		{
-
-		}
-,
 		"dependency_cache" : [ 			{
 				"name" : "o.io.udp.maxpat",
-				"bootpath" : "/Applications/Max 6.1/patches/CNMAT_Externals/odot/abstractions",
-				"patcherrelativepath" : "../../../../../../../Applications/Max 6.1/patches/CNMAT_Externals/odot/abstractions",
+				"bootpath" : "/Users/adrian2013/CNMAT-odot/abstractions/io",
+				"patcherrelativepath" : "../../../../../CNMAT-odot/abstractions/io",
 				"type" : "JSON",
 				"implicit" : 1
 			}

@@ -39,7 +39,6 @@ void loop(){
     
     bndl.add("/analog/1").add((int32_t)adcRead(1, &timetag));
    bndl.add("/analog/1/time").add(timetag);
-   bndl.add("/annoying/1/time").add("sdfds");
    
      bndl.add("/digital/5").add((digitalRead(5)==HIGH)?"HIGH":"LOW");
 

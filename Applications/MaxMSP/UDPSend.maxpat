@@ -4,7 +4,7 @@
 		"appversion" : 		{
 			"major" : 6,
 			"minor" : 1,
-			"revision" : 2,
+			"revision" : 3,
 			"architecture" : "x86"
 		}
 ,
@@ -32,14 +32,11 @@
 					"fontname" : "Andale Mono",
 					"fontsize" : 14.0,
 					"id" : "obj-3",
-					"linecount" : 3,
 					"maxclass" : "o.message",
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 377.0, 184.0, 298.0, 54.0 ],
-					"presentation_rect" : [ 410.0, 195.0, 0.0, 0.0 ],
-					"text" : "/analog/0 207 \n/analog/1 184 \n/digital/5 \"LOW\" \n",
+					"patching_rect" : [ 377.0, 184.0, 298.0, 22.0 ],
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -69,7 +66,7 @@
 					"numinlets" : 1,
 					"numoutlets" : 0,
 					"patching_rect" : [ 95.0, 62.0, 150.0, 33.0 ],
-					"text" : "Set udp port, send and receive port respectivly"
+					"text" : "Set udp port, send and receive port respectively"
 				}
 
 			}
@@ -78,13 +75,11 @@
 					"fontname" : "Andale Mono",
 					"fontsize" : 14.0,
 					"id" : "obj-1",
-					"linecount" : 2,
 					"maxclass" : "o.message",
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 38.0, 197.0, 298.0, 38.0 ],
-					"text" : "/mouse/step 211 105 \n/units \"pixels\" \n",
+					"patching_rect" : [ 38.0, 197.0, 298.0, 22.0 ],
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
@@ -99,7 +94,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 67.5, 108.0, 288.0, 22.0 ],
-					"text" : "o.io.udp 128.32.122.252 8888 9999"
+					"text" : "o.io.udp 128.32.122.26 8888 9999"
 				}
 
 			}
@@ -134,8 +129,8 @@
  ],
 		"dependency_cache" : [ 			{
 				"name" : "o.io.udp.maxpat",
-				"bootpath" : "/Applications/Max 6.1/patches/CNMAT_Externals/odot/abstractions",
-				"patcherrelativepath" : "../../../../../../../Applications/Max 6.1/patches/CNMAT_Externals/odot/abstractions",
+				"bootpath" : "/Users/adrian2013/CNMAT-odot/abstractions/io",
+				"patcherrelativepath" : "../../../../../CNMAT-odot/abstractions/io",
 				"type" : "JSON",
 				"implicit" : 1
 			}
