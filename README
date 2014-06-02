@@ -21,7 +21,7 @@ New in this release:
 
 Supported IDE:
 
-Arduino 1.05
+Arduino 1.05 and 1.5.6r2 (tested for Due Serial only)
 
 Best Supported Board:
 The Teensy 3.0 and 3.1 have the performance and memory that afford rich OSC implementations.
@@ -31,8 +31,6 @@ with "best practice" engineering of high performance microcontrollers.
 
 Unsupported boards:
 
-Arduino Due: we may eventually return to our early attempts to support the Due with Arduino 1.5+ now that their new library format and IDE
-appears to have stabilized.
 
 Arduino Yun and related openwrt/arduino hybrids (e.g. Draguino):
 
@@ -40,8 +38,8 @@ Marco Brianza is exploring these interesting approaches to running this OSC libr
 	https://github.com/cylinderlight/udp2serial
 	https://github.com/cylinderlight/udp2serialSPI
 
-The Yun still lacks the Linux-side support to reliably move data between the 32u4 and the router. We recommend that you add a Teensy to 
-the USB port of an OpenWrt router to get good performance and reliability with this library.
+The Yun still lacks the Linux-side support to reliably move data between the 32u4 and the router's cpu. We recommend that you add a Teensy to 
+the USB port of an OpenWrt router to get good performance and reliability with our library.
 
 Roadmap (your contributions appreciated):
 
