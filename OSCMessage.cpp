@@ -432,12 +432,6 @@ void OSCMessage::send(Print &p){
             while(dataPad--){
                 p.write(nullChar);
             }
-        } else if(datum->type == 'b'){
-            p.write(datum->data.b, datum->bytes);
-            int dataPad = padSize(datum->bytes);
-            while(dataPad--){
-                p.write(nullChar);
-            }
         } else if (datum->type == 'd'){
             double d = BigEndian(datum->data.d);
             uint8_t * ptr = (uint8_t *) &d;
