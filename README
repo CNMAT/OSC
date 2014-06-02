@@ -56,12 +56,10 @@ Roadmap (your contributions appreciated):
 - spark core examples
 - Better Time Tags that avoid the overflow limitation of Arduino timer code
 - Time Tag synchronization
-- Bluetooth LE
 
 Potentials for 2015 and beyond:
 - Unit testing
-
-Goals for future releases:
+- Bluetooth LE 
 - TCP/IP Examples
 - examples for more applications (i.e. TouchOSC, Processing with SLIP)
 - deadline scheduling of OSC 64-bit timetags
