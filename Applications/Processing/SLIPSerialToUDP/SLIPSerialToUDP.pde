@@ -271,7 +271,7 @@ void slipDecode(byte incoming) {
     //send off the packet
     SerialSendToUDP();
   } 
-  else {
+  else if (incoming != slipesc) {
     serialBuffer.add(incoming);
   }
 }
