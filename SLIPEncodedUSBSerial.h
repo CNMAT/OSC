@@ -4,19 +4,18 @@ Extends the Serial class to encode SLIP over serial
 
 #ifndef SLIPEncodedUSBSerial_h
 #define SLIPEncodedUSBSerial_h
-#if ARDUINO >= 100
+
 #include "Arduino.h"
-#else
-#include "WProgram.h"
-#endif
+
 #include <Stream.h>
 #if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_)) || defined(BOARD_maple_mini)
 #define OSC_HASUSBSERIAL
 #endif
 
+
 #ifdef OSC_HASUSBSERIAL
 //import the serial USB object
-#if defined (__MK20DX128__) || defined(BOARD_maple_mini)
+#if defined (__MK20DX128__) || defined(BOARD_maple_mini) || defined(CORE_TEENSY)
 #include <usb_serial.h>
 #elif defined(CORE_TEENSY)
 #include <usb_api.h>
@@ -68,6 +67,8 @@ public:
 	
 	int available();
 	int read();
+    int readBytes( uint8_t *buffer, size_t size);
+
 	int peek();
 	void flush();
 	
