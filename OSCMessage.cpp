@@ -185,6 +185,10 @@ char OSCMessage::getType(int position){
     }
 }
 
+int OSCMessage::getDataCount(){
+    return dataCount;
+}
+
 int OSCMessage::getDataLength(int position){
     OSCData * datum = getOSCData(position);
     if (!hasError()){
@@ -298,6 +302,15 @@ int OSCMessage::getAddress(char * buffer, int offset, int len){
 	return strlen(buffer);
 }
 
+int OSCMessage::getAddressLength(int offset) {
+    if (address && offset < strlen(address)) {
+        return strlen(address+offset);
+    }
+    else {
+        return 0;
+    }
+}
+
 void OSCMessage::setAddress(const char * _address){
     //free the previous address
     free(address); // are we sure address was allocated?
@@ -317,14 +330,14 @@ void OSCMessage::setAddress(const char * _address){
 =============================================================================*/
 
 #ifdef SLOWpadcalculation
-int OSCMessage::padSize(int _bytes){
-    int space = (_bytes + 3) / 4;
-    space *= 4;
-	return space - _bytes;
+int OSCMessage::padSize(int _bytes) {
+    int padSize = (_bytes + 4) % 4;
+    return padSize;
 }
 #else
-static inline  int padSize(int bytes) { return (4- (bytes&03))&3; }
+static inline  int padSize(int bytes) { return (bytes + 4) % 4; }
 #endif
+
 //returns the number of OSCData in the OSCMessage
 int OSCMessage::size(){
 	return dataCount;
@@ -558,12 +571,15 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                         } u;
                         memcpy(u.b, incomingBuffer, 4);
                         uint32_t blobLength = BigEndian(u.i);
-                        if (incomingBufferSize == blobLength + 4){
+
+                        if (incomingBufferSize == blobLength + 4) {
                             set(i, incomingBuffer + 4, blobLength);
                             clearIncomingBuffer();
-                            decodeState = DATA_PADDING;
+
+                            if (padSize(datum->bytes) > 0) {
+                                decodeState = DATA_PADDING;
+                            }
                         }
-                        
                     }
                     break;
             }
@@ -575,7 +591,9 @@ void OSCMessage::decodeData(uint8_t incomingByte){
 
 //does not validate the incoming OSC for correctness
 void OSCMessage::decode(uint8_t incomingByte){
+
     addToIncomingBuffer(incomingByte);
+
     switch (decodeState){
         case STANDBY:
             if (incomingByte == '/'){
@@ -599,36 +617,23 @@ void OSCMessage::decode(uint8_t incomingByte){
                 clearIncomingBuffer();
 			}
 			break;
-		case TYPES:
-			if (incomingByte != 0){
-				//next state
+        case TYPES:
+            if (incomingByte != 0) {
                 decodeType(incomingByte);
-			} else {
-                decodeState = TYPES_PADDING;
+            } else {
+                clearIncomingBuffer();
+                decodeState = DATA;
             }
-            //FALL THROUGH to test if it should go to the data state
-		case TYPES_PADDING: {
-                //compute the padding size for the types
-                //to determine the start of the data section
-            int typePad = padSize(dataCount + 1); // 1 is the comma
-                if (typePad == 0){
-                    typePad = 4;     // to make sure it will be null terminated
-                }
-                if (incomingBufferSize == (typePad + dataCount)){
-                    clearIncomingBuffer();
-                    decodeState = DATA;
-                }
-            }
-			break;
+            break;
 		case DATA:
             decodeData(incomingByte);
             break;
 		case DATA_PADDING:{
-                //get hte last valid data
+                // get the last valid data
                 for (int i = dataCount - 1; i >= 0; i--){
                     OSCData * datum = getOSCData(i);
                     if (datum->error == OSC_OK){
-                        //compute the padding size for the data
+                        // compute the padding size for the data
                         int dataPad = padSize(datum->bytes);
                         if (incomingBufferSize == dataPad){
                             clearIncomingBuffer();
@@ -647,35 +652,35 @@ void OSCMessage::decode(uint8_t incomingByte){
 /*=============================================================================
     INCOMING BUFFER MANAGEMENT
  =============================================================================*/
-#define OSCPREALLOCATEIZE 16
-void OSCMessage::addToIncomingBuffer(uint8_t incomingByte){
-    //realloc some space for the new byte and stick it on the end
-    if(incomingBufferFree>0)
+#define OSC_PREALLOCATE_SIZE 16
+void OSCMessage::addToIncomingBuffer(uint8_t incomingByte) {
+    // realloc some space for the new byte and stick it on the end
+    if (incomingBufferFree > 0)
     {
-            incomingBuffer[incomingBufferSize++] = incomingByte;
-            incomingBufferFree--;
+        incomingBuffer[incomingBufferSize++] = incomingByte;
+        incomingBufferFree--;
     }
     else
-	{
-
-        incomingBuffer = (uint8_t *) realloc ( incomingBuffer, incomingBufferSize + 1 + OSCPREALLOCATEIZE);
+    {
+        incomingBuffer = (uint8_t *) realloc ( incomingBuffer, incomingBufferSize + OSC_PREALLOCATE_SIZE);
         if (incomingBuffer != NULL){
             incomingBuffer[incomingBufferSize++] = incomingByte;
-            incomingBufferFree = OSCPREALLOCATEIZE;
+            incomingBufferFree = OSC_PREALLOCATE_SIZE - 1;
         } else {
             error = ALLOCFAILED;
         }
     }
 }
 
-void OSCMessage::clearIncomingBuffer(){
-    incomingBuffer = (uint8_t *) realloc ( incomingBuffer, OSCPREALLOCATEIZE);
-	if (incomingBuffer != NULL){
-		incomingBufferFree = OSCPREALLOCATEIZE;
-	} else {
-		error = ALLOCFAILED;
-        incomingBuffer = NULL;
+void OSCMessage::clearIncomingBuffer() {
+    incomingBuffer = (uint8_t *) realloc ( incomingBuffer, OSC_PREALLOCATE_SIZE);
 
-	}    
+    if (incomingBuffer != NULL) {
+        incomingBufferFree = OSC_PREALLOCATE_SIZE;
+    } else {
+        incomingBufferFree = 0;
+        error = ALLOCFAILED;
+    }
+
     incomingBufferSize = 0;
 }
