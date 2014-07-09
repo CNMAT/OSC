@@ -257,8 +257,8 @@ public:
 	int getAddress(char * buffer, int offset = 0);
 	int getAddress(char * buffer, int offset, int len);
 	
-	// TODO: int getAddressLength(int offset = 0);
-	
+    int getDataCount();
+    int getAddressLength(int offset = 0);
 
 /*=============================================================================
 	TESTING DATA
