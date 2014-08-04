@@ -1,6 +1,8 @@
 
 #include "OSCData.h"
 
+
+osctime_t zerotime = {0,0};
 /*=============================================================================
 	CONSTRUCTORS
 
@@ -47,11 +49,11 @@ OSCData::OSCData(float f){
 	data.f = f;	
 }
 
-OSCData::OSCData(uint64_t t){
+OSCData::OSCData(osctime_t t){
 	error = OSC_OK;
 	type = 't';
-	bytes = sizeof(uint64_t );
-	data.l = t;
+	bytes = 8;
+	data.time = t;
 }
 OSCData::OSCData(bool b){
 	error = OSC_OK;
@@ -105,9 +107,12 @@ OSCData::OSCData (OSCData * datum){
 	error = OSC_OK;
 	type = datum->type;
 	bytes = datum->bytes;
-	if (type == 'i' || type == 'f' || type == 'd'|| type == 'y'){
+	if ( (type == 'i') || (type == 'f') || (type == 'd') || (type == 't')
+        || (type == 'h') || (type == 'c') || (type == 'r') || (type == 'm')
+        )
+    {
 		data = datum->data;
-	} else if (type == 's' || type == 'b'){
+	} else if ((type == 's') || (type == 'b')){
 		//allocate a new peice of memory
         uint8_t * mem = (uint8_t * ) malloc(bytes);
         if (mem == NULL){
@@ -155,11 +160,12 @@ int32_t OSCData::getInt(){
         return NULL;
     }
 }
-uint64_t OSCData::getTime(){
+osctime_t OSCData::getTime(){
     if (type == 't'){
-        return data.l;
+        return data.time;
     } else {
-        return NULL;
+
+        return zerotime;
     }
 }
 float OSCData::getFloat(){
@@ -178,8 +184,13 @@ double OSCData::getDouble(){
     }
 }
 bool OSCData::getBoolean(){
-    
-    return type=='T';
+    if (type == 'T'){
+        return true;
+    } else if (type=='F'){
+        return false;
+    }
+    else
+        return NULL;
 }
 
 int OSCData::getString(char * strBuffer, int length){

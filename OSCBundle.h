@@ -28,6 +28,7 @@
 
 #include "OSCMessage.h"
 
+extern osctime_t zerotime;
 class OSCBundle
 {
 
@@ -43,7 +44,7 @@ private:
 	//the number of messages in the array
 	int numMessages;
     
-    uint64_t timetag;
+    osctime_t timetag;
     
     //error codes
     OSCErrorCode error;
@@ -89,8 +90,8 @@ public:
 	CONSTRUCTORS / DESTRUCTOR
 =============================================================================*/
 		
-    //default timetag of 1
-  	OSCBundle(uint64_t = 1);
+    //default timetag of
+      	OSCBundle(osctime_t = zerotime);
 
 	//DESTRUCTOR
 	~OSCBundle();
@@ -110,7 +111,7 @@ public:
     
     template <typename T>
     void setTimetag(T t){
-        timetag = (uint64_t) t;
+        timetag = (osctime_t) t;
     }
     //sets the timetag from a buffer
     void setTimetag(uint8_t * buff){

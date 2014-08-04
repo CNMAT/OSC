@@ -30,7 +30,7 @@
 	CONSTRUCTORS / DESTRUCTOR
 =============================================================================*/
 
-OSCBundle::OSCBundle(uint64_t _timetag){
+OSCBundle::OSCBundle(osctime_t _timetag){
     setTimetag(_timetag);
     numMessages = 0;
     error = OSC_OK;
@@ -142,7 +142,7 @@ bool OSCBundle::dispatch(const char * pattern, void (*callback)(OSCMessage&), in
 	bool called = false;
 	for (int i = 0; i < numMessages; i++){
         OSCMessage msg = getOSCMessage(i);
-		called |= msg.dispatch(pattern, callback, initial_offset);
+		called = msg.dispatch(pattern, callback, initial_offset) || called ;
 	}
 	return called;
 }
@@ -152,7 +152,7 @@ bool OSCBundle::route(const char * pattern, void (*callback)(OSCMessage&, int), 
 	bool called = false;
 	for (int i = 0; i < numMessages; i++){
         OSCMessage msg = getOSCMessage(i);
-		called |= msg.route(pattern, callback, initial_offset);
+		called =  msg.route(pattern, callback, initial_offset) || called;
 	}
 	return called;
 }
@@ -198,7 +198,7 @@ void OSCBundle::send(Print &p){
     static uint8_t header[] = {'#', 'b', 'u', 'n', 'd', 'l', 'e', 0};
     p.write(header, 8);
     //write the timetag
-    uint64_t t64 = BigEndian(timetag);
+    uint64_t t64 ; // xxx = BigEndian(timetag);
     uint8_t * tptr = (uint8_t *) &t64;
     p.write(tptr, 8);
     //send the messages
@@ -236,7 +236,7 @@ void OSCBundle::decodeTimetag(){
     //parse the incoming buffer as a uint64
     setTimetag(incomingBuffer);
     //make sure the endianness is right
-    timetag = BigEndian(timetag);
+    //xxx time tag    timetag = BigEndian(timetag);
     decodeState = MESSAGE_SIZE;
     clearIncomingBuffer();
 }

@@ -25,7 +25,9 @@
 
 #include "OSCMessage.h"
 #include "OSCMatch.h"
+#include "OSCTiming.h"
 
+extern osctime_t zerotime;
 /*=============================================================================
 	CONSTRUCTORS / DESTRUCTOR
 =============================================================================*/
@@ -128,12 +130,12 @@ int32_t OSCMessage::getInt(int position){
         return NULL;
     }
 }
-uint64_t OSCMessage::getTime(int position){
+osctime_t OSCMessage::getTime(int position){
 	OSCData * datum = getOSCData(position);
 	if (!hasError()){
 		return datum->getTime();
     } else {
-        return NULL;
+        return zerotime;
     }
 }
 float OSCMessage::getFloat(int position){
@@ -149,6 +151,14 @@ double OSCMessage::getDouble(int position){
 	OSCData * datum = getOSCData(position);
 	if (!hasError()){
 		return datum->getDouble();
+    } else {
+        return NULL;
+    }
+}
+bool  OSCMessage::getBoolean(int position){
+	OSCData * datum = getOSCData(position);
+	if (!hasError()){
+		return datum->getBoolean();
     } else {
         return NULL;
     }
@@ -437,9 +447,13 @@ void OSCMessage::send(Print &p){
             uint8_t * ptr = (uint8_t *) &d;
             p.write(ptr, 8);
         } else if (datum->type == 't'){
-            uint64_t d = BigEndian(datum->data.l);
+            osctime_t time =  datum->data.time;
+            uint32_t d = BigEndian(time.seconds);
             uint8_t * ptr = (uint8_t *)    &d;
-            p.write(ptr, 8);
+            p.write(ptr, 4);
+            d = BigEndian(time.fractionofseconds);
+            ptr = (uint8_t *)    &d;
+            p.write(ptr, 4);
 
         } else if (datum->type == 'T' || datum->type == 'F')
                     { }
@@ -528,15 +542,18 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                     }
                     break;
                 case 't':
+                    
                     if (incomingBufferSize == 8){
                         //parse the buffer as an int
                         union {
-                            uint64_t d;
+                            osctime_t t;
                             uint8_t b[8];
                         } u;
                         memcpy(u.b, incomingBuffer, 8);
-                         uint64_t dataVal = BigEndian(u.d);
-                        set(i, dataVal);
+                       
+                        u.t.seconds = BigEndian(u.t.seconds);
+                        u.t.fractionofseconds = BigEndian(u.t.fractionofseconds);
+                        set(i, u.t);
                         clearIncomingBuffer();
                     }
                     break;
@@ -624,7 +641,7 @@ void OSCMessage::decode(uint8_t incomingByte){
             decodeData(incomingByte);
             break;
 		case DATA_PADDING:{
-                //get hte last valid data
+                //get the last valid data
                 for (int i = dataCount - 1; i >= 0; i--){
                     OSCData * datum = getOSCData(i);
                     if (datum->error == OSC_OK){

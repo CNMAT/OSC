@@ -8,19 +8,21 @@
 
 #ifndef ____OSCTiming__
 #define ____OSCTiming__
-#if ARDUINO >= 100
-#include "Arduino.h"
-#else
-#include "WProgram.h"
-#endif
 
+
+#include "Arduino.h"
 #include <stdlib.h>
 #include <stdint.h>
 #include <inttypes.h>
+typedef struct
+{
+    uint32_t seconds;
+    uint32_t fractionofseconds;
+} osctime_t;
 
-uint64_t oscTime();
-int adcRead(int pin, uint64_t *t);
-int capacitanceRead(int pin, uint64_t *t);
+osctime_t oscTime();
+int adcRead(int pin, osctime_t *t);
+int capacitanceRead(int pin, osctime_t *t);
 
 int inputRead(int pin, uint64_t *t);
 

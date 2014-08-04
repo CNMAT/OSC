@@ -26,17 +26,13 @@
 #ifndef OSCDATA_h
 #define OSCDATA_h
 
-#if ARDUINO >= 100
 #include "Arduino.h"
-#else
-#include "WProgram.h"
-#endif
 
 #include <stdlib.h> 
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
-
+#include <OSCTiming.h>
 #if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_)) || defined(BOARD_maple_mini)
 
 #define BOARD_HAS_USB_SERIAL
@@ -84,6 +80,7 @@ public:
 		double d; //double
         uint64_t l; //long
 		uint8_t * b; //blob
+        osctime_t time;
 	} data;
 
 	//overload the constructor to account for all the types and sizes
@@ -96,7 +93,8 @@ public:
     //accepts another OSCData objects and clones it
 	OSCData (OSCData *);
     OSCData  (bool);
-    OSCData  (uint64_t);
+    //    OSCData  (uint64_t);
+    OSCData  (osctime_t);
 
 	//destructor
 	~OSCData();
@@ -108,7 +106,7 @@ public:
     int getString(char *, int);
     int getBlob(uint8_t *, int);
     bool getBoolean();
-    uint64_t getTime();
+    osctime_t getTime();
     
     //constructor from byte array with type and length
 	OSCData(char, uint8_t *, int);
