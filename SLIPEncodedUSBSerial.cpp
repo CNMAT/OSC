@@ -133,6 +133,26 @@ back:
 	else
 		return -1;
 }
+#ifdef FUTUREDEVELOPMENT
+int SLIPEncodedUSBSerial::readBytes( uint8_t *buffer, size_t size)
+{
+    int count = 0;
+    while(!endofPacket() && available() && (size>0))
+    {
+        int c = read();
+        if(c>=0)
+        {
+            *buffer++ = c;
+            ++count;
+            --size;
+            
+        }
+        else
+            break;
+    }
+    return count;
+}
+#endif
 
 // as close as we can get to correct behavior
 int SLIPEncodedUSBSerial::peek(){
@@ -163,7 +183,11 @@ int SLIPEncodedUSBSerial::peek(){
 	}	
 }
 
-void SLIPEncodedUSBSerial::write(const uint8_t *buffer, size_t size) {  while(size--) write(*buffer++); }
+void SLIPEncodedUSBSerial::write(const uint8_t *buffer, size_t size)
+{
+        while(size--)
+            write(*buffer++);
+}
 
 #else
 //encode SLIP
@@ -178,7 +202,12 @@ size_t SLIPEncodedUSBSerial::write(uint8_t b){
 		return serial->write(b);
 	}	
 }
-size_t SLIPEncodedUSBSerial::write(const uint8_t *buffer, size_t size) { size_t result; while(size--) result = write(*buffer++); return result; }
+size_t SLIPEncodedUSBSerial::write(const uint8_t *buffer, size_t size)
+{
+    size_t result;
+    while(size--)
+        result = write(*buffer++); return result;
+}
 #endif
 
 void SLIPEncodedUSBSerial::begin(unsigned long baudrate){

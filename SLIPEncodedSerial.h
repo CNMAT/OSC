@@ -4,11 +4,9 @@ Extends the Serial class to encode SLIP over serial
 
 #ifndef SLIPEncodedSerial_h
 #define SLIPEncodedSerial_h
-#if ARDUINO >= 100
+
+
 #include "Arduino.h"
-#else
-#include "WProgram.h"
-#endif
 #include <Stream.h>
 #include <HardwareSerial.h>
 
