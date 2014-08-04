@@ -76,10 +76,10 @@ static uint32_t savedcount, savedmicros;
 
 static void latchOscTime()
 {
-      cli();
+    noInterrupts();
     savedcount = timer0_millis_count;
     savedmicros = micros();
-       sei();
+    interrupts();
 }
 
 static osctime_t computeOscTime()
@@ -103,15 +103,17 @@ osctime_t oscTime()
     return computeOscTime();
 
 }
-#elif defined(AVR) || defined(__AVR_ATmega32U4__)
+#elif defined(AVR) || defined(__AVR_ATmega32U4__) || defined(__SAM3X8E__)
 static uint32_t savedcount, savedmicros;
 
 static void latchOscTime()
 {
-    cli();
+    noInterrupts();
+    //cli();
     savedcount = millis();
     savedmicros = micros();
-    sei();
+    interrupts();
+    //sei();
 }
 
 osctime_t computeOscTime()
@@ -142,7 +144,7 @@ static void latchOscTime()
 osctime_t oscTime()
 {
     osctime_t t;
-    t.fractionofsecond = 1;
+    t.fractionofseconds = 1;
     return ;
 
 }
