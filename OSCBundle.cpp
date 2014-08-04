@@ -198,9 +198,16 @@ void OSCBundle::send(Print &p){
     static uint8_t header[] = {'#', 'b', 'u', 'n', 'd', 'l', 'e', 0};
     p.write(header, 8);
     //write the timetag
-    uint64_t t64 ; // xxx = BigEndian(timetag);
-    uint8_t * tptr = (uint8_t *) &t64;
-    p.write(tptr, 8);
+{
+    osctime_t time =  timetag;
+    uint32_t d = BigEndian(time.seconds);
+    uint8_t * ptr = (uint8_t *)    &d;
+    p.write(ptr, 4);
+    d = BigEndian(time.fractionofseconds);
+    ptr = (uint8_t *)    &d;
+    p.write(ptr, 4);
+}
+
     //send the messages
     for (int i = 0; i < numMessages; i++){
         OSCMessage * msg = getOSCMessage(i);

@@ -4,11 +4,11 @@
 		"appversion" : 		{
 			"major" : 6,
 			"minor" : 1,
-			"revision" : 2,
+			"revision" : 6,
 			"architecture" : "x86"
 		}
 ,
-		"rect" : [ 189.0, 128.0, 1072.0, 480.0 ],
+		"rect" : [ 343.0, 146.0, 1072.0, 480.0 ],
 		"bglocked" : 0,
 		"openinpresentation" : 0,
 		"default_fontsize" : 12.0,
@@ -29,45 +29,57 @@
 		"tags" : "",
 		"boxes" : [ 			{
 				"box" : 				{
-					"fontname" : "Andale Mono",
-					"fontsize" : 14.0,
-					"frgb" : 0.0,
-					"id" : "obj-2",
-					"linecount" : 6,
-					"maxclass" : "comment",
+					"fontsize" : 12.0,
+					"id" : "obj-8",
+					"linecount" : 5,
+					"maxclass" : "o.display",
 					"numinlets" : 1,
-					"numoutlets" : 0,
-					"patching_rect" : [ 47.0, 30.0, 171.0, 101.0 ],
-					"presentation_rect" : [ 228.0, 22.0, 0.0, 0.0 ],
-					"text" : "Initialize ports: adjust the port letter to correspond to your USB serial Arduino device"
-				}
-
-			}
-, 			{
-				"box" : 				{
-					"fontname" : "Andale Mono",
-					"fontsize" : 14.0,
-					"id" : "obj-1",
-					"maxclass" : "o.message",
-					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 74.0, 198.0, 298.0, 22.0 ],
+					"patching_rect" : [ 572.0, 228.0, 207.0, 88.0 ],
+					"text" : "/port : \"usbmodem12341\",\n/rate/output : 449,\n/rate/input : 0,\n/mediansize/received : -1,\n/baud",
 					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
 			}
 , 			{
 				"box" : 				{
-					"fontname" : "Arial",
 					"fontsize" : 12.0,
-					"id" : "obj-5",
-					"maxclass" : "message",
-					"numinlets" : 2,
+					"id" : "obj-6",
+					"linecount" : 6,
+					"maxclass" : "o.display",
+					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 263.0, 108.0, 37.0, 18.0 ],
-					"text" : "reset"
+					"patching_rect" : [ 95.0, 228.0, 394.0, 102.0 ],
+					"text" : "/analog/0 : 129,\n/analog/0/time : 1900-01-01T00:00:22.384380Z,\n/analog/1 : 124,\n/analog/1/time : 1900-01-01T00:00:22.385016Z,\n/digital/5 : \"LOW\",\n/bundle/time : 1900-01-01T00:00:22.385644Z",
+					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"fontsize" : 12.0,
+					"id" : "obj-9",
+					"maxclass" : "o.expr.codebox",
+					"numinlets" : 1,
+					"numoutlets" : 2,
+					"outlettype" : [ "FullPacket", "FullPacket" ],
+					"patching_rect" : [ 95.0, 172.0, 251.0, 37.0 ],
+					"text" : "  /bundle/time = gettimetag()",
+					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-7",
+					"maxclass" : "bpatcher",
+					"name" : "o.io.serial.display.maxpat",
+					"numinlets" : 1,
+					"numoutlets" : 1,
+					"outlettype" : [ "FullPacket" ],
+					"patching_rect" : [ 355.5, 69.0, 331.0, 28.0 ]
 				}
 
 			}
@@ -81,24 +93,8 @@
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 503.0, 123.0, 150.0, 54.0 ],
+					"patching_rect" : [ 592.0, 119.0, 150.0, 54.0 ],
 					"text" : "stats on serial OSC communications"
-				}
-
-			}
-, 			{
-				"box" : 				{
-					"fontname" : "Andale Mono",
-					"fontsize" : 14.0,
-					"id" : "obj-3",
-					"linecount" : 6,
-					"maxclass" : "o.message",
-					"numinlets" : 2,
-					"numoutlets" : 1,
-					"outlettype" : [ "" ],
-					"patching_rect" : [ 407.0, 202.0, 298.0, 101.0 ],
-					"text" : "/ports \n/rate/output 0 \n/rate/input 0 \n/mediansize/received \n/port \"a\" \n/baudrate 9600 \n",
-					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
 				}
 
 			}
@@ -108,27 +104,18 @@
 					"fontsize" : 14.0,
 					"id" : "obj-26",
 					"maxclass" : "newobj",
-					"numinlets" : 1,
+					"numinlets" : 2,
 					"numoutlets" : 2,
-					"outlettype" : [ "", "FullPacket" ],
-					"patching_rect" : [ 265.5, 129.0, 195.0, 22.0 ],
-					"text" : "o.io.slipserial c 9600"
+					"outlettype" : [ "FullPacket", "FullPacket" ],
+					"patching_rect" : [ 179.5, 119.0, 195.0, 22.0 ],
+					"text" : "o.io.slipserial f 9600"
 				}
 
 			}
  ],
 		"lines" : [ 			{
 				"patchline" : 				{
-					"destination" : [ "obj-1", 1 ],
-					"disabled" : 0,
-					"hidden" : 0,
-					"source" : [ "obj-26", 0 ]
-				}
-
-			}
-, 			{
-				"patchline" : 				{
-					"destination" : [ "obj-3", 1 ],
+					"destination" : [ "obj-8", 0 ],
 					"disabled" : 0,
 					"hidden" : 0,
 					"source" : [ "obj-26", 1 ]
@@ -137,43 +124,91 @@
 			}
 , 			{
 				"patchline" : 				{
-					"destination" : [ "obj-26", 0 ],
+					"destination" : [ "obj-9", 0 ],
 					"disabled" : 0,
 					"hidden" : 0,
-					"source" : [ "obj-5", 0 ]
+					"source" : [ "obj-26", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-26", 1 ],
+					"disabled" : 0,
+					"hidden" : 0,
+					"source" : [ "obj-7", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-6", 0 ],
+					"disabled" : 0,
+					"hidden" : 0,
+					"source" : [ "obj-9", 0 ]
 				}
 
 			}
  ],
 		"dependency_cache" : [ 			{
 				"name" : "o.io.slipserial.maxpat",
-				"bootpath" : "/Applications/Max 6.1/patches/CNMAT_Externals/odot/abstractions",
-				"patcherrelativepath" : "../../../../../../../Applications/Max 6.1/patches/CNMAT_Externals/odot/abstractions",
+				"bootpath" : "/Users/adrian2013/Documents/Max/Packages/CNMAT-MMJSS/patchers/esplora",
+				"patcherrelativepath" : "../../../../../Documents/Max/Packages/CNMAT-MMJSS/patchers/esplora",
 				"type" : "JSON",
 				"implicit" : 1
 			}
 , 			{
-				"name" : "slipOSC.mxo",
-				"type" : "iLaX"
+				"name" : "o.righttoleft.maxpat",
+				"bootpath" : "/Users/adrian2013/Documents/Max/Packages/CNMAT-odot/patchers/ordering",
+				"patcherrelativepath" : "../../../../../Documents/Max/Packages/CNMAT-odot/patchers/ordering",
+				"type" : "JSON",
+				"implicit" : 1
+			}
+, 			{
+				"name" : "o.io.serial.display.maxpat",
+				"bootpath" : "/Users/adrian2013/Documents/Max/Packages/CNMAT-MMJSS/patchers/esplora",
+				"patcherrelativepath" : "../../../../../Documents/Max/Packages/CNMAT-MMJSS/patchers/esplora",
+				"type" : "JSON",
+				"implicit" : 1
 			}
 , 			{
 				"name" : "o.pack.mxo",
 				"type" : "iLaX"
 			}
 , 			{
-				"name" : "OpenSoundControl.mxo",
+				"name" : "o.route.mxo",
 				"type" : "iLaX"
 			}
 , 			{
-				"name" : "o.collect.mxo",
+				"name" : "o.union.mxo",
 				"type" : "iLaX"
 			}
 , 			{
-				"name" : "o.downcast.mxo",
+				"name" : "o.validate.mxo",
 				"type" : "iLaX"
 			}
 , 			{
-				"name" : "o.message.mxo",
+				"name" : "o.print.mxo",
+				"type" : "iLaX"
+			}
+, 			{
+				"name" : "o.slip.encode.mxo",
+				"type" : "iLaX"
+			}
+, 			{
+				"name" : "o.slip.decode.mxo",
+				"type" : "iLaX"
+			}
+, 			{
+				"name" : "o.if.mxo",
+				"type" : "iLaX"
+			}
+, 			{
+				"name" : "o.expr.codebox.mxo",
+				"type" : "iLaX"
+			}
+, 			{
+				"name" : "o.display.mxo",
 				"type" : "iLaX"
 			}
  ]
