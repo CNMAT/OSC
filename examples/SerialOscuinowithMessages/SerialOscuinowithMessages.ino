@@ -7,7 +7,7 @@
 SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
 #else
 #include <SLIPEncodedSerial.h>
- SLIPEncodedSerial SLIPSerial(Serial);
+ SLIPEncodedSerial SLIPSerial(Serial1);
 #endif
 
 
@@ -228,7 +228,7 @@ void routeTouch(OSCMessage &msg, int addrOffset )
 #endif
 
 #ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
-#if defined(__MK20DX128__)
+#if defined(__MK20DX128__) || defined(__MK20DX512__)
 float getSupplyVoltage()
 {
   int val = analogRead(39); 

@@ -1,3 +1,4 @@
+
 #include <SLIPEncodedUSBSerial.h>
 
 /*
@@ -5,8 +6,7 @@
  */
 //instantiate with the tranmission layer
 
-#if defined(CORE_TEENSY)|| defined(__AVR_ATmega32U4__) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_)) || defined(BOARD_maple_mini)
-
+#if (defined(CORE_TEENSY) && defined(USB_SERIAL)) || (!defined(CORE_TEENSY) && defined(__AVR_ATmega32U4__)) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_)) || defined(BOARD_maple_mini)
 
 
 //USB Serials

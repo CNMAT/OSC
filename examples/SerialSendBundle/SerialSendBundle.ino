@@ -13,7 +13,7 @@
 SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
 #else
 #include <SLIPEncodedSerial.h>
- SLIPEncodedSerial SLIPSerial(Serial);
+ SLIPEncodedSerial SLIPSerial(Serial1);
 #endif
 
 

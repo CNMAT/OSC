@@ -12,7 +12,7 @@ This example can be extended to build routers and forwarders of OSC packets
 SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
 #else
 #include <SLIPEncodedSerial.h>
- SLIPEncodedSerial SLIPSerial(Serial);
+ SLIPEncodedSerial SLIPSerial(Serial1);
 #endif
 
 void setup() {
