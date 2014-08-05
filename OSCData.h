@@ -32,7 +32,8 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
-#include <OSCTiming.h>
+
+#include "OSCTiming.h"
 
 #if (defined(CORE_TEENSY) && defined(USB_SERIAL)) || (!defined(CORE_TEENSY) && defined(__AVR_ATmega32U4__)) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_)) || defined(BOARD_maple_mini)
 

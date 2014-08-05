@@ -1,5 +1,5 @@
 
-#include <SLIPEncodedUSBSerial.h>
+#include "SLIPEncodedUSBSerial.h"
 
 /*
  CONSTRUCTOR

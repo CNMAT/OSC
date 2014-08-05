@@ -1,4 +1,4 @@
-#include <SLIPEncodedSerial.h>
+#include "SLIPEncodedSerial.h"
 
 /*
  CONSTRUCTOR
