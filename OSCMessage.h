@@ -287,12 +287,12 @@ public:
 	int match( const char * pattern, int = 0);
 	
 	//calls the function with the message as the arg if it was a full match
-	bool dispatch(const char * pattern, void (*callback)(OSCMessage &), int = 0);
+	bool dispatch(const char * pattern, void (*callback)(OSCMessage &, void *), void * callback_arg = NULL, int = 0);
 	
 	//like dispatch, but allows for partial matches
 	//the address match offset is sent as an argument to the callback
 	//also room for an option address offset to allow for multiple nested routes
-	bool route(const char * pattern, void (*callback)(OSCMessage &, int), int = 0);
+	bool route(const char * pattern, void (*callback)(OSCMessage &, void *, int), void * callback_arg = NULL, int = 0);
 	
 
 

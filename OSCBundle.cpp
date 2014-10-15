@@ -138,21 +138,21 @@ OSCMessage * OSCBundle::getOSCMessage(int pos){
  =============================================================================*/
 
 
-bool OSCBundle::dispatch(const char * pattern, void (*callback)(OSCMessage&), int initial_offset){
+bool OSCBundle::dispatch(const char * pattern, void (*callback)(OSCMessage &, void *), void * callback_arg, int initial_offset){
 	bool called = false;
 	for (int i = 0; i < numMessages; i++){
         OSCMessage msg = getOSCMessage(i);
-		called = msg.dispatch(pattern, callback, initial_offset) || called ;
+		called = msg.dispatch(pattern, callback, callback_arg, initial_offset) || called ;
 	}
 	return called;
 }
 
 
-bool OSCBundle::route(const char * pattern, void (*callback)(OSCMessage&, int), int initial_offset){
+bool OSCBundle::route(const char * pattern, void (*callback)(OSCMessage &, void *, int), void * callback_arg, int initial_offset){
 	bool called = false;
 	for (int i = 0; i < numMessages; i++){
         OSCMessage msg = getOSCMessage(i);
-		called =  msg.route(pattern, callback, initial_offset) || called;
+		called =  msg.route(pattern, callback, callback_arg, initial_offset) || called;
 	}
 	return called;
 }
