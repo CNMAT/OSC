@@ -94,6 +94,7 @@ void OSCMessage::empty(){
     free(data);
     data = NULL;
     dataCount = 0;
+    decodeState = STANDBY;
     clearIncomingBuffer();
 }
 
