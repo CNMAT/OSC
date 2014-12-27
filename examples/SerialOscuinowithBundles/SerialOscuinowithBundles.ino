@@ -7,7 +7,7 @@
 SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
 #else
 #include <SLIPEncodedSerial.h>
- SLIPEncodedSerial SLIPSerial(Serial1);
+ SLIPEncodedSerial SLIPSerial(Serial);
 #endif
 
 //outgoing messages
@@ -196,7 +196,7 @@ void routeTone(OSCMessage &msg, int addrOffset ){
 #endif
 
 
-#ifdef BOARD_HAS_CAPACITANCE_SENSING
+#ifdef  BOARD_HAS_CAPACITANCE_SENSING
 #define NTPINS 12
 const int cpins[NTPINS] = {22,23,19,18,17,16,15,0,1,25,32, 33 }; 
 void routeTouch(OSCMessage &msg, int addrOffset )
@@ -218,7 +218,7 @@ void routeTouch(OSCMessage &msg, int addrOffset )
 #endif
 
 #ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
-#if defined(__MK20DX128__) || defined(__MK20DX128__)
+#if defined(__MK20DX128__) || defined(__MK20DX256__)
 float getSupplyVoltage()
 {
   int val = analogRead(39); 
@@ -259,7 +259,7 @@ float getSupplyVoltage(){
 #ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
 
 
-#if defined(__MK20DX128__)
+#if defined(__MK20DX128__) || defined(__MK20DX256__)
 float getTemperature()
 {
         analogReference(INTERNAL);
@@ -345,7 +345,7 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
 
 
 void setup() {
-    SLIPSerial.begin(9600);   // set this as high as you can reliably run on your platform
+    SLIPSerial.begin(115200);   // set this as high as you can reliably run on your platform
 #if ARDUINO >= 100
     while(!Serial)
       ;   // Leonardo bug
@@ -373,7 +373,7 @@ void loop(){
 #ifdef BOARD_HAS_TONE
       bundleIN.route("/tone", routeTone);
 #endif
-#ifdef TOUCHSUPPORT
+#ifdef    BOARD_HAS_CAPACITANCE_SENSING
       bundleIN.route("/c", routeTouch);
 #endif
     }

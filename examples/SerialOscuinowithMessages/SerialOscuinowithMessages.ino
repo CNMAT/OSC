@@ -247,7 +247,7 @@ float getSupplyVoltage(){
     ADMUX = _BV(MUX5) | _BV(MUX0);
   #elif defined (__AVR_ATtiny25__) || defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__)
     ADMUX = _BV(MUX3) | _BV(MUX2);
-  #elif  defined(__AVR_AT90USB646__) || defined(__AVR_AT90USB1286__)    || defined(__AVR_ATmega1280__) 
+  #elif  defined(__AVR_AT90USB646__) || defined(__AVR_AT90USB1286__)   
     ADMUX = 0x40| _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1) ;
     ADCSRB =  0;
   #else
