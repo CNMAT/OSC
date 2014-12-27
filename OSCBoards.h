@@ -10,9 +10,6 @@
 #define _OSCBoards_h
 
 
-#if defined(__SAM3X8E__)  
-#define BOARD_HAS_TONE
-#endif
 
 #if defined(__MK20DX128__) ||  defined(__MK20DX256__) // Teensy 3.0  3.1 (PIC32's might have some day)
 #define BOARD_HAS_CAPACITANCE_SENSING
@@ -40,18 +37,12 @@
 
 // missing specs for Arduino Due
 #if defined(__SAM3X8E__)
-#ifndef LED_BUILTIN
-#define LED_BUILTIN  PIN_LED
-#endif
+
 #ifndef analogInputToDigitalPin
 #define analogInputToDigitalPin(p)  ((p < 12) ? (p) + 54 : -1)
 #endif
-#ifndef NUM_DIGITAL_PINS
-#define NUM_DIGITAL_PINS 54
-#endif
-#ifndef NUM_ANALOG_INPUTS
-#define NUM_ANALOG_INPUTS 12
-#endif
+
+
 #endif // defined(__SAM3X8E__)
 
 // missing specs for Leonardo derived devices

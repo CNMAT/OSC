@@ -22,7 +22,7 @@ Extends the Serial class to encode SLIP over serial
 #include "HardwareSerial.h"
 #elif defined(__AVR_ATmega32U4__)
 // leonardo
-#include "Platform.h"
+//#include "Platform.h"
 #include "USBAPI.h"
 #include <avr/wdt.h>    
 #else

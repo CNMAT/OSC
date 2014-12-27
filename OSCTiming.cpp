@@ -106,6 +106,7 @@ osctime_t oscTime()
 #elif defined(AVR) || defined(__AVR_ATmega32U4__) || defined(__SAM3X8E__)
 static uint32_t savedcount, savedmicros;
 
+
 static void latchOscTime()
 {
     noInterrupts();
@@ -119,8 +120,9 @@ static void latchOscTime()
 osctime_t computeOscTime()
 { //4,294,967,296
     osctime_t t;
-    savedmicros %= 1000000;
-    t.fractionofseconds = (67108864ULL * (uint64_t)savedmicros) / 15625 ; // 2^32/1000000
+       savedmicros %= 1000000UL;
+    //        t.fractionofseconds = (67108864ULL * (uint64_t)savedmicros) / 15625ULL ; // 2^32/1000000
+       t.fractionofseconds= (67108864UL * savedmicros)/ 15625ULL ; // 2^32/1000000
     t.seconds  = savedcount/1000;
     return t;
 

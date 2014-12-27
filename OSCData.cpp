@@ -25,27 +25,40 @@ OSCData::OSCData(const char * s){
 	}
 }
 
-OSCData::OSCData(int i){
-	error = OSC_OK;
-	type = 'i';
-	//cast it to an int32
-	bytes = sizeof(int32_t);
-	int32_t i32 = (int32_t) i;
-	data.i = i32;
-}
+
+
 
 OSCData::OSCData(int32_t i){
 	error = OSC_OK;
 	type = 'i';
-	bytes = sizeof(i);
+	bytes = 4;
 	data.i = i;
 }
-
+OSCData::OSCData(int i){
+	error = OSC_OK;
+	type = 'i';
+	bytes = 4;
+	data.i = i;
+}
+OSCData::OSCData(unsigned int i){
+	error = OSC_OK;
+	type = 'i';
+	bytes = 4;
+	data.i = i;
+}
+#if defined(__SAM3X8E__)
+OSCData::OSCData(int16_t i){
+	error = OSC_OK;
+	type = 'i';
+	bytes = 4;
+	data.i = i;
+}
+#endif
 
 OSCData::OSCData(float f){
 	error = OSC_OK;
 	type = 'f';
-	bytes = sizeof(float);
+	bytes = 4;
 	data.f = f;	
 }
 
@@ -55,7 +68,7 @@ OSCData::OSCData(osctime_t t){
 	bytes = 8;
 	data.time = t;
 }
-OSCData::OSCData(bool b){
+OSCData::OSCData(boolean b){
 	error = OSC_OK;
 	type = b?'T':'F';
 	bytes = 0;
@@ -65,7 +78,7 @@ OSCData::OSCData(bool b){
 OSCData::OSCData(double d){
 	error = OSC_OK;
 	bytes = sizeof(double);
-	//if it's not 8 bits it's not a true double
+	//if it's not 8 bytes it's not a true double
 	if (bytes == 8){
 		type = 'd';
 		data.d = d;
@@ -113,7 +126,7 @@ OSCData::OSCData (OSCData * datum){
     {
 		data = datum->data;
 	} else if ((type == 's') || (type == 'b')){
-		//allocate a new peice of memory
+		//allocate a new piece of memory
         uint8_t * mem = (uint8_t * ) malloc(bytes);
         if (mem == NULL){
             error = ALLOCFAILED;
