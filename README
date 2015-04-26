@@ -21,10 +21,10 @@ New in this release:
 
 Supported IDE:
 
-Arduino 1.05 and 1.5.6r2 (tested for Due Serial only)
+Arduino 1.05 and 1.6.3 (tested for Due Serial and Teensy so far)
 
 Best Supported Board:
-The Teensy 3.0 and 3.1 have the performance and memory that afford rich OSC implementations.
+The Teensy 3.0 and 3.1 and LC have the performance and memory that afford rich OSC implementations.
 Our primary test platform for new development is the Teensy 3.1 which currently offers the best performance
 of any of the Arduinos and variants. We greatly appreciate Paul Stoffregen's ongoing work
 with "best practice" engineering of high performance microcontrollers.
@@ -43,7 +43,7 @@ the USB port of an OpenWrt router to get good performance and reliability with o
 
 Roadmap (your contributions appreciated):
 
-2014:
+2015:
 
 - use of github release features
 - support for special OSC types in CNMAT's "o." especially subbundles
@@ -55,7 +55,7 @@ Roadmap (your contributions appreciated):
 - Better Time Tags that avoid the overflow limitation of Arduino timer code
 - Time Tag synchronization
 
-Potentials for 2015 and beyond:
+Potentials for 2016 and beyond:
 - Unit testing
 - Bluetooth LE 
 - TCP/IP Examples
