@@ -20,7 +20,7 @@ const unsigned int inPort = 8888;
 const unsigned int outPort = 9999;
 
 //everything on the network needs a unique MAC 
-#if defined(__MK20DX128__)
+#if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MKL26Z64__) 
 // Teensy 3 has MAC burned in
 static byte mac[6];
 void read(uint8_t word, uint8_t *mac, uint8_t offset) {
@@ -256,7 +256,7 @@ const char *name = numToOSCAddress(cpins[i]);
 
 
 #ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
-#if defined(__MK20DX128__)
+#if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MKL26Z64__) 
 float getSupplyVoltage()
 {
   int val = analogRead(39); 
@@ -297,7 +297,7 @@ float getSupplyVoltage(){
 #ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
 
 
-#if defined(__MK20DX128__)
+#if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MKL26Z64__) 
 float getTemperature()
 {
         analogReference(INTERNAL);

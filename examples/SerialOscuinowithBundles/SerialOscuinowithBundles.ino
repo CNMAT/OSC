@@ -200,10 +200,11 @@ void routeTone(OSCMessage &msg, int addrOffset ){
 #if  defined(__MKL26Z64__) 
 #define NTPINS 11
 const int cpins[NTPINS] = {22,23,19,18,17,16,15,0,1,3,4 }; 
-#elif
+#else
 #define NTPINS 12
 const int cpins[NTPINS] = {22,23,19,18,17,16,15,0,1,25,32, 33 }; 
-#eendif
+#endif
+
 void routeTouch(OSCMessage &msg, int addrOffset )
 {
     for(int i=0;i<NTPINS;++i)
