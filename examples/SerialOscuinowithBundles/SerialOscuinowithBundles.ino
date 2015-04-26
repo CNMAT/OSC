@@ -197,8 +197,13 @@ void routeTone(OSCMessage &msg, int addrOffset ){
 
 
 #ifdef  BOARD_HAS_CAPACITANCE_SENSING
+#if  defined(__MKL26Z64__) 
+#define NTPINS 11
+const int cpins[NTPINS] = {22,23,19,18,17,16,15,0,1,3,4 }; 
+#elif
 #define NTPINS 12
 const int cpins[NTPINS] = {22,23,19,18,17,16,15,0,1,25,32, 33 }; 
+#eendif
 void routeTouch(OSCMessage &msg, int addrOffset )
 {
     for(int i=0;i<NTPINS;++i)
@@ -218,7 +223,7 @@ void routeTouch(OSCMessage &msg, int addrOffset )
 #endif
 
 #ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
-#if defined(__MK20DX128__) || defined(__MK20DX256__)
+#if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MKL26Z64__) 
 float getSupplyVoltage()
 {
   int val = analogRead(39); 
@@ -259,7 +264,7 @@ float getSupplyVoltage(){
 #ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
 
 
-#if defined(__MK20DX128__) || defined(__MK20DX256__)
+#if defined(__MK20DX128__) || defined(__MK20DX256__)|| defined(__MKL26Z64__) 
 float getTemperature()
 {
         analogReference(INTERNAL);

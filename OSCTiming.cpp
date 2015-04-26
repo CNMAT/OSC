@@ -27,7 +27,7 @@
 #include "OSCTiming.h"
 #include "OSCBoards.h"
 
-#if defined(__MK20DX128__) ||  defined(__MK20DX256__)
+#if defined(__MK20DX128__) ||  defined(__MK20DX256__) || defined(__MKL26Z64__) 
 
 extern volatile uint32_t systick_millis_count;
 static uint32_t savedcount, savedcurrent;

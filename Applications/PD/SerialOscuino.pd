@@ -1,4 +1,4 @@
-#N canvas 89 52 1168 784 10;
+#N canvas 616 22 1168 784 10;
 #X declare -lib mrpeach;
 #X obj 310 126 unpackOSC;
 #X obj 133 96 packOSC;
@@ -50,7 +50,7 @@
 -1 -1 0 1;
 #X obj 139 276 vsl 15 128 0 1023 0 0 empty empty empty 0 -9 0 10 -262144
 -1 -1 0 1;
-#X obj 75 29 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0 1
+#X obj 75 27 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1 1
 ;
 #X msg 70 60 /s/l \$1;
 #X obj 577 329 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
@@ -179,8 +179,12 @@
 #X obj 729 19 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
 #X obj 729 44 metro 60;
-#X msg 434 87 devicename /dev/tty.usbmodem12341 \, baud 9600 \, pollintervall
-1;
+#X obj 131 155 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
+-1 -1;
+#X obj 214 158 print;
+#X obj -40 118 print;
+#X msg 527 91 devicename /dev/tty.usbmodem122611 \, baud 9600 \, pollintervall
+4 \, verbose 1;
 #X connect 0 0 64 0;
 #X connect 1 0 43 0;
 #X connect 2 0 1 0;
@@ -193,6 +197,8 @@
 #X connect 29 0 30 0;
 #X connect 30 0 1 0;
 #X connect 43 0 0 0;
+#X connect 43 0 105 0;
+#X connect 43 0 106 0;
 #X connect 48 0 7 0;
 #X connect 48 1 8 0;
 #X connect 48 2 9 0;
@@ -286,4 +292,4 @@
 #X connect 101 0 2 0;
 #X connect 103 0 104 0;
 #X connect 104 0 63 0;
-#X connect 105 0 43 1;
+#X connect 108 0 43 1;

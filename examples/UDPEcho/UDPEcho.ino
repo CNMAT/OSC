@@ -21,7 +21,7 @@ const unsigned int inPort = 8888;
 const unsigned int outPort = 9999;
 
 //everything on the network needs a unique MAC
-#if defined(__MK20DX128__) || defined(__MK20DX256__)
+#if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MKL26Z64__) 
 // Teensy 3.x has MAC burned in
 static byte mac[6];
 void read(uint8_t word, uint8_t *mac, uint8_t offset) {
