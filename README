@@ -7,6 +7,8 @@ This is a modified version of OSC which is compatible with the ESP8266.
 
 It currently requires the modification of the ESP8266 platform.txt file as a workaround. These modified version is found in ESP_SUPPORT_FILES. Readme contains instructions.
 
+New example (ESP8266_SoftAP_UDPUniSendMessage_TouchOSC) in examples folder. 
+
 
 
 
