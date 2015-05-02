@@ -15,7 +15,7 @@ compiler.sdk.path={runtime.hardware.path}/esp8266/sdk/
 compiler.cpreprocessor.flags=-D__ets__ -DICACHE_FLASH "-I{compiler.sdk.path}/include"
 
 compiler.c.cmd=xtensa-lx106-elf-gcc
-compiler.c.flags=-c -Os -Wpointer-arith -Wno-implicit-function-declaration -Wl,-EL -fno-inline-functions -nostdlib -mlongcalls -mtext-section-literals -MMD -std=c99
+compiler.c.flags=-c -Os -Wpointer-arith -Wno-implicit-function-declaration -Wl,-EL -fno-inline-functions -nostdlib -mlongcalls -mtext-section-literals -MMD -std=c99 -Wconversion-null
 
 compiler.S.cmd=xtensa-lx106-elf-gcc
 compiler.S.flags=-c -g -x assembler-with-cpp -MMD
