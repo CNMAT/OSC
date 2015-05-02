@@ -1,0 +1,3 @@
+This platform.txt file is modified to bypass certain errors in order to allow the OSC library for Arduino to compile for the ESP8266. 
+
+It should replace the existing platform.txt in the user\Documents\Arduino\hardware\esp8266com\esp8266 folder. 
