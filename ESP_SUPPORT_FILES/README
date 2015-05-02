@@ -1,3 +1,5 @@
-This platform.txt file is modified to bypass certain errors in order to allow the OSC library for Arduino to compile for the ESP8266. 
+This platform.txt file is modified to bypass certain errors in order to allow the OSC library for Arduino to compile for the ESP8266. I've added -Wconversion-null flag to compiler.c.flags to hide the warning. 
+
+This is probably a temporary fix which likely has a deeper cause! If anybody knows how to fix it, please do!
 
 It should replace the existing platform.txt in the user\Documents\Arduino\hardware\esp8266com\esp8266 folder. 
