@@ -1,4 +1,4 @@
-This platform.txt file is modified to bypass certain errors in order to allow the OSC library for Arduino to compile for the ESP8266. I've added -Wconversion-null flag to compiler.c.flags to hide the warning. 
+This platform.txt file is modified to bypass certain errors in order to allow the OSC library for Arduino to compile for the ESP8266. I've added -Wconversion-null flag to compiler.c.flags to hide several 'converting to non-pointer type ____ from null' warnings (used to auto-determine OSC message argument type?).
 
 This is probably a temporary fix which likely has a deeper cause! If anybody knows how to fix it, please do!
 
