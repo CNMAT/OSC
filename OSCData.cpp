@@ -34,12 +34,12 @@ OSCData::OSCData(int32_t i){
 	bytes = 4;
 	data.i = i;
 }
-OSCData::OSCData(int i){
-	error = OSC_OK;
-	type = 'i';
-	bytes = 4;
-	data.i = i;
-}
+// OSCData::OSCData(int i){
+// 	error = OSC_OK;
+// 	type = 'i';
+// 	bytes = 4;
+// 	data.i = i;
+// }
 OSCData::OSCData(unsigned int i){
 	error = OSC_OK;
 	type = 'i';

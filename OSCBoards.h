@@ -69,6 +69,7 @@
 
 #endif
 
+#if !defined(ESP_H)
 #ifndef analogInputToDigitalPin
 int analogInputToDigitalPin(int i)
 {
@@ -116,4 +117,5 @@ int analogInputToDigitalPin(int i)
     }
 }
 #endif
+#endif //!defined(ESP_H)
 

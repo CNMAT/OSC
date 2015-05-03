@@ -128,7 +128,7 @@ int32_t OSCMessage::getInt(int position){
 	if (!hasError()){
 		return datum->getInt();
     } else {
-        return NULL;
+        return -1;
     }
 }
 osctime_t OSCMessage::getTime(int position){
@@ -144,7 +144,7 @@ float OSCMessage::getFloat(int position){
 	if (!hasError()){
 		return datum->getFloat();
     } else {
-        return NULL;
+        return -1;
     }
 }
 
@@ -153,7 +153,7 @@ double OSCMessage::getDouble(int position){
 	if (!hasError()){
 		return datum->getDouble();
     } else {
-        return NULL;
+        return -1;
     }
 }
 bool  OSCMessage::getBoolean(int position){
@@ -172,7 +172,7 @@ int OSCMessage::getString(int position, char * buffer, int bufferSize){
         int copyBytes = bufferSize < datum->bytes? bufferSize : datum->bytes;
 		return datum->getString(buffer, copyBytes);
     } else {
-        return NULL;
+        return -1;
     }
 }
 
@@ -183,7 +183,7 @@ int OSCMessage::getBlob(int position, uint8_t * buffer, int bufferSize){
         int copyBytes = bufferSize < datum->bytes? bufferSize : datum->bytes;
 		return datum->getBlob(buffer, copyBytes);
     } else {
-        return NULL;
+        return -1;
     }
 }
 
@@ -192,7 +192,7 @@ char OSCMessage::getType(int position){
 	if (!hasError()){
 		return datum->type;
 	} else {
-        return NULL;
+        return '\0';
     }
 }
 

@@ -92,7 +92,7 @@ public:
 	OSCData (int16_t);
 #endif
 	OSCData (int32_t);
-    OSCData (int);
+    // OSCData (int);
     OSCData (unsigned int);
 	OSCData (float);
 	OSCData (double);
