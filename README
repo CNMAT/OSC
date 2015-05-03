@@ -5,10 +5,7 @@ This is a modified version of OSC which is compatible with the ESP8266.
 - It has not yet been tested for support previously supported boards (did I break anything?)
 - It has been tested on Windows 8.1, Arduino 1.6.3 with Sandeep fork of esp-8266-arduino v.0.0.3 (https://github.com/sandeepmistry/esp8266-Arduino)
 
-It currently requires the modification of the ESP8266 platform.txt file as a workaround. These modified version is found in ESP_SUPPORT_FILES. Readme contains instructions.
-
 New example (ESP8266_SoftAP_UDPUniSendMessage_TouchOSC) in examples folder. 
-
 
 
 
