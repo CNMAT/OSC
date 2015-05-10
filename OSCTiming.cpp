@@ -147,7 +147,7 @@ osctime_t oscTime()
 {
     osctime_t t;
     t.fractionofseconds = 1;
-    return ;
+    return t;
 
 }
 #endif
