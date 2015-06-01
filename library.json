@@ -1,0 +1,27 @@
+{
+  "name": "OSC",
+  "keywords": "sound, protocol",
+  "description": "Open Sound Control (OSC) is an open, transport-independent, message-based protocol developed for communication among computers, sound synthesizers, and other multimedia devices.",
+  "authors": [
+    {
+      "name": "Adrian Freed",
+      "email": "adrian@adrianfreed.com",
+      "url": "http://www.adrianfreed.com"
+    },
+    {
+      "name": "Yotam Mann",
+      "url": "http://yotammann.info"
+    }    
+  ],
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/CNMAT/OSC.git"
+  },
+  "frameworks": "arduino",
+  "platforms": [
+    "atmelavr",
+    "atmelsam",
+    "teensy"
+  ]
+}
