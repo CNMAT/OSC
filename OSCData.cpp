@@ -34,12 +34,14 @@ OSCData::OSCData(int32_t i){
 	bytes = 4;
 	data.i = i;
 }
+#ifndef ESP8266
 OSCData::OSCData(int i){
 	error = OSC_OK;
 	type = 'i';
 	bytes = 4;
 	data.i = i;
 }
+#endif
 OSCData::OSCData(unsigned int i){
 	error = OSC_OK;
 	type = 'i';
@@ -170,7 +172,11 @@ int32_t OSCData::getInt(){
     if (type == 'i'){
         return data.i;
     } else {
+    #ifndef ESP8266
         return NULL;
+    #else
+        return -1; 
+    #endif
     }
 }
 osctime_t OSCData::getTime(){
@@ -185,7 +191,11 @@ float OSCData::getFloat(){
     if (type == 'f'){
         return data.f;
     } else {
+    #ifndef ESP8266
         return NULL;
+    #else
+        return -1; 
+    #endif
     }
 }
 
@@ -193,7 +203,11 @@ double OSCData::getDouble(){
     if (type == 'd'){
         return data.d;
     } else {
+    #ifndef ESP8266
         return NULL;
+    #else
+        return -1; 
+    #endif
     }
 }
 bool OSCData::getBoolean(){
@@ -203,7 +217,11 @@ bool OSCData::getBoolean(){
         return false;
     }
     else
+    #ifndef ESP8266
         return NULL;
+    #else
+        return -1; 
+    #endif
 }
 
 int OSCData::getString(char * strBuffer, int length){
@@ -211,7 +229,11 @@ int OSCData::getString(char * strBuffer, int length){
         strncpy(strBuffer, data.s, bytes);
         return bytes;
     } else {
+    #ifndef ESP8266
         return NULL;
+    #else
+        return -1; 
+    #endif
     }
 }
 
@@ -220,6 +242,10 @@ int OSCData::getBlob(uint8_t * blobBuffer, int length){
         memcpy(blobBuffer, data.b, bytes);
         return bytes;
     } else {
+    #ifndef ESP8266
         return NULL;
+    #else
+        return -1; 
+    #endif
     }
 }
