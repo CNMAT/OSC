@@ -7,13 +7,7 @@ Bidirectional Esplora OSC communications
  
  Includes some examples of common "best practices" for OSC name space and parameter 
  mapping design.
- 
- Todo:
- Fix floating point frequency (might be a max/msp side bug)
- Add LCD support when it is released.
- Add better sound synthesis using DDS on Timer 4
- Debounce the switches
- sliding window for the accelerometer, joystick and slider
+
  
 */
 
@@ -174,7 +168,7 @@ void loop(){
 
   if(!SLIPSerial.available())
   {
-    /*
+    
     // The RAW OSC address space and parameter mappngs try to capture
     // the data at lowest level without calibration or scaling
     // The names are chosen to match what is on the silkscreen of the board where it is found
@@ -204,7 +198,7 @@ void loop(){
       SLIPSerial.endPacket(); // mark the end of the OSC Packet
       bndl.empty();
     #endif //RAW
-    */
+    
 
     // The COOKED OSC address space and parameter mappings 
     // encode data for ease of use and legibility at the host. Unit intervals replace integers
