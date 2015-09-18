@@ -203,7 +203,6 @@ void routeTone(OSCMessage &msg, int addrOffset ){
 #endif
 
 
-#ifdef BOARD_HAS_CAPACITANCE_SENSING
 #ifdef  BOARD_HAS_CAPACITANCE_SENSING
 #if  defined(__MKL26Z64__) 
 #define NTPINS 11
