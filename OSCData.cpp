@@ -207,9 +207,9 @@ bool OSCData::getBoolean(){
 }
 
 int OSCData::getString(char * strBuffer, int length){
-    if (type == 's' && bytes <= length){
-        strncpy(strBuffer, data.s, bytes);
-        return bytes;
+    if (type == 's' && bytes >= length){
+        strncpy(strBuffer, data.s, length);
+        return length;
     } else {
         return NULL;
     }
