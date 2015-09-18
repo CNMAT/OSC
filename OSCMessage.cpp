@@ -128,7 +128,11 @@ int32_t OSCMessage::getInt(int position){
 	if (!hasError()){
 		return datum->getInt();
     } else {
-        return NULL;
+        #ifndef ESP8266
+            return NULL;
+        #else
+            return -1; 
+        #endif
     }
 }
 osctime_t OSCMessage::getTime(int position){
@@ -144,7 +148,11 @@ float OSCMessage::getFloat(int position){
 	if (!hasError()){
 		return datum->getFloat();
     } else {
-        return NULL;
+        #ifndef ESP8266
+            return NULL;
+        #else
+            return -1; 
+        #endif
     }
 }
 
@@ -153,7 +161,11 @@ double OSCMessage::getDouble(int position){
 	if (!hasError()){
 		return datum->getDouble();
     } else {
-        return NULL;
+        #ifndef ESP8266
+            return NULL;
+        #else
+            return -1; 
+        #endif
     }
 }
 bool  OSCMessage::getBoolean(int position){
@@ -161,7 +173,11 @@ bool  OSCMessage::getBoolean(int position){
 	if (!hasError()){
 		return datum->getBoolean();
     } else {
-        return NULL;
+        #ifndef ESP8266
+            return NULL;
+        #else
+            return -1; 
+        #endif
     }
 }
 
@@ -172,7 +188,11 @@ int OSCMessage::getString(int position, char * buffer, int bufferSize){
         int copyBytes = bufferSize < datum->bytes? bufferSize : datum->bytes;
 		return datum->getString(buffer, copyBytes);
     } else {
-        return NULL;
+        #ifndef ESP8266
+            return NULL;
+        #else
+            return -1; 
+        #endif
     }
 }
 
@@ -183,7 +203,11 @@ int OSCMessage::getBlob(int position, uint8_t * buffer, int bufferSize){
         int copyBytes = bufferSize < datum->bytes? bufferSize : datum->bytes;
 		return datum->getBlob(buffer, copyBytes);
     } else {
-        return NULL;
+        #ifndef ESP8266
+            return NULL;
+        #else
+            return -1; 
+        #endif
     }
 }
 
@@ -192,7 +216,11 @@ char OSCMessage::getType(int position){
 	if (!hasError()){
 		return datum->type;
 	} else {
-        return NULL;
+        #ifndef ESP8266
+            return NULL;
+        #else
+            return '\0'; 
+        #endif
     }
 }
 

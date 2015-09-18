@@ -68,52 +68,53 @@
 #endif
 
 #endif
-
-#ifndef analogInputToDigitalPin
-int analogInputToDigitalPin(int i)
-{
-    switch(i)
-    {
-        case  0: return A0;
-        case 1: return A1;
-        case 2: return A2;
-        case 3: return A3;
-        case 4: return A4;
-        case 5: return A5;
-#ifdef A6
-        case 6: return A6;
-#endif
-#ifdef A7
-        case 7: return A7;
-#endif
-#ifdef A8
-        case 8: return A8;
-#endif
-#ifdef A9
-        case 9: return A9;
-#endif
-#ifdef A10
-        case 10: return A10;
-#endif
-#ifdef A11
-        case 11: return A11;
-#endif
-#ifdef A12
-        case 12: return A12;
-#endif
-#ifdef A13
-        case 13: return A13;
-#endif
-#ifdef A14
-        case 14: return A14;
-#endif
-#ifdef A15
-        case 15: return A15;
-#endif
-#ifdef A16    
-        case 16: return A16;
-#endif
-    }
-}
-#endif
+#ifndef ESP8266
+    #ifndef analogInputToDigitalPin
+        int analogInputToDigitalPin(int i)
+        {
+            switch(i)
+            {
+                case 0: return A0;
+                case 1: return A1;
+                case 2: return A2;
+                case 3: return A3;
+                case 4: return A4;
+                case 5: return A5;
+        #ifdef A6
+                case 6: return A6;
+        #endif
+        #ifdef A7
+                case 7: return A7;
+        #endif
+        #ifdef A8
+                case 8: return A8;
+        #endif
+        #ifdef A9
+                case 9: return A9;
+        #endif
+        #ifdef A10
+                case 10: return A10;
+        #endif
+        #ifdef A11
+                case 11: return A11;
+        #endif
+        #ifdef A12
+                case 12: return A12;
+        #endif
+        #ifdef A13
+                case 13: return A13;
+        #endif
+        #ifdef A14
+                case 14: return A14;
+        #endif
+        #ifdef A15
+                case 15: return A15;
+        #endif
+        #ifdef A16    
+                case 16: return A16;
+        #endif
+            }
+        }
+    #endif
+#endif //for ESP8266 ifndef
 

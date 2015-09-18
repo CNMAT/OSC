@@ -92,7 +92,9 @@ public:
 	OSCData (int16_t);
 #endif
 	OSCData (int32_t);
+#ifndef ESP8266
     OSCData (int);
+#endif
     OSCData (unsigned int);
 	OSCData (float);
 	OSCData (double);
