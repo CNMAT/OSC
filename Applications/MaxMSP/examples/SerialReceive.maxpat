@@ -2,33 +2,43 @@
 	"patcher" : 	{
 		"fileversion" : 1,
 		"appversion" : 		{
-			"major" : 6,
-			"minor" : 1,
-			"revision" : 9,
-			"architecture" : "x86"
+			"major" : 7,
+			"minor" : 0,
+			"revision" : 4,
+			"architecture" : "x86",
+			"modernui" : 1
 		}
 ,
-		"rect" : [ 709.0, 45.0, 1358.0, 750.0 ],
+		"rect" : [ 378.0, 174.0, 792.0, 490.0 ],
 		"bglocked" : 0,
 		"openinpresentation" : 0,
 		"default_fontsize" : 12.0,
 		"default_fontface" : 0,
 		"default_fontname" : "Arial",
-		"gridonopen" : 0,
+		"gridonopen" : 1,
 		"gridsize" : [ 15.0, 15.0 ],
-		"gridsnaponopen" : 0,
+		"gridsnaponopen" : 1,
+		"objectsnaponopen" : 1,
 		"statusbarvisible" : 2,
 		"toolbarvisible" : 1,
+		"lefttoolbarpinned" : 0,
+		"toptoolbarpinned" : 0,
+		"righttoolbarpinned" : 0,
+		"bottomtoolbarpinned" : 0,
+		"toolbars_unpinned_last_save" : 0,
+		"tallnewobj" : 0,
 		"boxanimatetime" : 200,
-		"imprint" : 0,
 		"enablehscroll" : 1,
 		"enablevscroll" : 1,
 		"devicewidth" : 0.0,
 		"description" : "",
 		"digest" : "",
 		"tags" : "",
+		"style" : "",
+		"subpatcher_template" : "",
 		"boxes" : [ 			{
 				"box" : 				{
+					"fontface" : 0,
 					"fontname" : "Arial",
 					"fontsize" : 12.0,
 					"id" : "obj-5",
@@ -37,7 +47,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 68.0, 374.0, 267.0, 34.0 ],
-					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
+					"textcolor" : [ 1.0, 1.0, 1.0, 1.0 ]
 				}
 
 			}
@@ -50,7 +60,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "FullPacket" ],
-					"patching_rect" : [ 167.0, 207.0, 69.0, 20.0 ],
+					"patching_rect" : [ 164.0, 202.0, 69.0, 22.0 ],
+					"style" : "",
 					"text" : "o.pack /led"
 				}
 
@@ -64,13 +75,15 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "FullPacket" ],
-					"patching_rect" : [ 164.0, 244.0, 95.0, 22.0 ],
+					"patching_rect" : [ 164.0, 244.0, 95.0, 24.0 ],
+					"style" : "",
 					"text" : "o.downcast"
 				}
 
 			}
 , 			{
 				"box" : 				{
+					"fontface" : 0,
 					"fontname" : "Arial",
 					"fontsize" : 12.0,
 					"id" : "obj-18",
@@ -79,12 +92,13 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 164.0, 314.0, 92.0, 34.0 ],
-					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
+					"textcolor" : [ 1.0, 1.0, 1.0, 1.0 ]
 				}
 
 			}
 , 			{
 				"box" : 				{
+					"fontface" : 0,
 					"fontname" : "Arial",
 					"fontsize" : 12.0,
 					"id" : "obj-3",
@@ -93,7 +107,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 350.5, 374.0, 158.0, 34.0 ],
-					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
+					"textcolor" : [ 1.0, 1.0, 1.0, 1.0 ]
 				}
 
 			}
@@ -101,27 +115,34 @@
 				"box" : 				{
 					"fontname" : "Arial",
 					"fontsize" : 12.0,
-					"frgb" : 0.0,
 					"id" : "obj-2",
 					"linecount" : 2,
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
 					"patching_rect" : [ 370.5, 218.5, 170.0, 33.0 ],
+					"style" : "",
 					"text" : "Look for your device in the menu list of serial USB"
 				}
 
 			}
 , 			{
 				"box" : 				{
+					"bgmode" : 0,
+					"border" : 0,
+					"clickthrough" : 0,
+					"enablehscroll" : 0,
+					"enablevscroll" : 0,
 					"id" : "obj-4",
+					"lockeddragscroll" : 0,
 					"maxclass" : "bpatcher",
 					"name" : "o.io.serial.display.maxpat",
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"offset" : [ 3.0, 0.0 ],
 					"outlettype" : [ "FullPacket" ],
-					"patching_rect" : [ 350.5, 289.0, 340.5, 25.0 ]
+					"patching_rect" : [ 350.5, 289.0, 340.5, 25.0 ],
+					"viewvisibility" : 1
 				}
 
 			}
@@ -134,7 +155,8 @@
 					"numinlets" : 2,
 					"numoutlets" : 2,
 					"outlettype" : [ "FullPacket", "FullPacket" ],
-					"patching_rect" : [ 289.5, 328.0, 80.0, 20.0 ],
+					"patching_rect" : [ 289.5, 328.0, 80.0, 22.0 ],
+					"style" : "",
 					"text" : "o.io.slipserial"
 				}
 
@@ -143,13 +165,13 @@
 				"box" : 				{
 					"fontname" : "Andale Mono",
 					"fontsize" : 14.0,
-					"frgb" : 0.0,
 					"id" : "obj-11",
 					"linecount" : 3,
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
 					"patching_rect" : [ 541.0, 364.0, 150.0, 54.0 ],
+					"style" : "",
 					"text" : "stats on serial OSC communications"
 				}
 
@@ -158,13 +180,13 @@
 				"box" : 				{
 					"fontname" : "Arial",
 					"fontsize" : 12.0,
-					"frgb" : 0.0,
 					"id" : "obj-19",
 					"linecount" : 2,
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 133.5, 25.0, 156.0, 33.0 ],
+					"patching_rect" : [ 43.5, 42.0, 156.0, 33.0 ],
+					"style" : "",
 					"text" : "PWM control of brightness of LED"
 				}
 
@@ -178,7 +200,8 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 177.0, 151.0, 32.5, 18.0 ],
+					"patching_rect" : [ 114.0, 151.0, 32.5, 22.0 ],
+					"style" : "",
 					"text" : "on"
 				}
 
@@ -192,7 +215,8 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 127.0, 151.0, 32.5, 18.0 ],
+					"patching_rect" : [ 56.0, 151.0, 32.5, 22.0 ],
+					"style" : "",
 					"text" : "off"
 				}
 
@@ -206,8 +230,9 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 289.5, 31.0, 20.0, 140.0 ],
-					"setminmax" : [ 0.0, 1.0 ]
+					"patching_rect" : [ 220.5, 31.0, 20.0, 140.0 ],
+					"setminmax" : [ 0.0, 1.0 ],
+					"style" : ""
 				}
 
 			}
@@ -219,7 +244,8 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "int" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 239.0, 151.0, 20.0, 20.0 ]
+					"patching_rect" : [ 164.0, 151.0, 20.0, 20.0 ],
+					"style" : ""
 				}
 
 			}
@@ -256,6 +282,7 @@
 			}
 , 			{
 				"patchline" : 				{
+					"color" : [ 1.0, 0.8, 0.4, 1.0 ],
 					"destination" : [ "obj-12", 0 ],
 					"disabled" : 0,
 					"hidden" : 0,
@@ -265,6 +292,7 @@
 			}
 , 			{
 				"patchline" : 				{
+					"color" : [ 1.0, 0.8, 0.4, 1.0 ],
 					"destination" : [ "obj-12", 0 ],
 					"disabled" : 0,
 					"hidden" : 0,
@@ -316,6 +344,7 @@
 			}
 , 			{
 				"patchline" : 				{
+					"color" : [ 1.0, 0.8, 0.4, 1.0 ],
 					"destination" : [ "obj-12", 0 ],
 					"disabled" : 0,
 					"hidden" : 0,
@@ -325,6 +354,7 @@
 			}
 , 			{
 				"patchline" : 				{
+					"color" : [ 1.0, 0.8, 0.4, 1.0 ],
 					"destination" : [ "obj-12", 0 ],
 					"disabled" : 0,
 					"hidden" : 0,
@@ -335,22 +365,19 @@
  ],
 		"dependency_cache" : [ 			{
 				"name" : "o.io.slipserial.maxpat",
-				"bootpath" : "/Users/adrian2013/Documents/Max/Packages/o.io/experimental/Protocols/serial",
-				"patcherrelativepath" : "../../../../../../Documents/Max/Packages/o.io/experimental/Protocols/serial",
+				"bootpath" : "~/Documents/Max/Packages/o.io/experimental/Protocols/serial",
 				"type" : "JSON",
 				"implicit" : 1
 			}
 , 			{
 				"name" : "o.righttoleft.maxpat",
-				"bootpath" : "/Users/adrian2013/Documents/Max/Packages/CNMAT-odot/patchers/ordering",
-				"patcherrelativepath" : "../../../../../../Documents/Max/Packages/CNMAT-odot/patchers/ordering",
+				"bootpath" : "~/Documents/Max/Packages/odot/patchers/ordering",
 				"type" : "JSON",
 				"implicit" : 1
 			}
 , 			{
 				"name" : "o.io.serial.display.maxpat",
-				"bootpath" : "/Users/adrian2013/Documents/Max/Packages/o.io/experimental/Protocols/serial",
-				"patcherrelativepath" : "../../../../../../Documents/Max/Packages/o.io/experimental/Protocols/serial",
+				"bootpath" : "~/Documents/Max/Packages/o.io/experimental/Protocols/serial",
 				"type" : "JSON",
 				"implicit" : 1
 			}
@@ -394,7 +421,8 @@
 				"name" : "o.downcast.mxo",
 				"type" : "iLaX"
 			}
- ]
+ ],
+		"embedsnapshot" : 0
 	}
 
 }
