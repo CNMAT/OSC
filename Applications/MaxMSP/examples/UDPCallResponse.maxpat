@@ -2,31 +2,40 @@
 	"patcher" : 	{
 		"fileversion" : 1,
 		"appversion" : 		{
-			"major" : 6,
-			"minor" : 1,
-			"revision" : 7,
-			"architecture" : "x86"
+			"major" : 7,
+			"minor" : 0,
+			"revision" : 4,
+			"architecture" : "x86",
+			"modernui" : 1
 		}
 ,
-		"rect" : [ 171.0, 60.0, 1266.0, 737.0 ],
+		"rect" : [ 140.0, 78.0, 982.0, 632.0 ],
 		"bglocked" : 0,
 		"openinpresentation" : 0,
 		"default_fontsize" : 14.0,
 		"default_fontface" : 0,
 		"default_fontname" : "Andale Mono",
-		"gridonopen" : 0,
+		"gridonopen" : 1,
 		"gridsize" : [ 5.0, 5.0 ],
-		"gridsnaponopen" : 0,
+		"gridsnaponopen" : 1,
+		"objectsnaponopen" : 1,
 		"statusbarvisible" : 2,
 		"toolbarvisible" : 1,
+		"lefttoolbarpinned" : 0,
+		"toptoolbarpinned" : 0,
+		"righttoolbarpinned" : 0,
+		"bottomtoolbarpinned" : 0,
+		"toolbars_unpinned_last_save" : 0,
+		"tallnewobj" : 0,
 		"boxanimatetime" : 200,
-		"imprint" : 0,
 		"enablehscroll" : 1,
 		"enablevscroll" : 1,
 		"devicewidth" : 0.0,
 		"description" : "",
 		"digest" : "",
 		"tags" : "",
+		"style" : "",
+		"subpatcher_template" : "",
 		"boxes" : [ 			{
 				"box" : 				{
 					"fontname" : "Andale Mono",
@@ -36,13 +45,15 @@
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "FullPacket" ],
-					"patching_rect" : [ 246.5, 265.0, 128.0, 22.0 ],
+					"patching_rect" : [ 246.5, 265.0, 128.0, 24.0 ],
+					"style" : "",
 					"text" : "o.betweentimes"
 				}
 
 			}
 , 			{
 				"box" : 				{
+					"fontface" : 0,
 					"fontsize" : 14.0,
 					"id" : "obj-9",
 					"maxclass" : "o.compose",
@@ -50,14 +61,16 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 699.5, 158.0, 157.0, 26.0 ],
-					"presentation_rect" : [ 948.0, 153.0, 0.0, 0.0 ],
+					"saved_bundle_data" : [ 35, 98, 117, 110, 100, 108, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 47, 97, 110, 97, 108, 111, 103, 47, 123, 50, 44, 51, 125, 47, 117, 0, 44, 0, 0, 0 ],
+					"saved_bundle_length" : 40,
 					"text" : "/analog/{2,3}/u",
-					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
+					"textcolor" : [ 0.188, 0.188, 0.188, 1.0 ]
 				}
 
 			}
 , 			{
 				"box" : 				{
+					"fontface" : 0,
 					"fontsize" : 14.0,
 					"id" : "obj-8",
 					"maxclass" : "o.compose",
@@ -65,14 +78,16 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 448.5, 159.0, 150.0, 26.0 ],
-					"presentation_rect" : [ 313.0, 164.0, 0.0, 0.0 ],
+					"saved_bundle_data" : [ 35, 98, 117, 110, 100, 108, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 47, 97, 110, 97, 108, 111, 103, 47, 91, 48, 45, 51, 93, 47, 117, 0, 44, 0, 0, 0 ],
+					"saved_bundle_length" : 40,
 					"text" : "/analog/[0-3]/u",
-					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
+					"textcolor" : [ 0.188, 0.188, 0.188, 1.0 ]
 				}
 
 			}
 , 			{
 				"box" : 				{
+					"fontface" : 0,
 					"fontsize" : 14.0,
 					"id" : "obj-6",
 					"maxclass" : "o.compose",
@@ -80,23 +95,24 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"patching_rect" : [ 246.5, 159.0, 150.0, 26.0 ],
+					"saved_bundle_data" : [ 35, 98, 117, 110, 100, 108, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 47, 97, 110, 97, 108, 111, 103, 47, 42, 0, 0, 0, 44, 0, 0, 0 ],
+					"saved_bundle_length" : 36,
 					"text" : "/analog/*",
-					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
+					"textcolor" : [ 0.188, 0.188, 0.188, 1.0 ]
 				}
 
 			}
 , 			{
 				"box" : 				{
+					"fontface" : 0,
 					"fontsize" : 14.0,
 					"id" : "obj-4",
-					"linecount" : 6,
 					"maxclass" : "o.display",
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 246.5, 308.0, 265.0, 116.0 ],
-					"text" : "/analog/0 : 984,\n/analog/1 : 971,\n/analog/2 : 974,\n/analog/3 : 976,\n/betweentime : 0.0330503,\n/units/betweentime : \"seconds\"",
-					"textcolor" : [ 0.0, 0.0, 0.0, 1.0 ]
+					"patching_rect" : [ 246.5, 308.0, 265.0, 36.0 ],
+					"textcolor" : [ 1.0, 1.0, 1.0, 1.0 ]
 				}
 
 			}
@@ -109,7 +125,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 246.5, 55.0, 95.0, 22.0 ],
+					"patching_rect" : [ 246.5, 55.0, 95.0, 24.0 ],
+					"style" : "",
 					"text" : "loadmess 1"
 				}
 
@@ -118,13 +135,13 @@
 				"box" : 				{
 					"fontname" : "Andale Mono",
 					"fontsize" : 14.0,
-					"frgb" : 0.0,
 					"id" : "obj-1",
 					"linecount" : 2,
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
 					"patching_rect" : [ 726.5, 77.0, 222.0, 38.0 ],
+					"style" : "",
 					"text" : "read analog pins 2 and 3 with pullup turned on"
 				}
 
@@ -137,7 +154,8 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "int" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 699.5, 95.0, 20.0, 20.0 ]
+					"patching_rect" : [ 699.5, 95.0, 20.0, 20.0 ],
+					"style" : ""
 				}
 
 			}
@@ -150,7 +168,8 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "bang" ],
-					"patching_rect" : [ 699.5, 126.0, 86.0, 22.0 ],
+					"patching_rect" : [ 699.5, 126.0, 86.0, 24.0 ],
+					"style" : "",
 					"text" : "qmetro 20"
 				}
 
@@ -162,7 +181,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "bang" ],
-					"patching_rect" : [ 182.0, 468.0, 20.0, 20.0 ]
+					"patching_rect" : [ 179.333328, 500.0, 20.0, 20.0 ],
+					"style" : ""
 				}
 
 			}
@@ -175,7 +195,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "float" ],
 					"parameter_enable" : 1,
-					"patching_rect" : [ 180.0, 363.0, 34.0, 95.0 ],
+					"patching_rect" : [ 179.333328, 396.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
 							"parameter_longname" : "a[37]",
@@ -195,12 +215,12 @@
 				"box" : 				{
 					"fontname" : "Andale Mono",
 					"fontsize" : 14.0,
-					"frgb" : 0.0,
 					"id" : "obj-13",
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 11.0, 509.0, 137.0, 22.0 ],
+					"patching_rect" : [ 11.0, 542.0, 137.0, 22.0 ],
+					"style" : "",
 					"text" : "analog readings"
 				}
 
@@ -212,7 +232,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "bang" ],
-					"patching_rect" : [ 143.0, 467.0, 20.0, 20.0 ]
+					"patching_rect" : [ 145.666672, 500.0, 20.0, 20.0 ],
+					"style" : ""
 				}
 
 			}
@@ -223,7 +244,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "bang" ],
-					"patching_rect" : [ 110.0, 467.0, 20.0, 20.0 ]
+					"patching_rect" : [ 112.0, 500.0, 20.0, 20.0 ],
+					"style" : ""
 				}
 
 			}
@@ -234,7 +256,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "bang" ],
-					"patching_rect" : [ 77.0, 467.0, 20.0, 20.0 ]
+					"patching_rect" : [ 78.333336, 500.0, 20.0, 20.0 ],
+					"style" : ""
 				}
 
 			}
@@ -245,7 +268,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "bang" ],
-					"patching_rect" : [ 44.0, 467.0, 20.0, 20.0 ]
+					"patching_rect" : [ 44.666668, 500.0, 20.0, 20.0 ],
+					"style" : ""
 				}
 
 			}
@@ -258,7 +282,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "float" ],
 					"parameter_enable" : 1,
-					"patching_rect" : [ 143.0, 363.0, 34.0, 95.0 ],
+					"patching_rect" : [ 145.666672, 396.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
 							"parameter_longname" : "a[19]",
@@ -283,7 +307,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "float" ],
 					"parameter_enable" : 1,
-					"patching_rect" : [ 110.0, 363.0, 34.0, 95.0 ],
+					"patching_rect" : [ 112.0, 396.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
 							"parameter_longname" : "a[20]",
@@ -308,7 +332,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "float" ],
 					"parameter_enable" : 1,
-					"patching_rect" : [ 77.0, 363.0, 34.0, 95.0 ],
+					"patching_rect" : [ 78.333336, 396.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
 							"parameter_longname" : "a[21]",
@@ -333,7 +357,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "float" ],
 					"parameter_enable" : 1,
-					"patching_rect" : [ 44.0, 363.0, 34.0, 95.0 ],
+					"patching_rect" : [ 44.666668, 396.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
 							"parameter_longname" : "a[22]",
@@ -358,7 +382,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "float" ],
 					"parameter_enable" : 1,
-					"patching_rect" : [ 11.0, 363.0, 34.0, 95.0 ],
+					"patching_rect" : [ 11.0, 396.0, 34.0, 95.0 ],
 					"saved_attribute_attributes" : 					{
 						"valueof" : 						{
 							"parameter_longname" : "a[23]",
@@ -381,7 +405,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "bang" ],
-					"patching_rect" : [ 11.0, 467.0, 20.0, 20.0 ]
+					"patching_rect" : [ 11.0, 500.0, 20.0, 20.0 ],
+					"style" : ""
 				}
 
 			}
@@ -394,7 +419,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 7,
 					"outlettype" : [ "", "", "", "", "", "", "FullPacket" ],
-					"patching_rect" : [ 11.0, 323.0, 221.0, 22.0 ],
+					"patching_rect" : [ 11.0, 323.0, 221.0, 24.0 ],
+					"style" : "",
 					"text" : "o.route /0 /1 /2 /3 /4 /5"
 				}
 
@@ -408,7 +434,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 2,
 					"outlettype" : [ "", "FullPacket" ],
-					"patching_rect" : [ 11.0, 265.0, 137.0, 22.0 ],
+					"patching_rect" : [ 11.0, 265.0, 137.0, 24.0 ],
+					"style" : "",
 					"text" : "o.route /analog"
 				}
 
@@ -417,13 +444,13 @@
 				"box" : 				{
 					"fontname" : "Andale Mono",
 					"fontsize" : 14.0,
-					"frgb" : 0.0,
 					"id" : "obj-15",
 					"linecount" : 2,
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
 					"patching_rect" : [ 475.5, 86.0, 187.0, 38.0 ],
+					"style" : "",
 					"text" : "read analog pins 0-3 with pullup turned on"
 				}
 
@@ -436,7 +463,8 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "int" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 448.5, 95.0, 20.0, 20.0 ]
+					"patching_rect" : [ 448.5, 95.0, 20.0, 20.0 ],
+					"style" : ""
 				}
 
 			}
@@ -449,7 +477,8 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "bang" ],
-					"patching_rect" : [ 448.5, 125.0, 86.0, 22.0 ],
+					"patching_rect" : [ 448.5, 125.0, 86.0, 24.0 ],
+					"style" : "",
 					"text" : "qmetro 20"
 				}
 
@@ -458,12 +487,12 @@
 				"box" : 				{
 					"fontname" : "Andale Mono",
 					"fontsize" : 14.0,
-					"frgb" : 0.0,
 					"id" : "obj-46",
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
 					"patching_rect" : [ 261.5, 95.0, 187.0, 22.0 ],
+					"style" : "",
 					"text" : "read all analog pins"
 				}
 
@@ -476,7 +505,8 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "int" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 246.5, 95.0, 20.0, 20.0 ]
+					"patching_rect" : [ 246.5, 95.0, 20.0, 20.0 ],
+					"style" : ""
 				}
 
 			}
@@ -489,7 +519,8 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "bang" ],
-					"patching_rect" : [ 246.5, 124.0, 95.0, 22.0 ],
+					"patching_rect" : [ 246.5, 124.0, 95.0, 24.0 ],
+					"style" : "",
 					"text" : "qmetro 100"
 				}
 
@@ -503,7 +534,8 @@
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 246.5, 214.0, 288.0, 22.0 ],
+					"patching_rect" : [ 246.5, 214.0, 288.0, 24.0 ],
+					"style" : "",
 					"text" : "o.io.udp 128.32.122.252 8888 9999"
 				}
 
@@ -519,43 +551,52 @@
 					"patcher" : 					{
 						"fileversion" : 1,
 						"appversion" : 						{
-							"major" : 6,
-							"minor" : 1,
-							"revision" : 7,
-							"architecture" : "x86"
+							"major" : 7,
+							"minor" : 0,
+							"revision" : 4,
+							"architecture" : "x86",
+							"modernui" : 1
 						}
 ,
-						"rect" : [ 25.0, 69.0, 738.0, 421.0 ],
+						"rect" : [ 34.0, 78.0, 738.0, 421.0 ],
 						"bglocked" : 0,
 						"openinpresentation" : 0,
 						"default_fontsize" : 14.0,
 						"default_fontface" : 0,
 						"default_fontname" : "Andale Mono",
-						"gridonopen" : 0,
+						"gridonopen" : 1,
 						"gridsize" : [ 5.0, 5.0 ],
-						"gridsnaponopen" : 0,
+						"gridsnaponopen" : 1,
+						"objectsnaponopen" : 1,
 						"statusbarvisible" : 2,
 						"toolbarvisible" : 1,
+						"lefttoolbarpinned" : 0,
+						"toptoolbarpinned" : 0,
+						"righttoolbarpinned" : 0,
+						"bottomtoolbarpinned" : 0,
+						"toolbars_unpinned_last_save" : 0,
+						"tallnewobj" : 0,
 						"boxanimatetime" : 200,
-						"imprint" : 0,
 						"enablehscroll" : 1,
 						"enablevscroll" : 1,
 						"devicewidth" : 0.0,
 						"description" : "",
 						"digest" : "",
 						"tags" : "",
+						"style" : "",
+						"subpatcher_template" : "",
 						"boxes" : [ 							{
 								"box" : 								{
 									"fontname" : "Andale Mono",
 									"fontsize" : 14.0,
-									"frgb" : 0.0,
 									"id" : "obj-2",
-									"linecount" : 24,
+									"linecount" : 25,
 									"maxclass" : "comment",
 									"numinlets" : 1,
 									"numoutlets" : 0,
-									"patching_rect" : [ 15.0, 20.0, 697.0, 386.0 ],
-									"text" : "/*\n Written by Yotam Mann, The Center for New Music and Audio Technologies,\n University of California, Berkeley.  Copyright (c) 2012, The Regents of\n the University of California (Regents).\n \n Permission to use, copy, modify, distribute, and distribute modified versions\n of this software and its documentation without fee and without a signed\n licensing agreement, is hereby granted, provided that the above copyright\n notice, this paragraph and the following two paragraphs appear in all copies,\n modifications, and distributions.\n \n IN NO EVENT SHALL REGENTS BE LIABLE TO ANY PARTY FOR DIRECT, INDIRECT,\n SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST PROFITS, ARISING\n OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN IF REGENTS HAS\n BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n \n REGENTS SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT NOT LIMITED TO,\n THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR\n PURPOSE. THE SOFTWARE AND ACCOMPANYING DOCUMENTATION, IF ANY, PROVIDED\n HEREUNDER IS PROVIDED \"AS IS\". REGENTS HAS NO OBLIGATION TO PROVIDE\n MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.\n \n For bug reports and feature requests please email me at yotam@cnmat.berkeley.edu\n */"
+									"patching_rect" : [ 15.0, 20.0, 768.0, 400.0 ],
+									"style" : "",
+									"text" : "/*\n Written by Yotam Mann and Adrian Freed,\n The Center for New Music and Audio Technologies,\n University of California, Berkeley.  Copyright (c) 2012, The Regents of\n the University of California (Regents).\n \n Permission to use, copy, modify, distribute, and distribute modified versions\n of this software and its documentation without fee and without a signed\n licensing agreement, is hereby granted, provided that the above copyright\n notice, this paragraph and the following two paragraphs appear in all copies,\n modifications, and distributions.\n \n IN NO EVENT SHALL REGENTS BE LIABLE TO ANY PARTY FOR DIRECT, INDIRECT,\n SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST PROFITS, ARISING\n OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN IF REGENTS HAS\n BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n \n REGENTS SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT NOT LIMITED TO,\n THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR\n PURPOSE. THE SOFTWARE AND ACCOMPANYING DOCUMENTATION, IF ANY, PROVIDED\n HEREUNDER IS PROVIDED \"AS IS\". REGENTS HAS NO OBLIGATION TO PROVIDE\n MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.\n \n For bug reports and feature requests please email me at yotam@cnmat.berkeley.edu\n */"
 								}
 
 							}
@@ -563,20 +604,18 @@
 						"lines" : [  ]
 					}
 ,
-					"patching_rect" : [ 666.5, 494.0, 111.0, 22.0 ],
+					"patching_rect" : [ 666.5, 494.0, 111.0, 24.0 ],
 					"saved_object_attributes" : 					{
-						"default_fontface" : 0,
-						"default_fontname" : "Andale Mono",
-						"default_fontsize" : 14.0,
 						"description" : "",
 						"digest" : "",
-						"fontface" : 0,
 						"fontname" : "Andale Mono",
 						"fontsize" : 14.0,
 						"globalpatchername" : "",
+						"style" : "",
 						"tags" : ""
 					}
 ,
+					"style" : "",
 					"text" : "p disclaimer"
 				}
 
@@ -584,6 +623,7 @@
  ],
 		"lines" : [ 			{
 				"patchline" : 				{
+					"color" : [ 1.0, 0.8, 0.4, 1.0 ],
 					"destination" : [ "obj-4", 0 ],
 					"disabled" : 0,
 					"hidden" : 0,
@@ -656,6 +696,7 @@
 			}
 , 			{
 				"patchline" : 				{
+					"color" : [ 1.0, 0.8, 0.4, 1.0 ],
 					"destination" : [ "obj-10", 0 ],
 					"disabled" : 0,
 					"hidden" : 0,
@@ -665,6 +706,7 @@
 			}
 , 			{
 				"patchline" : 				{
+					"color" : [ 1.0, 0.8, 0.4, 1.0 ],
 					"destination" : [ "obj-45", 0 ],
 					"disabled" : 0,
 					"hidden" : 0,
@@ -683,6 +725,7 @@
 			}
 , 			{
 				"patchline" : 				{
+					"color" : [ 1.0, 0.8, 0.4, 1.0 ],
 					"destination" : [ "obj-81", 0 ],
 					"disabled" : 0,
 					"hidden" : 0,
@@ -692,6 +735,7 @@
 			}
 , 			{
 				"patchline" : 				{
+					"color" : [ 1.0, 0.8, 0.4, 1.0 ],
 					"destination" : [ "obj-26", 0 ],
 					"disabled" : 0,
 					"hidden" : 0,
@@ -746,6 +790,7 @@
 			}
 , 			{
 				"patchline" : 				{
+					"color" : [ 1.0, 0.8, 0.4, 1.0 ],
 					"destination" : [ "obj-26", 0 ],
 					"disabled" : 0,
 					"hidden" : 0,
@@ -809,6 +854,7 @@
 			}
 , 			{
 				"patchline" : 				{
+					"color" : [ 1.0, 0.8, 0.4, 1.0 ],
 					"destination" : [ "obj-26", 0 ],
 					"disabled" : 0,
 					"hidden" : 0,
@@ -818,39 +864,35 @@
 			}
  ],
 		"parameters" : 		{
-			"obj-64" : [ "a[37]", "a", 0 ],
-			"obj-101" : [ "a[23]", "a", 0 ],
 			"obj-105" : [ "a[19]", "a", 0 ],
 			"obj-104" : [ "a[20]", "a", 0 ],
 			"obj-103" : [ "a[21]", "a", 0 ],
-			"obj-102" : [ "a[22]", "a", 0 ]
+			"obj-64" : [ "a[37]", "a", 0 ],
+			"obj-102" : [ "a[22]", "a", 0 ],
+			"obj-101" : [ "a[23]", "a", 0 ]
 		}
 ,
 		"dependency_cache" : [ 			{
 				"name" : "o.io.udp.maxpat",
-				"bootpath" : "/Users/adrian2013/Documents/Max/Packages/o.io/patchers",
-				"patcherrelativepath" : "../../../../../Documents/Max/Packages/o.io/patchers",
+				"bootpath" : "~/Documents/Max/Packages/o.io/experimental/Protocols/udp",
 				"type" : "JSON",
 				"implicit" : 1
 			}
 , 			{
 				"name" : "o.betweentimes.maxpat",
-				"bootpath" : "/Users/adrian2013/Documents/Max/Packages/CNMAT-odot/patchers/time",
-				"patcherrelativepath" : "../../../../../Documents/Max/Packages/CNMAT-odot/patchers/time",
+				"bootpath" : "~/Documents/Max/Packages/odot/patchers/time",
 				"type" : "JSON",
 				"implicit" : 1
 			}
 , 			{
 				"name" : "o.was.maxpat",
-				"bootpath" : "/Users/adrian2013/Documents/Max/Packages/CNMAT-odot/patchers/time",
-				"patcherrelativepath" : "../../../../../Documents/Max/Packages/CNMAT-odot/patchers/time",
+				"bootpath" : "~/Documents/Max/Packages/odot/dev",
 				"type" : "JSON",
 				"implicit" : 1
 			}
 , 			{
 				"name" : "o.righttoleft.maxpat",
-				"bootpath" : "/Users/adrian2013/Documents/Max/Packages/CNMAT-odot/patchers/ordering",
-				"patcherrelativepath" : "../../../../../Documents/Max/Packages/CNMAT-odot/patchers/ordering",
+				"bootpath" : "~/Documents/Max/Packages/odot/patchers/ordering",
 				"type" : "JSON",
 				"implicit" : 1
 			}
@@ -898,7 +940,8 @@
 				"name" : "o.expr.codebox.mxo",
 				"type" : "iLaX"
 			}
- ]
+ ],
+		"embedsnapshot" : 0
 	}
 
 }
