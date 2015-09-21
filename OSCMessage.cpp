@@ -156,6 +156,7 @@ double OSCMessage::getDouble(int position){
         return NULL;
     }
 }
+
 bool  OSCMessage::getBoolean(int position){
 	OSCData * datum = getOSCData(position);
 	if (!hasError()){
@@ -648,7 +649,11 @@ void OSCMessage::decode(uint8_t incomingByte){
                     if (datum->error == OSC_OK){
                         //compute the padding size for the data
                         int dataPad = padSize(datum->bytes);
-                        if (incomingBufferSize == dataPad){
+                        //  if there is no padding required, switch back to DATA, and don't clear the incomingBuffer because it holds next data
+                        if (dataPad == 0){
+                             decodeState = DATA;
+                        }
+                        else if (incomingBufferSize == dataPad){
                             clearIncomingBuffer();
                             decodeState = DATA;
                         }
