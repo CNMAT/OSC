@@ -97,7 +97,7 @@ OSCMessage & OSCBundle::add(){
 }
 
 OSCMessage & OSCBundle::add(OSCMessage & _msg){
-    OSCMessage * msg = new OSCMessage(_msg);
+    OSCMessage * msg = new OSCMessage(&_msg);
     if (!msg->hasError()){
         //realloc the array to fit the message
         OSCMessage ** messageMem = (OSCMessage **) realloc(messages, sizeof(OSCMessage *) * (numMessages + 1));
