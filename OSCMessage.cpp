@@ -547,7 +547,7 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                     break;
                 case 'f':
                     if (incomingBufferSize == 4){
-                        //parse the buffer as an int
+                        //parse the buffer as a float
                         union {
                             float f;
                             uint8_t b[4];
@@ -560,7 +560,7 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                     break;
                 case 'd':
                     if (incomingBufferSize == 8){
-                        //parse the buffer as an int
+                        //parse the buffer as a double
                         union {
                             double d;
                             uint8_t b[8];
@@ -572,9 +572,8 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                     }
                     break;
                 case 't':
-                    
                     if (incomingBufferSize == 8){
-                        //parse the buffer as an int
+                        //parse the buffer as a timetag
                         union {
                             osctime_t t;
                             uint8_t b[8];
