@@ -190,6 +190,13 @@ OSC for Arduino comes with a small suite of tests to validate its functionality 
 
 The tests require [ArduinoUnit](https://github.com/mmurdoch/arduinounit) to be installed in the `libraries` folder. The results of the test are printed to the Serial console. 
 
+Tested on:
+
+* Esplora
+* Leonardo
+* Teensy 3.x
+* Mega 2560
+
 # Performance
 
 Currently best performance is achieved with Arduinos with built-in USB Serial, i.e. Teensy 3.0, Teensy 2.0 and 2.0++ and Leanardo variants (12Mbps max). 
