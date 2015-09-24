@@ -97,7 +97,7 @@ public:
 	~OSCBundle();
 
     //clears all of the OSCMessages inside
-    void empty();
+    OSCBundle& empty();
 	
 /*=============================================================================
     SETTERS
@@ -110,12 +110,14 @@ public:
 	OSCMessage & add(OSCMessage & msg);
     
     template <typename T>
-    void setTimetag(T t){
+    OSCBundle& setTimetag(T t){
         timetag = (osctime_t) t;
+        return *this;
     }
     //sets the timetag from a buffer
-    void setTimetag(uint8_t * buff){
+    OSCBundle& setTimetag(uint8_t * buff){
         memcpy(&timetag, buff, 8);
+        return *this;
     }
     
 /*=============================================================================
@@ -159,15 +161,15 @@ public:
     SENDING
  =============================================================================*/
     
-    void send(Print &p);
+    OSCBundle& send(Print &p);
     
 /*=============================================================================
     FILLING
  =============================================================================*/
     
-    void fill(uint8_t incomingByte);
+    OSCBundle& fill(uint8_t incomingByte);
     
-    void fill(uint8_t * incomingBytes, int length);
+    OSCBundle& fill(uint8_t * incomingBytes, int length);
 };
 
 #endif

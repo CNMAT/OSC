@@ -50,7 +50,7 @@ OSCBundle::~OSCBundle(){
 }
 
 //clears all of the OSCMessages inside
-void OSCBundle::empty(){
+OSCBundle& OSCBundle::empty(){
     error = OSC_OK;
     for (int i = 0; i < numMessages; i++){
         OSCMessage * msg = getOSCMessage(i);
@@ -60,6 +60,7 @@ void OSCBundle::empty(){
     messages = NULL;
     clearIncomingBuffer();
     numMessages = 0;
+    return *this;
 }
 
 /*=============================================================================
@@ -189,10 +190,10 @@ OSCErrorCode OSCBundle::getError(){
  SENDING
  =============================================================================*/
 
-void OSCBundle::send(Print &p){
+OSCBundle& OSCBundle::send(Print &p){
     //don't send a bundle with errors
     if (hasError()){
-        return;
+        return *this;
     }
     //write the bundle header
     static uint8_t header[] = {'#', 'b', 'u', 'n', 'd', 'l', 'e', 0};
@@ -219,20 +220,23 @@ void OSCBundle::send(Print &p){
         p.write(sptr, 4);
         msg->send(p);
     }
+    return *this;
 }
 
 /*=============================================================================
     FILLING
  =============================================================================*/
 
-void OSCBundle::fill(uint8_t incomingByte){
+OSCBundle& OSCBundle::fill(uint8_t incomingByte){
     decode(incomingByte);
+    return *this;
 }
 
-void OSCBundle::fill(uint8_t * incomingBytes, int length){
+OSCBundle& OSCBundle::fill(uint8_t * incomingBytes, int length){
     while (length--){
         decode(*incomingBytes++);
     }
+    return *this;
 }
 
 /*=============================================================================
