@@ -123,7 +123,7 @@ public:
 	~OSCMessage();
 
 	//empties all of the data
-	void empty();
+	OSCMessage& empty();
 
 /*=============================================================================
 	SETTING  DATA
@@ -178,7 +178,7 @@ public:
 
 	//sets the data at a position
 	template <typename T> 
-	void set(int position, T datum){
+	OSCMessage& set(int position, T datum){
 		if (position < dataCount){
 			//replace the OSCData with a new one
 			OSCData * oldDatum = getOSCData(position);
@@ -200,10 +200,11 @@ public:
 			//else out of bounds error
 			error = INDEX_OUT_OF_BOUNDS;
 		}
+		return *this;
 	}
     
     //blob specific setter
-    void set(int position, uint8_t * blob, int length){
+    OSCMessage& set(int position, uint8_t * blob, int length){
         if (position < dataCount){
 			//replace the OSCData with a new one
 			OSCData * oldDatum = getOSCData(position);
@@ -225,9 +226,10 @@ public:
 			//else out of bounds error
 			error = INDEX_OUT_OF_BOUNDS;
 		}
+		return *this;
     }
     
-    void setAddress(const char *);
+    OSCMessage& setAddress(const char *);
 
 /*=============================================================================
 	GETTING DATA
@@ -311,11 +313,11 @@ public:
  =============================================================================*/
     
     //send the message
-    void send(Print &p);
+    OSCMessage& send(Print &p);
     
     //fill the message from a byte stream
-    void fill(uint8_t);
-    void fill(uint8_t *, int);
+    OSCMessage& fill(uint8_t);
+    OSCMessage& fill(uint8_t *, int);
 		
 /*=============================================================================
 	ERROR

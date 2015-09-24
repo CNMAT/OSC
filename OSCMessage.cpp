@@ -81,7 +81,7 @@ OSCMessage::~OSCMessage(){
     free(incomingBuffer);
 }
 
-void OSCMessage::empty(){
+OSCMessage& OSCMessage::empty(){
     error = OSC_OK;
     //free each of hte data in the array
     for (int i = 0; i < dataCount; i++){
@@ -338,7 +338,7 @@ int OSCMessage::getAddress(char * buffer, int offset, int len){
 	return strlen(buffer);
 }
 
-void OSCMessage::setAddress(const char * _address){
+OSCMessage& OSCMessage::setAddress(const char * _address){
     //free the previous address
     free(address); // are we sure address was allocated?
     //copy the address
@@ -350,6 +350,7 @@ void OSCMessage::setAddress(const char * _address){
 		strcpy(addressMemory, _address);
 		address = addressMemory;
 	}
+    return *this;
 }
 
 /*=============================================================================
@@ -419,10 +420,10 @@ OSCErrorCode OSCMessage::getError(){
     SENDING
  =============================================================================*/
 
-void OSCMessage::send(Print &p){
+OSCMessage& OSCMessage::send(Print &p){
     //don't send a message with errors
     if (hasError()){
-        return;
+        return *this;
     }
     uint8_t nullChar = '\0';
     //send the address
@@ -493,20 +494,23 @@ void OSCMessage::send(Print &p){
             p.write(ptr, datum->bytes);
         }
     }
+    return *this;
 }
 
 /*=============================================================================
     FILLING
  =============================================================================*/
 
-void OSCMessage::fill(uint8_t incomingByte){
+OSCMessage& OSCMessage::fill(uint8_t incomingByte){
     decode(incomingByte);
+    return *this;
 }
 
-void OSCMessage::fill(uint8_t * incomingBytes, int length){
+OSCMessage& OSCMessage::fill(uint8_t * incomingBytes, int length){
     while (length--){
         decode(*incomingBytes++);
     }
+    return *this;
 }
 
 /*=============================================================================
