@@ -88,7 +88,7 @@ Returns the integer at the given position
 msg.getInt(2);
 ```
 
-### `float getInt(int position)`
+### `float getFloat(int position)`
 
 Returns the float at the given position
 
