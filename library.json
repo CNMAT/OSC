@@ -1,7 +1,7 @@
 {
   "name": "OSC",
-  "keywords": "sound, protocol",
-  "description": "Open Sound Control (OSC) is an open, transport-independent, message-based protocol developed for communication among computers, sound synthesizers, and other multimedia devices.",
+  "keywords": "sound, encoding, OSC",
+  "description": "Open Sound Control (OSC) is an open, transport-independent, message-based encidubg developed for communication among computers, sound synthesizers, and other multimedia devices.",
   "authors": [
     {
       "name": "Adrian Freed",
