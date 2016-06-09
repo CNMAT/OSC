@@ -169,7 +169,7 @@ public:
     
     OSCBundle& fill(uint8_t incomingByte);
     
-    OSCBundle& fill(uint8_t * incomingBytes, int length);
+    OSCBundle& fill(const uint8_t * incomingBytes, int length);
 };
 
 #endif
