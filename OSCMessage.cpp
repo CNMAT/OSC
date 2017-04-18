@@ -305,19 +305,19 @@ bool OSCMessage::fullMatch( const char * pattern, int addr_offset){
 	return (ret==3);
 }
 
-bool OSCMessage::dispatch(const char * pattern, void (*callback)(OSCMessage &), int addr_offset){
+bool OSCMessage::dispatch(const char * pattern, void (*callback)(OSCMessage &, void *), void * callback_arg, int addr_offset){
 	if (fullMatch(pattern, addr_offset)){
-		callback(*this);
+		callback(*this, callback_arg);
 		return true;
 	} else {
 		return false;
 	}
 }
 
-bool OSCMessage::route(const char * pattern, void (*callback)(OSCMessage &, int), int initial_offset){
+bool OSCMessage::route(const char * pattern, void (*callback)(OSCMessage &, void *, int), void * callback_arg, int initial_offset){
 	int match_offset = match(pattern, initial_offset);
 	if (match_offset>0){
-		callback(*this, match_offset + initial_offset);
+		callback(*this, callback_arg, match_offset + initial_offset);
 		return true;
 	} else {
 		return false;
