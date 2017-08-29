@@ -125,6 +125,7 @@ OSCMessage * OSCBundle::getOSCMessage( char * addr){
             return msg;
         }
 	}
+	return NULL;
 }
 
 //the position is the same as the order they were declared in
@@ -132,6 +133,7 @@ OSCMessage * OSCBundle::getOSCMessage(int pos){
 	if (pos < numMessages){
 		return messages[pos];
 	} 
+	return NULL;
 }
 
 /*=============================================================================

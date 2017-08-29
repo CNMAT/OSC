@@ -158,7 +158,7 @@ size_t SLIPEncodedSerial::write(uint8_t b){
 		return serial->write(b);
 	}	
 }
-size_t SLIPEncodedSerial::write(const uint8_t *buffer, size_t size) { size_t result; while(size--) result = write(*buffer++); return result; }
+size_t SLIPEncodedSerial::write(const uint8_t *buffer, size_t size) { size_t result=0; while(size--) result = write(*buffer++); return result; }
 
 #endif
 

@@ -173,7 +173,7 @@ int32_t OSCData::getInt(){
         return data.i;
     } else {
     #ifndef ESP8266
-        return NULL;
+        return (int32_t)NULL;
     #else
         return -1; 
     #endif
@@ -192,7 +192,7 @@ float OSCData::getFloat(){
         return data.f;
     } else {
     #ifndef ESP8266
-        return NULL;
+        return (float)NULL;
     #else
         return -1; 
     #endif
@@ -204,7 +204,7 @@ double OSCData::getDouble(){
         return data.d;
     } else {
     #ifndef ESP8266
-        return NULL;
+        return (double)NULL;
     #else
         return -1; 
     #endif
@@ -230,7 +230,7 @@ int OSCData::getString(char * strBuffer, int length){
         return length;
     } else {
     #ifndef ESP8266
-        return NULL;
+        return (int)NULL;
     #else
         return -1; 
     #endif
@@ -245,7 +245,7 @@ int OSCData::getBlob(uint8_t * blobBuffer, int length){
         return length;
     } else {
     #ifndef ESP8266
-        return NULL;
+        return (int)NULL;
     #else
         return -1; 
     #endif
