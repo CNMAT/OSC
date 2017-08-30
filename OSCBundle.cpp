@@ -67,7 +67,7 @@ OSCBundle& OSCBundle::empty(){
  SETTERS
  =============================================================================*/
 
-OSCMessage & OSCBundle::add(char * _address){
+OSCMessage & OSCBundle::add(const char * _address){
 	OSCMessage * msg = new OSCMessage(_address);
     if (!msg->hasError()){
         //realloc the array to fit the message

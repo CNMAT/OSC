@@ -78,15 +78,13 @@ void routeOutputOne(OSCMessage &msg){
 }
 
 
-/**
- * 
- * TROUBLESHOOTING:
- * Because of a bug in the Arduino IDE, it sometimes thinks that the '*' in combination with '/' is the opening or closing of a multiline comment
- * This can be fixed by escaping the '/' with '\' or using the octal value of '*' which is '\052'
- * for example:
- * "/*" == "/\052" ==  "\/*"
- * 
- **/
+//
+// TROUBLESHOOTING:
+// Because of a bug in the Arduino IDE, it sometimes thinks that the '*' in combination with '/' is the opening or closing of a multiline comment
+// This can be fixed by escaping the '/' with '\' or using the octal value of '*' which is '\052'
+// for example:
+// "/*" == "/\052" ==  "\/*"
+//
 
 
 
