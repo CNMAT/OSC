@@ -34,7 +34,7 @@ OSCData::OSCData(int32_t i){
 	bytes = 4;
 	data.i = i;
 }
-#ifndef ESP8266
+#ifndef ESPxx
 OSCData::OSCData(int i){
 	error = OSC_OK;
 	type = 'i';
@@ -172,7 +172,7 @@ int32_t OSCData::getInt(){
     if (type == 'i'){
         return data.i;
     } else {
-    #ifndef ESP8266
+    #ifndef ESPxx
         return (int32_t)NULL;
     #else
         return -1; 
@@ -191,7 +191,7 @@ float OSCData::getFloat(){
     if (type == 'f'){
         return data.f;
     } else {
-    #ifndef ESP8266
+    #ifndef ESPxx
         return (float)NULL;
     #else
         return -1; 
@@ -203,7 +203,7 @@ double OSCData::getDouble(){
     if (type == 'd'){
         return data.d;
     } else {
-    #ifndef ESP8266
+    #ifndef ESPxx
         return (double)NULL;
     #else
         return -1; 
@@ -217,7 +217,7 @@ bool OSCData::getBoolean(){
         return false;
     }
     else
-    #ifndef ESP8266
+    #ifndef ESPxx
         return NULL;
     #else
         return -1; 
@@ -229,7 +229,7 @@ int OSCData::getString(char * strBuffer, int length){
         strncpy(strBuffer, data.s, length);
         return length;
     } else {
-    #ifndef ESP8266
+    #ifndef ESPxx
         return (int)NULL;
     #else
         return -1; 
@@ -244,7 +244,7 @@ int OSCData::getBlob(uint8_t * blobBuffer, int length){
         memcpy(blobBuffer, data.b + 4, length);
         return length;
     } else {
-    #ifndef ESP8266
+    #ifndef ESPxx
         return (int)NULL;
     #else
         return -1; 

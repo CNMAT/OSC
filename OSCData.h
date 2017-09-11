@@ -45,7 +45,7 @@
 #endif
 #endif
 
-
+#define ESPxx		(defined(ESP8266) || defined(ESP32))
 
 //ERRORS/////////////////////////////////////////////////
 typedef enum { OSC_OK = 0,
@@ -92,7 +92,7 @@ public:
 	OSCData (int16_t);
 #endif
 	OSCData (int32_t);
-#ifndef ESP8266
+#ifndef ESPxx
     OSCData (int);
 #endif
     OSCData (unsigned int);

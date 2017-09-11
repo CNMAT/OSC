@@ -129,7 +129,7 @@ int32_t OSCMessage::getInt(int position){
 	if (!hasError()){
 		return datum->getInt();
     } else {
-        #ifndef ESP8266
+        #ifndef ESPxx
             return (int32_t)NULL;
         #else
             return -1; 
@@ -149,7 +149,7 @@ float OSCMessage::getFloat(int position){
 	if (!hasError()){
 		return datum->getFloat();
     } else {
-        #ifndef ESP8266
+        #ifndef ESPxx
             return (float)NULL;
         #else
             return -1; 
@@ -162,7 +162,7 @@ double OSCMessage::getDouble(int position){
 	if (!hasError()){
 		return datum->getDouble();
     } else {
-        #ifndef ESP8266
+        #ifndef ESPxx
             return (double)NULL;
         #else
             return -1; 
@@ -175,7 +175,7 @@ bool  OSCMessage::getBoolean(int position){
 	if (!hasError()){
 		return datum->getBoolean();
     } else {
-        #ifndef ESP8266
+        #ifndef ESPxx
             return NULL;
         #else
             return -1; 
@@ -190,7 +190,7 @@ int OSCMessage::getString(int position, char * buffer, int bufferSize){
         int copyBytes = bufferSize < datum->bytes? bufferSize : datum->bytes;
 		return datum->getString(buffer, copyBytes);
     } else {
-        #ifndef ESP8266
+        #ifndef ESPxx
             return (int)NULL;
         #else
             return -1; 
@@ -205,7 +205,7 @@ int OSCMessage::getBlob(int position, uint8_t * buffer, int bufferSize){
         int copyBytes = bufferSize < datum->bytes? bufferSize : datum->bytes;
 		return datum->getBlob(buffer, copyBytes);
     } else {
-        #ifndef ESP8266
+        #ifndef ESPxx
             return (int)NULL;
         #else
             return -1; 
@@ -218,7 +218,7 @@ char OSCMessage::getType(int position){
 	if (!hasError()){
 		return datum->type;
 	} else {
-        #ifndef ESP8266
+        #ifndef ESPxx
             return (int)NULL;
         #else
             return '\0'; 
