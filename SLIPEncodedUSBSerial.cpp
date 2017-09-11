@@ -204,7 +204,7 @@ size_t SLIPEncodedUSBSerial::write(uint8_t b){
 }
 size_t SLIPEncodedUSBSerial::write(const uint8_t *buffer, size_t size)
 {
-    size_t result;
+    size_t result=0;
     while(size--)
         result = write(*buffer++); return result;
 }

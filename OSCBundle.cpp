@@ -67,7 +67,7 @@ OSCBundle& OSCBundle::empty(){
  SETTERS
  =============================================================================*/
 
-OSCMessage & OSCBundle::add(char * _address){
+OSCMessage & OSCBundle::add(const char * _address){
 	OSCMessage * msg = new OSCMessage(_address);
     if (!msg->hasError()){
         //realloc the array to fit the message
@@ -125,6 +125,7 @@ OSCMessage * OSCBundle::getOSCMessage( char * addr){
             return msg;
         }
 	}
+	return NULL;
 }
 
 //the position is the same as the order they were declared in
@@ -132,6 +133,7 @@ OSCMessage * OSCBundle::getOSCMessage(int pos){
 	if (pos < numMessages){
 		return messages[pos];
 	} 
+	return NULL;
 }
 
 /*=============================================================================

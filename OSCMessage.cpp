@@ -96,6 +96,7 @@ OSCMessage& OSCMessage::empty(){
     dataCount = 0;
     decodeState = STANDBY;
     clearIncomingBuffer();
+    return *this;
 }
 
 //COPY
@@ -129,7 +130,7 @@ int32_t OSCMessage::getInt(int position){
 		return datum->getInt();
     } else {
         #ifndef ESP8266
-            return NULL;
+            return (int32_t)NULL;
         #else
             return -1; 
         #endif
@@ -149,7 +150,7 @@ float OSCMessage::getFloat(int position){
 		return datum->getFloat();
     } else {
         #ifndef ESP8266
-            return NULL;
+            return (float)NULL;
         #else
             return -1; 
         #endif
@@ -162,7 +163,7 @@ double OSCMessage::getDouble(int position){
 		return datum->getDouble();
     } else {
         #ifndef ESP8266
-            return NULL;
+            return (double)NULL;
         #else
             return -1; 
         #endif
@@ -190,7 +191,7 @@ int OSCMessage::getString(int position, char * buffer, int bufferSize){
 		return datum->getString(buffer, copyBytes);
     } else {
         #ifndef ESP8266
-            return NULL;
+            return (int)NULL;
         #else
             return -1; 
         #endif
@@ -205,7 +206,7 @@ int OSCMessage::getBlob(int position, uint8_t * buffer, int bufferSize){
 		return datum->getBlob(buffer, copyBytes);
     } else {
         #ifndef ESP8266
-            return NULL;
+            return (int)NULL;
         #else
             return -1; 
         #endif
@@ -218,7 +219,7 @@ char OSCMessage::getType(int position){
 		return datum->type;
 	} else {
         #ifndef ESP8266
-            return NULL;
+            return (int)NULL;
         #else
             return '\0'; 
         #endif
@@ -608,7 +609,7 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                         } u;
                         memcpy(u.b, incomingBuffer, 4);
                         uint32_t blobLength = BigEndian(u.i);
-                        if (incomingBufferSize == blobLength + 4){
+                        if (incomingBufferSize == (int)(blobLength + 4)){
                             set(i, incomingBuffer + 4, blobLength);
                             clearIncomingBuffer();
                             decodeState = DATA_PADDING;
@@ -693,7 +694,8 @@ void OSCMessage::decode(uint8_t incomingByte){
                 }
             }
 			break;
-
+		case DONE:
+			break; // TODO: is this correct? - was missing from original code, it did this by default
     }
 }
 
