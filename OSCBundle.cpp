@@ -234,7 +234,7 @@ OSCBundle& OSCBundle::fill(uint8_t incomingByte){
     return *this;
 }
 
-OSCBundle& OSCBundle::fill(uint8_t * incomingBytes, int length){
+OSCBundle& OSCBundle::fill(const uint8_t * incomingBytes, int length){
     while (length--){
         decode(*incomingBytes++);
     }
