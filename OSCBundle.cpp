@@ -291,6 +291,8 @@ void OSCBundle::decode(uint8_t incomingByte){
             if (incomingByte == '#'){
                 decodeState = HEADER;
             } else if (incomingByte == '/'){
+                add();//add a simple message to the bundle
+                decodeMessage(incomingByte);
                 decodeState = MESSAGE;
             }
             break;
