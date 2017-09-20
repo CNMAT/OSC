@@ -42,8 +42,8 @@ void read_mac() {
 }
 #else
 void read_mac() {}
- byte mac[] = {
-      0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }; // you can find this written on the board of some Arduino Ethernets or shields
+ byte mac[] = {  
+  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }; // you can find this written on the board of some Arduino Ethernets or shields
 #endif
 
 void setup() {
