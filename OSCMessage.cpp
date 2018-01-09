@@ -203,7 +203,7 @@ int OSCMessage::getBlob(int position, uint8_t * buffer, int bufferSize){
 	if (!hasError()){
 		return datum->getBlob(buffer, bufferSize);
   } else {
-    #ifndef ESP8266
+    #ifndef ESPxx
         return NULL;
     #else
         return -1;
@@ -217,7 +217,7 @@ uint32_t OSCMessage::getBlobLength(int position)
   if (!hasError()){
     return datum->getBlobLength();
   } else {
-    #ifndef ESP8266
+    #ifndef ESPxx
         return NULL;
     #else
         return 0;
