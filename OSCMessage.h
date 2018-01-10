@@ -245,10 +245,15 @@ public:
     bool getBoolean(int);
 
 	//return the copied string's length
+	int getString(int, char *);
+	//the length can be restricted with a third argument
 	int getString(int, char *, int);
+
 	//returns the number of unsigned int8's copied into the buffer
-	int getBlob(int, uint8_t *, int);
 	int getBlob(int, uint8_t *);
+	//the length can be restricted with a third argument
+	int getBlob(int, uint8_t *, int);
+
 
   // returns the length of blob as written into the 4 first data bytes
   uint32_t getBlobLength(int position);

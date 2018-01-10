@@ -198,6 +198,19 @@ int OSCMessage::getString(int position, char * buffer, int bufferSize){
     }
 }
 
+int OSCMessage::getString(int position, char * buffer){
+    OSCData * datum = getOSCData(position);
+    if (!hasError()){
+        return datum->getString(buffer, datum->bytes);
+    } else {
+        #ifndef ESPxx
+            return (int)NULL;
+        #else
+            return -1;
+        #endif
+    }
+}
+
 int OSCMessage::getBlob(int position, uint8_t * buffer, int bufferSize){
     OSCData * datum = getOSCData(position);
     if (!hasError()){

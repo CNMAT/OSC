@@ -224,6 +224,7 @@ bool OSCData::getBoolean(){
     #endif
 }
 
+
 int OSCData::getString(char * strBuffer, int length){
     if (type == 's' && bytes >= length){
         strncpy(strBuffer, data.s, length);
@@ -237,11 +238,25 @@ int OSCData::getString(char * strBuffer, int length){
     }
 }
 
+
+int OSCData::getString(char * strBuffer){
+    if (type == 's'){
+        strncpy(strBuffer, data.s, bytes);
+        return bytes;
+    } else {
+    #ifndef ESPxx
+        return (int)NULL;
+    #else
+        return -1;
+    #endif
+    }
+}
+
 int OSCData::getBlob(uint8_t * blobBuffer, int length){
     // read the blob length from OSC Data
     uint32_t blobLength =  getBlobLength();
     //jump over the first 4 bytes which encode the length
-    if (type == 'b' && blobLength <= length){
+    if (type == 'b' && blobLength <= (uint32_t)length){
         memcpy(blobBuffer, data.b + 4, blobLength);
         return blobLength;
     } else {
