@@ -257,7 +257,7 @@ uint32_t OSCData::getBlobLength(){
   if (type == 'b'){
     uint32_t len;
     memcpy(&len, &bytes, 4);
-    return len;
+    return len-4;
   }
   return 0;
 }
