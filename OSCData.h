@@ -113,6 +113,7 @@ public:
     double getDouble();
     int getString(char *, int);
     int getBlob(uint8_t *, int);
+    int getBlob(uint8_t *);
     uint32_t getBlobLength();
     bool getBoolean();
     osctime_t getTime();

@@ -248,6 +248,7 @@ public:
 	int getString(int, char *, int);
 	//returns the number of unsigned int8's copied into the buffer
 	int getBlob(int, uint8_t *, int);
+	int getBlob(int, uint8_t *);
 
   // returns the length of blob as written into the 4 first data bytes
   uint32_t getBlobLength(int position);
