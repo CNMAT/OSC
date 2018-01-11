@@ -1,79 +1,85 @@
-getOSCMessage		KEYWORD1
-fill			KEYWORD1
-send			KEYWORD1
-dispatch		KEYWORD1
-route			KEYWORD1
-setTimetag		KEYWORD1
-getTimetag		KEYWORD1
-hasError		KEYWORD1
-add			KEYWORD2
-match			KEYWORD2
-fullMatch		KEYWORD2
-getInt			KEYWORD2
-getFloat		KEYWORD2
-getBlob			KEYWORD2
-getString		KEYWORD1
-getAddress		KEYWORD1
-getDataLength 		KEYWORD1
-isInt			KEYWORD1
-isFloat			KEYWORD1
-isBlob			KEYWORD1
-isString		KEYWORD1
-empty			KEYWORD1
-OSCBundle		KEYWORD1
-OSCMessage		KEYWORD1
-OSCMatch		KEYWORD1
-OSCData			KEYWORD1
-endTransmission		KEYWORD1
-endofTransmission	KEYWORD1
-SLIPEncodedSerial	KEYWORD3
+getOSCMessage			KEYWORD1
+fill					KEYWORD1
+send					KEYWORD1
+dispatch				KEYWORD1
+route					KEYWORD1
+setTimetag				KEYWORD1
+getTimetag				KEYWORD1
+hasError				KEYWORD1
+add						KEYWORD2
+set    					KEYWORD2
+match					KEYWORD2
+fullMatch				KEYWORD2
+getInt					KEYWORD2
+getFloat				KEYWORD2
+getDouble   			KEYWORD2
+getBlob					KEYWORD2
+getString				KEYWORD1
+getAddress				KEYWORD1
+getDataLength 			KEYWORD1
+isInt					KEYWORD1
+isFloat					KEYWORD1
+isBlob					KEYWORD1
+isString				KEYWORD1
+isBoolean   			KEYWORD1
+isDouble    			KEYWORD1
+size        			KEYWORD1
+bytes       			KEYWORD1
+empty					KEYWORD1
+OSCBundle				KEYWORD1
+OSCMessage				KEYWORD1
+OSCMatch				KEYWORD1
+OSCData					KEYWORD1
+endTransmission			KEYWORD1
+endofTransmission		KEYWORD1
+SLIPEncodedSerial		KEYWORD3
 SLIPEncodedUSBSerial	KEYWORD3
 SLIPEncodedSPISerial	KEYWORD3
-oscTime			KEYWORD1
-adcRead			KEYWORD1
-capacitanceRead		KEYWORD1
-inputRead		KEYWORD1
+oscTime					KEYWORD1
+adcRead					KEYWORD1
+capacitanceRead			KEYWORD1
+inputRead				KEYWORD1
 #######################################
 # Syntax Coloring Map SPI
 #######################################
 #######################################
 # Class
 #######################################
-StreamSPI0	KEYWORD3
+StreamSPI0				KEYWORD3
 
 #######################################
-# Datatypes (KEYWORD1)
+# Datatypes 			(KEYWORD1)
 #######################################
 
 SPI	KEYWORD1
-StreamSPI	KEYWORD1
+StreamSPI				KEYWORD1
 
 #######################################
 # Methods and Functions (KEYWORD2)
 #######################################
-begin	KEYWORD2
-end	KEYWORD2
-transfer	KEYWORD2
-setBitOrder	KEYWORD2
-setDataMode	KEYWORD2
-setClockDivider	KEYWORD2
+begin					KEYWORD2
+end						KEYWORD2
+transfer				KEYWORD2
+setBitOrder				KEYWORD2
+setDataMode				KEYWORD2
+setClockDivider			KEYWORD2
 
 
 #######################################
-# Constants (LITERAL1)
+# Constants 			(LITERAL1)
 #######################################
-SPI_CLOCK_DIV4	LITERAL1
-SPI_CLOCK_DIV16	LITERAL1
-SPI_CLOCK_DIV64	LITERAL1
-SPI_CLOCK_DIV128	LITERAL1
-SPI_CLOCK_DIV2	LITERAL1
-SPI_CLOCK_DIV8	LITERAL1
-SPI_CLOCK_DIV32	LITERAL1
-SPI_CLOCK_DIV64	LITERAL1
-SPI_MODE0	LITERAL1
-SPI_MODE1	LITERAL1
-SPI_MODE2	LITERAL1
-SPI_MODE3	LITERAL1
+SPI_CLOCK_DIV4			LITERAL1
+SPI_CLOCK_DIV16			LITERAL1
+SPI_CLOCK_DIV64			LITERAL1
+SPI_CLOCK_DIV128		LITERAL1
+SPI_CLOCK_DIV2			LITERAL1
+SPI_CLOCK_DIV8			LITERAL1
+SPI_CLOCK_DIV32			LITERAL1
+SPI_CLOCK_DIV64			LITERAL1
+SPI_MODE0				LITERAL1
+SPI_MODE1				LITERAL1
+SPI_MODE2				LITERAL1
+SPI_MODE3				LITERAL1
 
 
 
