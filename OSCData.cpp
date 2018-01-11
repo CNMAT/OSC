@@ -61,7 +61,7 @@ OSCData::OSCData(float f){
 	error = OSC_OK;
 	type = 'f';
 	bytes = 4;
-	data.f = f;	
+	data.f = f;
 }
 
 OSCData::OSCData(osctime_t t){
@@ -86,7 +86,7 @@ OSCData::OSCData(double d){
 		data.d = d;
 	} else {
 		type = 'f';
-		data.f = d;	
+		data.f = d;
 	}
 }
 
@@ -102,7 +102,7 @@ OSCData::OSCData(uint8_t * b, int len){
 	//own the data
 	if(bytes>0)
     {
-            
+
         uint8_t * mem = (uint8_t * ) malloc(bytes);
         if (mem == NULL){
             error = ALLOCFAILED;
@@ -163,7 +163,7 @@ OSCData::OSCData(char t){
 
 /*=============================================================================
     GETTERS
- 
+
     perform a safety check to make sure the data type matches the request
     otherwise returns NULL
 =============================================================================*/
@@ -175,7 +175,7 @@ int32_t OSCData::getInt(){
     #ifndef ESPxx
         return (int32_t)NULL;
     #else
-        return -1; 
+        return -1;
     #endif
     }
 }
@@ -194,7 +194,7 @@ float OSCData::getFloat(){
     #ifndef ESPxx
         return (float)NULL;
     #else
-        return -1; 
+        return -1;
     #endif
     }
 }
@@ -206,7 +206,7 @@ double OSCData::getDouble(){
     #ifndef ESPxx
         return (double)NULL;
     #else
-        return -1; 
+        return -1;
     #endif
     }
 }
@@ -220,9 +220,10 @@ bool OSCData::getBoolean(){
     #ifndef ESPxx
         return NULL;
     #else
-        return -1; 
+        return -1;
     #endif
 }
+
 
 int OSCData::getString(char * strBuffer, int length){
     if (type == 's' && bytes >= length){
@@ -232,14 +233,28 @@ int OSCData::getString(char * strBuffer, int length){
     #ifndef ESPxx
         return (int)NULL;
     #else
-        return -1; 
+        return -1;
+    #endif
+    }
+}
+
+
+int OSCData::getString(char * strBuffer){
+    if (type == 's'){
+        strncpy(strBuffer, data.s, bytes);
+        return bytes;
+    } else {
+    #ifndef ESPxx
+        return (int)NULL;
+    #else
+        return -1;
     #endif
     }
 }
 
 int OSCData::getBlob(uint8_t * blobBuffer, int length){
     //jump over the first 4 bytes which encode the length
-    int blobLength = bytes - 4;
+    int blobLength =  bytes-4;
     if (type == 'b' && blobLength >= length){
         memcpy(blobBuffer, data.b + 4, length);
         return length;
@@ -247,7 +262,31 @@ int OSCData::getBlob(uint8_t * blobBuffer, int length){
     #ifndef ESPxx
         return (int)NULL;
     #else
-        return -1; 
+        return -1;
     #endif
     }
+}
+
+int OSCData::getBlob(uint8_t * blobBuffer){
+    // read the blob length
+    int blobLength =  getBlobLength();
+
+    if (type == 'b'){
+        memcpy(blobBuffer, data.b + 4, blobLength);
+        return blobLength;
+    } else {
+    #ifndef ESPxx
+        return (int)NULL;
+    #else
+        return -1;
+    #endif
+    }
+}
+
+int OSCData::getBlobLength(){
+  if (type == 'b'){
+    //jump over the first 4 bytes which encode the length
+    return bytes-4;
+  }
+  return -1;
 }

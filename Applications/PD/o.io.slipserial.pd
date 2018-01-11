@@ -1,36 +1,22 @@
-#N canvas 624 330 756 268 10;
-#X declare -lib mrpeach;
-#X obj 251 231 import mrpeach;
+#N canvas 618 358 756 268 10;
 #X obj 95 179 mrpeach/slipdec 65536;
 #X obj 95 47 mrpeach/slipenc 65536;
-#X obj 303 65 loadbang;
-#X obj 299 22 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
--1;
-#X obj 76 16 inlet;
-#X obj 74 240 outlet;
-#X msg 296 142 baud 115200;
+#X obj 359 20 loadbang;
+#X obj 95 22 inlet;
+#X obj 95 206 outlet;
+#X msg 359 83 baud 115200;
 #X obj 261 46 inlet;
-#X msg 132 95 devicename /dev/tty.usbserial-A5002rKU \, pollintervall
+#X msg 318 46 devicename /dev/tty.usbserial-A5002rKU \, pollintervall
 1;
-#X obj 57 157 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
--1;
-#X obj 99 120 comport;
-#X obj 49 99 print;
-#X obj 301 199 print errors;
-#X msg 390 42;
-#X obj 226 19 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
--1;
-#X connect 1 0 6 0;
-#X connect 2 0 11 0;
-#X connect 2 0 12 0;
-#X connect 3 0 9 0;
-#X connect 3 0 7 0;
-#X connect 4 0 3 0;
-#X connect 5 0 2 0;
-#X connect 7 0 11 0;
-#X connect 8 0 11 0;
-#X connect 9 0 11 0;
-#X connect 11 0 1 0;
-#X connect 11 0 10 0;
-#X connect 11 1 13 0;
-#X connect 15 0 11 0;
+#X obj 95 135 comport;
+#X obj 134 157 print errors;
+#X connect 0 0 4 0;
+#X connect 1 0 8 0;
+#X connect 2 0 7 0;
+#X connect 2 0 5 0;
+#X connect 3 0 1 0;
+#X connect 5 0 8 0;
+#X connect 6 0 8 0;
+#X connect 7 0 8 0;
+#X connect 8 0 0 0;
+#X connect 8 1 9 0;
