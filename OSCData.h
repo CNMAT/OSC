@@ -113,6 +113,7 @@ public:
     double getDouble();
     int getString(char *);
     int getString(char *, int);
+    int getString(char *, int, int, int);
     int getBlob(uint8_t *);
     int getBlob(uint8_t *, int);
     int getBlob(uint8_t *, int, int, int); 

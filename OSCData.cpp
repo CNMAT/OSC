@@ -255,6 +255,20 @@ int OSCData::getString(char * strBuffer, int length){
     }
 }
 
+// Here we can get only a part of the blob 
+int OSCData::getString(char * strBuffer, int length, int offset, int size){
+    if (type == 's' && size <= bytes && size <= length){
+        strncpy(strBuffer, data.s + offset, size);
+        return size;
+    } else {
+    #ifndef ESPxx
+        return (int)NULL;
+    #else
+        return -1;
+    #endif
+    }
+}
+
 // no-safety-check straightforward way to fill the passed buffer
 // with the contents of the received blob
 int OSCData::getBlob(uint8_t * blobBuffer){

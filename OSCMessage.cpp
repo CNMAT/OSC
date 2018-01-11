@@ -212,6 +212,21 @@ int OSCMessage::getString(int position, char * buffer, int bufferSize){
     }
 }
 
+int OSCMessage::getString(int position, char * buffer, int bufferSize, int offset, int size){
+    OSCData * datum = getOSCData(position);
+    if (!hasError()){
+        //the number of bytes to copy is the smaller between the buffer size and the datum's byte length
+        int copyBytes = bufferSize < datum->bytes? bufferSize : datum->bytes;
+        return datum->getString(buffer, copyBytes, offset, size);
+    } else {
+        #ifndef ESPxx
+            return (int)NULL;
+        #else
+            return -1;
+        #endif
+    }
+}
+
 
 int OSCMessage::getBlob(int position, uint8_t * buffer){
     OSCData * datum = getOSCData(position);
