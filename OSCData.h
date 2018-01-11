@@ -2,24 +2,24 @@
  Written by Yotam Mann, The Center for New Music and Audio Technologies,
  University of California, Berkeley.  Copyright (c) 2013, The Regents of
  the University of California (Regents).
- 
+
  Permission to use, copy, modify, distribute, and distribute modified versions
  of this software and its documentation without fee and without a signed
  licensing agreement, is hereby granted, provided that the above copyright
  notice, this paragraph and the following two paragraphs appear in all copies,
  modifications, and distributions.
- 
+
  IN NO EVENT SHALL REGENTS BE LIABLE TO ANY PARTY FOR DIRECT, INDIRECT,
  SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST PROFITS, ARISING
  OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN IF REGENTS HAS
  BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- 
+
  REGENTS SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
  THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  PURPOSE. THE SOFTWARE AND ACCOMPANYING DOCUMENTATION, IF ANY, PROVIDED
  HEREUNDER IS PROVIDED "AS IS". REGENTS HAS NO OBLIGATION TO PROVIDE
  MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
- 
+
  For bug reports and feature requests please email me at yotam@cnmat.berkeley.edu
  */
 
@@ -28,7 +28,7 @@
 
 #include "Arduino.h"
 
-#include <stdlib.h> 
+#include <stdlib.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
@@ -52,18 +52,18 @@ typedef enum { OSC_OK = 0,
 	BUFFER_FULL, INVALID_OSC, ALLOCFAILED, INDEX_OUT_OF_BOUNDS
 } OSCErrorCode;
 
-class OSCData 
+class OSCData
 {
-    
+
 private:
-    
+
     //friends
 	friend class OSCMessage;
-    
+
     //should only be used while decoding
     //leaves an invalid OSCMessage with a type, but no data
     OSCData(char t);
-       
+
 public:
 
 	//an error flag
@@ -106,16 +106,21 @@ public:
 
 	//destructor
 	~OSCData();
-    
+
     //GETTERS
     int32_t getInt();
     float getFloat();
     double getDouble();
+    int getString(char *);
     int getString(char *, int);
+    int getString(char *, int, int, int);
+    int getBlob(uint8_t *);
     int getBlob(uint8_t *, int);
+    int getBlob(uint8_t *, int, int, int); 
+    int getBlobLength();
     bool getBoolean();
     osctime_t getTime();
-    
+
     //constructor from byte array with type and length
 	OSCData(char, uint8_t *, int);
     //fill the passed in buffer with the data
@@ -125,11 +130,11 @@ public:
 
 /*
  based on http://stackoverflow.com/questions/809902/64-bit-ntohl-in-c
- 
+
  if the system is little endian, it will flip the bits
  if the system is big endian, it'll do nothing
  */
-template<typename T> 
+template<typename T>
 static inline T BigEndian(const T& x)
 {
     const int one = 1;
