@@ -246,7 +246,7 @@ uint32_t OSCMessage::getBlobLength(int position)
     #ifndef ESPxx
         return NULL;
     #else
-        return 0;
+        return -1;
     #endif
   }
 

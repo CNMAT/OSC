@@ -254,9 +254,8 @@ public:
 	//the length can be restricted with a third argument
 	int getBlob(int, uint8_t *, int);
 
-
-  // returns the length of blob as written into the 4 first data bytes
-  uint32_t getBlobLength(int position);
+	// returns the length of blob 
+  	uint32_t getBlobLength(int position);
 
 	//returns the number of bytes of the data at that position
 	int getDataLength(int);
