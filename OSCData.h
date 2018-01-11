@@ -115,7 +115,7 @@ public:
     int getString(char *, int);
     int getBlob(uint8_t *);
     int getBlob(uint8_t *, int); 
-    uint32_t getBlobLength();
+    int getBlobLength();
     bool getBoolean();
     osctime_t getTime();
 

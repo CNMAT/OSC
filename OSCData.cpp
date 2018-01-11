@@ -254,9 +254,9 @@ int OSCData::getString(char * strBuffer){
 
 int OSCData::getBlob(uint8_t * blobBuffer, int length){
     // read the blob length from OSC Data
-    uint32_t blobLength =  bytes-4;
+    int blobLength =  bytes-4;
     //jump over the first 4 bytes which encode the length
-    if (type == 'b' && blobLength >= (uint32_t)length){
+    if (type == 'b' && blobLength >= length){
         memcpy(blobBuffer, data.b + 4, length);
         return length;
     } else {
@@ -270,7 +270,7 @@ int OSCData::getBlob(uint8_t * blobBuffer, int length){
 
 int OSCData::getBlob(uint8_t * blobBuffer){
     // read the blob length from OSC Data
-    uint32_t blobLength =  getBlobLength();
+    int blobLength =  getBlobLength();
     //jump over the first 4 bytes which encode the length
     if (type == 'b'){
         memcpy(blobBuffer, data.b + 4, blobLength);
@@ -284,7 +284,7 @@ int OSCData::getBlob(uint8_t * blobBuffer){
     }
 }
 
-uint32_t OSCData::getBlobLength(){
+int OSCData::getBlobLength(){
   if (type == 'b'){
     return bytes-4;
   }
