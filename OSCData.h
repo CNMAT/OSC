@@ -114,7 +114,8 @@ public:
     int getString(char *);
     int getString(char *, int);
     int getBlob(uint8_t *);
-    int getBlob(uint8_t *, int); 
+    int getBlob(uint8_t *, int);
+    int getBlob(uint8_t *, int, int, int); 
     int getBlobLength();
     bool getBoolean();
     osctime_t getTime();

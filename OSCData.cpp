@@ -225,20 +225,8 @@ bool OSCData::getBoolean(){
 }
 
 
-int OSCData::getString(char * strBuffer, int length){
-    if (type == 's' && bytes >= length){
-        strncpy(strBuffer, data.s, length);
-        return length;
-    } else {
-    #ifndef ESPxx
-        return (int)NULL;
-    #else
-        return -1;
-    #endif
-    }
-}
-
-
+// no-safety-check straightforward way to fill the passed buffer
+// with the received string
 int OSCData::getString(char * strBuffer){
     if (type == 's'){
         strncpy(strBuffer, data.s, bytes);
@@ -252,12 +240,12 @@ int OSCData::getString(char * strBuffer){
     }
 }
 
-int OSCData::getBlob(uint8_t * blobBuffer, int length){
-    //jump over the first 4 bytes which encode the length
-    int blobLength =  bytes-4;
-    if (type == 'b' && blobLength >= length){
-        memcpy(blobBuffer, data.b + 4, length);
-        return length;
+// it's possible to pass strBuffer's size as argument (length) 
+// in order to check that it won't be overflown
+int OSCData::getString(char * strBuffer, int length){
+    if (type == 's' && bytes <= length){
+        strncpy(strBuffer, data.s, bytes);
+        return bytes;
     } else {
     #ifndef ESPxx
         return (int)NULL;
@@ -267,6 +255,8 @@ int OSCData::getBlob(uint8_t * blobBuffer, int length){
     }
 }
 
+// no-safety-check straightforward way to fill the passed buffer
+// with the contents of the received blob
 int OSCData::getBlob(uint8_t * blobBuffer){
     // read the blob length
     int blobLength =  getBlobLength();
@@ -282,6 +272,41 @@ int OSCData::getBlob(uint8_t * blobBuffer){
     #endif
     }
 }
+
+// it's possible to pass blobBuffer's size as argument (length) 
+// in order to check that it won't be overflown
+int OSCData::getBlob(uint8_t * blobBuffer, int length){
+    //jump over the first 4 bytes which encode the length
+    int blobLength =  bytes-4;
+    if (type == 'b' && blobLength <= length){
+        memcpy(blobBuffer, data.b + 4, blobLength);
+        return blobLength;
+    } else {
+    #ifndef ESPxx
+        return (int)NULL;
+    #else
+        return -1;
+    #endif
+    }
+}
+
+// Here we can get only a part of the blob 
+int OSCData::getBlob(uint8_t * blobBuffer, int length, int offset, int size){
+    //jump over the first 4 bytes which encode the length
+    int blobLength =  bytes-4;
+    if (type == 'b' && size <= blobLength && size <= length){
+        memcpy(blobBuffer, data.b + 4 + offset, size);
+        return size;
+    } else {
+    #ifndef ESPxx
+        return (int)NULL;
+    #else
+        return -1;
+    #endif
+    }
+}
+
+
 
 int OSCData::getBlobLength(){
   if (type == 'b'){
