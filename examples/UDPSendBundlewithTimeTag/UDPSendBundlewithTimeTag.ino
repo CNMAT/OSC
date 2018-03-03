@@ -34,7 +34,7 @@ void setup() {
 void loop(){
   //declare the bundle
      OSCBundle bndl;
-    uint64_t timetag;
+    osctime_t timetag;
     
     //OSCBundle's add' returns the OSCMessage so the message's 'add' can be composed together
     bndl.add("/analog/0").add((int32_t)adcRead(0, &timetag));

@@ -27,8 +27,7 @@
 #include "OSCTiming.h"
 #include "OSCBoards.h"
 
-#if defined(__MK20DX128__) ||  defined(__MK20DX256__) || defined(__MKL26Z64__) 
-
+#if defined(__MK20DX128__) ||  defined(__MK20DX256__) || defined(__MKL26Z64__)  
 extern volatile uint32_t systick_millis_count;
 static uint32_t savedcount, savedcurrent;
 
@@ -103,7 +102,7 @@ osctime_t oscTime()
     return computeOscTime();
 
 }
-#elif defined(AVR) || defined(__AVR_ATmega32U4__) || defined(__SAM3X8E__)
+#elif defined(AVR) || defined(__AVR_ATmega32U4__) || defined(__SAM3X8E__) || defined(_SAMD21_)  || defined(__ARM__)
 static uint32_t savedcount, savedmicros;
 
 
