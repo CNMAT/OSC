@@ -4,10 +4,8 @@
 // Yotam Mann and Adrian Freed
 
 
-//#include <Ethernet.h>  
-//#include <EthernetUdp.h> 
-#include <EthernetV2_0.h>  //<EthernetV1_0.h>
-#include <EthernetUdpV2_0.h> //<EthernetUdpV1_0.h>
+#include <Ethernet.h>  
+#include <EthernetUdp.h> 
 #include <SPI.h>    
 #include <OSCBundle.h>
 #include <OSCBoards.h>
