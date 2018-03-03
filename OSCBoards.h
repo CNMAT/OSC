@@ -42,6 +42,11 @@
 #define LED_BUILTIN PIN_LED1
 #endif
 
+#if defined(_SAMD21_)
+#define BOARD_HAS_USB_SERIAL
+// Required for Serial on Zero based boards
+#define thisBoardsSerialUSB Serial
+#endif
 // missing specs for Arduino Due
 #if defined(__SAM3X8E__)
 
