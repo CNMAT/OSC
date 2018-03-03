@@ -176,7 +176,7 @@ bool  OSCMessage::getBoolean(int position){
 		return datum->getBoolean();
     } else {
         #ifndef ESPxx
-            return NULL;
+            return (bool)NULL;
         #else
             return -1;
         #endif
@@ -205,7 +205,7 @@ int OSCMessage::getString(int position, char * buffer, int bufferSize){
 		return datum->getString(buffer, copyBytes);
     } else {
         #ifndef ESPxx
-            return (int)NULL;
+            return 0;
         #else
             return -1;
         #endif
@@ -220,7 +220,7 @@ int OSCMessage::getString(int position, char * buffer, int bufferSize, int offse
         return datum->getString(buffer, copyBytes, offset, size);
     } else {
         #ifndef ESPxx
-            return (int)NULL;
+            return 0;
         #else
             return -1;
         #endif
@@ -234,7 +234,7 @@ int OSCMessage::getBlob(int position, uint8_t * buffer){
         return datum->getBlob(buffer);
   } else {
     #ifndef ESPxx
-        return NULL;
+        return 0;
     #else
         return -1;
     #endif
@@ -247,7 +247,7 @@ int OSCMessage::getBlob(int position, uint8_t * buffer, int bufferSize){
         return datum->getBlob(buffer, bufferSize);
   } else {
     #ifndef ESPxx
-        return NULL;
+        return 0;
     #else
         return -1;
     #endif
@@ -260,7 +260,7 @@ int OSCMessage::getBlob(int position, uint8_t * buffer, int bufferSize, int offs
         return datum->getBlob(buffer, bufferSize, offset, size);
   } else {
     #ifndef ESPxx
-        return NULL;
+        return 0;
     #else
         return -1;
     #endif
@@ -274,7 +274,7 @@ uint32_t OSCMessage::getBlobLength(int position)
     return datum->getBlobLength();
   } else {
     #ifndef ESPxx
-        return NULL;
+        return 0;
     #else
         return -1;
     #endif
