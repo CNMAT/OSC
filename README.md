@@ -166,11 +166,11 @@ As well as many small examples illustrating the API, there is a larger applicati
 
 ### IDEs
 
-Arduino 1.05 and 1.6.3 (tested for Due Serial and Teensy so far)
+Arduino 1.8.5 (tested for Due Serial and Teensy so far)
 
 Best Supported Board:
 The Teensy 3.0 and 3.1 and LC have the performance and memory that afford rich OSC implementations.
-Our primary test platform for new development is the Teensy 3.1 which currently offers the best performance
+Our primary test platform for new development is the Teensy 3.2 which currently offers the best performance
 of any of the Arduinos and variants. We greatly appreciate Paul Stoffregen's ongoing work
 with "best practice" engineering of high performance microcontrollers.
 
@@ -228,10 +228,4 @@ The serial examples use a 9600 baud rate which is reliable on most of the FTDI b
 We welcome and appreciate your contributions and feedback.
 
 # New in this release
-
-* Teensy LC support
-* compatibility with latest Arduino IDE and Teensyduino
-* Beginnings of support for timetags with initial implementations for teensy 3, teensy 2 and Atmega Arduinos
-* Sketches compile also in MPIDE for PIC32's there has been limited testing on the Fubarino MINI
-(watch out on this platform: it connects and numbers digital pins in use for USB and clock XTAL!)
-* Added Boolean type according to OSC 1.0 optional type spec. (lightly tested)
+ESPxx support
