@@ -352,11 +352,6 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
 
 void setup() {
     SLIPSerial.begin(115200);   // set this as high as you can reliably run on your platform
-#if ARDUINO >= 100
-    while(!Serial)
-      ;   // Leonardo bug
-#endif
-
 }
 
 //reads and routes the incoming messages

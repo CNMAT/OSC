@@ -21,10 +21,6 @@ SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
 void setup() {
   //begin SLIPSerial just like Serial
     SLIPSerial.begin(9600);   // set this as high as you can reliably run on your platform
-#if ARDUINO >= 100
-    while(!Serial)
-      ;   // Leonardo bug
-#endif
 
 }
 

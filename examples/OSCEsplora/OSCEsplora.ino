@@ -1,7 +1,6 @@
   
 /*
-Bidirectional Esplora OSC communications 
- using SLIP
+ Bidirectional Esplora OSC communications  using SLIP
  
  Adrian Freed, Jeff Lubow 2013
  
@@ -136,7 +135,6 @@ void routeTone(OSCMessage &msg, int addrOffset ){
 }
 const char *released = "released";
 const char *pressed = "pressed";
-SLIPEncodedUSBSerial SLIPSerial(Serial);
 
 const byte MUX_ADDR_PINS[] = { 
   A0, A1, A2, A3 };
@@ -151,11 +149,9 @@ unsigned int myReadChannel(byte channel) {
   return analogRead(MUX_COM_PIN);
 }
 
+SLIPEncodedUSBSerial SLIPSerial(Serial);
 void setup() {
-  //begin SLIPSerial just like Serial
   SLIPSerial.begin(115200);   // set this as high as you can reliably run on your platform
-  while(!Serial)
-    ; //Leonardo "feature" (also needed on Esplora?)
 }
 
 int32_t counter = 0; 

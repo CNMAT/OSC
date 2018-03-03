@@ -45,11 +45,18 @@
 #if defined(_SAMD21_)
 #define BOARD_HAS_USB_SERIAL
 // Required for Serial on Zero based boards
+#if defined(ARDUINO_SAMD_ZERO)
 #define thisBoardsSerialUSB Serial
+#else
+#define thisBoardsSerialUSB SerialUSB
+#endif
 #endif
 // missing specs for Arduino Due
 #if defined(__SAM3X8E__)
 
+#define BOARD_HAS_USB_SERIAL
+// Required for Serial on Zero based boards
+#define thisBoardsSerialUSB SerialUSB
 
 
 

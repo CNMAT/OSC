@@ -43,10 +43,12 @@ private:
 
 #if  defined(CORE_TEENSY) 
     usb_serial_class
-#elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__) || defined(_SAMD21_)
+#elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__) || defined(_SAMD21_)  || defined(__ARM__)
 Serial_
-#elif defined(__PIC32MX__) || defined(BOARD_maple_mini)
+    
+#elif defined(__PIC32MX__) || defined(BOARD_maple_mini) 
     USBSerial
+    
 #else
 #error Unknown USBserial type	
 #endif
@@ -57,8 +59,9 @@ public:
 //different constructor for each platform
 #if  defined(CORE_TEENSY)
     usb_serial_class
-#elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__)  || defined(_SAMD21_)
+#elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__)  || defined(_SAMD21_)  || defined(__ARM__)
     Serial_
+                         
 #elif defined(__PIC32MX__) || defined(BOARD_maple_mini)
     USBSerial
 #else

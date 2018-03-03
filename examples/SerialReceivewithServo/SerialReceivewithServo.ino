@@ -45,11 +45,6 @@ void setup() {
     myservo.attach(13);
     myservo.write(90);
     
-#if ARDUINO >= 100
-    while(!Serial)
-      ;   // Leonardo bug
-#endif
-
 
 }
 //reads and dispatches the incoming message

@@ -6,7 +6,7 @@
  */
 //instantiate with the tranmission layer
 
-#if (defined(CORE_TEENSY) && defined(USB_SERIAL)) || (!defined(CORE_TEENSY) && defined(__AVR_ATmega32U4__)) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_)) || defined(BOARD_maple_mini)
+#if (defined(CORE_TEENSY) && defined(USB_SERIAL)) || (!defined(CORE_TEENSY) && defined(__AVR_ATmega32U4__)) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_)) || defined(BOARD_maple_mini) || defined(_SAMD21_)  || defined(__ARM__)
 
 
 //USB Serials
@@ -14,8 +14,9 @@ SLIPEncodedUSBSerial::SLIPEncodedUSBSerial(
 
 #if  defined(CORE_TEENSY)
                                            usb_serial_class
-#elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__)
+#elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__) || defined(_SAMD21_)  || defined(__ARM__)
                                            Serial_
+                                        
 #elif defined(__PIC32MX__) || defined(BOARD_maple_mini)
                                            USBSerial
 #else
@@ -212,6 +213,8 @@ size_t SLIPEncodedUSBSerial::write(const uint8_t *buffer, size_t size)
 
 void SLIPEncodedUSBSerial::begin(unsigned long baudrate){
 	serial->begin(baudrate);
+    while(!serial)
+        ;
 }
 //SLIP specific method which begins a transmitted packet
 void SLIPEncodedUSBSerial::beginPacket() { 	serial->write(eot); }
