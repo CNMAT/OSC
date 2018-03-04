@@ -58,27 +58,9 @@
 // Required for Serial on Zero based boards
 #define thisBoardsSerialUSB SerialUSB
 
-
-
 #endif // defined(__SAM3X8E__)
 
-// missing specs for Leonardo derived devices
-#if ! defined(CORE_TEENSY) && (defined(__AVR_ATmega32U4__) && (!defined(LED_BUILTIN) || !defined(analogInputToDigitalPin)) )
 
-#if F_CPU==16000000
-// Leonardo and Esplora
-#ifndef LED_BUILTIN
-#define LED_BUILTIN  13
-#endif
-
-#else // F_CPU
-//Lilypad USB and Flora (8Mhz)
-#ifndef LED_BUILTIN
-#define LED_BUILTIN  13  // its 7 on Flora but how do we detect this?
-#endif
-
-#endif //F_CPU
-#endif
 
 
 #endif
