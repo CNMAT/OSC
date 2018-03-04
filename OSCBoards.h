@@ -60,7 +60,9 @@
 
 #endif // defined(__SAM3X8E__)
 
-
+#ifndef analogInputToDigitalPin
+int analogInputToDigitalPin(int i);
+#endif
 
 
 #endif
