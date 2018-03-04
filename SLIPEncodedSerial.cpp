@@ -129,23 +129,6 @@ int SLIPEncodedSerial::peek(){
 	return c; 
 }
 
-//the arduino and wiring libraries have different return types for the write function
-#if defined(WIRING) || defined(BOARD_DEFS_H)
-
-//encode SLIP
- void SLIPEncodedSerial::write(uint8_t b){
-	if(b == eot){ 
-		serial->write(slipesc);
-		return serial->write(slipescend); 
-	} else if(b==slipesc) {  
-		serial->write(slipesc);
-		return serial->write(slipescesc); 
-	} else {
-		return serial->write(b);
-	}	
-}
-void SLIPEncodedSerial::write(const uint8_t *buffer, size_t size) {  while(size--) write(*buffer++); }
-#else
 //encode SLIP
 size_t SLIPEncodedSerial::write(uint8_t b){
 	if(b == eot){ 
@@ -160,7 +143,6 @@ size_t SLIPEncodedSerial::write(uint8_t b){
 }
 size_t SLIPEncodedSerial::write(const uint8_t *buffer, size_t size) { size_t result=0; while(size--) result = write(*buffer++); return result; }
 
-#endif
 
 void SLIPEncodedSerial::begin(unsigned long baudrate){
 	serial->begin(baudrate);

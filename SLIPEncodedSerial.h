@@ -43,18 +43,11 @@ public:
 	bool endofPacket();
 	
 	
-//the arduino and wiring libraries have different return types for the write function
-#if defined(WIRING) || defined(BOARD_DEFS_H)
-	void write(uint8_t b);
-    void write(const uint8_t *buffer, size_t size);
-
-#else
 	//overrides the Stream's write function to encode SLIP
 	size_t write(uint8_t b);
     size_t write(const uint8_t *buffer, size_t size);
 
 	//using Print::write;
-#endif
 
 };
 

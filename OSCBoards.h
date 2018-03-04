@@ -12,7 +12,8 @@
 
 
 #if defined(__MK20DX128__) ||  defined(__MK20DX256__)  || defined(__MKL26Z64__) || defined(__MK66FX1M0__)
-// Teensy 3.0  3.1 (PIC32's might have some day) 3.1LC 3.2 3.5
+// Teensy 3.0  3.1  3.1LC 3.2 3.5
+// (PIC32's might have some day) TODO
 #define BOARD_HAS_CAPACITANCE_SENSING
 #endif
 
@@ -40,12 +41,15 @@
 #define NUM_ANALOG_INPUTS NUM_ANALOG_PINS
 #define NUM_DIGITAL_INPUTS NUM_DIGITAL_PINS
 #define LED_BUILTIN PIN_LED1
+#define BOARD_HAS_USB_SERIAL
+#define thisBoardsSerialUSB Serial
 #endif
 
 #if defined(_SAMD21_)
 #define BOARD_HAS_USB_SERIAL
 // Required for Serial on Zero based boards
 #if defined(ARDUINO_SAMD_ZERO)
+// Adafruit breaks with tradition here
 #define thisBoardsSerialUSB Serial
 #else
 #define thisBoardsSerialUSB SerialUSB

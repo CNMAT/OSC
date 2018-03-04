@@ -6,7 +6,7 @@
  */
 //instantiate with the tranmission layer
 
-#if (defined(CORE_TEENSY) && defined(USB_SERIAL)) || (!defined(CORE_TEENSY) && defined(__AVR_ATmega32U4__)) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_)) || defined(BOARD_maple_mini) || defined(_SAMD21_)  || defined(__ARM__)
+#if (defined(CORE_TEENSY) && defined(USB_SERIAL)) || (!defined(CORE_TEENSY) && defined(__AVR_ATmega32U4__)) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_)) || defined(BOARD_maple_mini) || defined(_SAMD21_)  || defined(__ARM__) || defined(__PIC32MX__)
 
 
 //USB Serials
@@ -17,8 +17,8 @@ SLIPEncodedUSBSerial::SLIPEncodedUSBSerial(
 #elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__) || defined(_SAMD21_)  || defined(__ARM__)
                                            Serial_
                                         
-#elif defined(__PIC32MX__) || defined(BOARD_maple_mini)
-                                           USBSerial
+#elif defined(__PIC32MX__)
+                                           CDCACM
 #else
 #error unknown platform
 #endif
@@ -168,29 +168,6 @@ int SLIPEncodedUSBSerial::peek(){
 	return c; 
 }
 
-//the arduino and wiring libraries have different return types for the write function
-#if defined(WIRING) || defined(BOARD_DEFS_H)
-
-//encode SLIP
- void SLIPEncodedUSBSerial::write(uint8_t b){
-	if(b == eot){ 
-		serial->write(slipesc);
-		return serial->write(slipescend); 
-	} else if(b==slipesc) {  
-		serial->write(slipesc);
-		return serial->write(slipescesc); 
-	} else {
-		return serial->write(b);
-	}	
-}
-
-void SLIPEncodedUSBSerial::write(const uint8_t *buffer, size_t size)
-{
-        while(size--)
-            write(*buffer++);
-}
-
-#else
 //encode SLIP
 size_t SLIPEncodedUSBSerial::write(uint8_t b){
 	if(b == eot){ 
@@ -209,7 +186,6 @@ size_t SLIPEncodedUSBSerial::write(const uint8_t *buffer, size_t size)
     while(size--)
         result = write(*buffer++); return result;
 }
-#endif
 
 void SLIPEncodedUSBSerial::begin(unsigned long baudrate){
 	serial->begin(baudrate);
