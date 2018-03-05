@@ -1,9 +1,7 @@
 #include <OSCBundle.h>
 #include <OSCBoards.h>
 
-// tested on Fubarino with MpIDE 0023-macosx-20130514-test
-// analalogRead() has a strange interpretation of its arguments
-// they think you are supposed to pass digital pin numbers???
+//  Fubarino MINI
 
 #ifdef BOARD_HAS_USB_SERIAL
 #include <SLIPEncodedUSBSerial.h>
@@ -19,10 +17,10 @@ OSCBundle bundleOUT;
  char * numToOSCAddress( int pin){
   static char s[10];
    int i = 9;
-	s[i--]= '\0';
-	do
+  s[i--]= '\0';
+  do
 {
-		s[i] = "0123456789"[pin % 10];
+    s[i] = "0123456789"[pin % 10];
                 --i;
                 pin /= 10;
 }
@@ -211,106 +209,6 @@ void routeTone(OSCMessage &msg, int addrOffset ){
 
 
 
-#ifdef BOARD_HAS_CAPACITANCE_SENSING
-#define NTPINS 12
-const int cpins[NTPINS] = {22,23,19,18,17,16,15,0,1,25,32, 33 }; 
-void routeTouch(OSCMessage &msg, int addrOffset )
-{
-  for(int i=0;i<NTPINS;++i)
-    {
-        const char *name = numToOSCAddress(cpins[i]);
-    int pinMatched = msg.match(name, addrOffset);
-        if(pinMatched)
-        {
-           char outputAddress[9];
-            strcpy(outputAddress, "/c");
-            strcat(outputAddress, name);
-            {
-                OSCMessage  msgOut(outputAddress); msgOut.add(touchRead(cpins[i]));
-                SLIPSerial.beginPacket(); msgOut.send(SLIPSerial); SLIPSerial.endPacket();
-            }
-
-        }
-    }
-}
-#endif
-
-#ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
-#if defined(__MK20DX128__)
-float getSupplyVoltage()
-{
-  int val = analogRead(39); 
-  return val>0? (1.20f*1023/val):0.0f; 
-}
-
-#else
-// power supply measurement on some Arduinos 
-float getSupplyVoltage(){
-    // powersupply
-    int result;
-    // Read 1.1V reference against AVcc
-#if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-    ADMUX = _BV(REFS0) | _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-  #elif defined (__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
-    ADMUX = _BV(MUX5) | _BV(MUX0);
-  #elif defined (__AVR_ATtiny25__) || defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__)
-    ADMUX = _BV(MUX3) | _BV(MUX2);
-  #elif  defined(__AVR_AT90USB646__) || defined(__AVR_AT90USB1286__)    || defined(__AVR_ATmega1280__) 
-    ADMUX = 0x40| _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1) ;
-    ADCSRB =  0;
-  #else
-    ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-  #endif  
-    delayMicroseconds(300); // wait for Vref to settle
-    ADCSRA |= _BV(ADSC); // Convert
-    while (bit_is_set(ADCSRA,ADSC));
-	result = ADCL;
-    result |= ADCH<<8;
-      
-    float supplyvoltage = 1.1264f *1023 / result;
-    return supplyvoltage;	
-}
-#endif
-
-#endif
-
-#ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
-
-
-#if defined(__MK20DX128__)
-float getTemperature()
-{
-        analogReference(INTERNAL);
-        delay(1);
-        int val = analogRead(38); // seems to be flakey
-        analogReference(DEFAULT);
-
-        return val; //need to compute something here to get to degrees C
-}
-#else
-// temperature
-float getTemperature(){	
-	int result;
-	
-#if defined(__AVR_ATmega32U4__)
-	ADMUX =  _BV(REFS1) | _BV(REFS0) | _BV(MUX2) | _BV(MUX1) | _BV(MUX0);
-	ADCSRB =  _BV(MUX5);
-#else
-	ADMUX = _BV(REFS1) | _BV(REFS0) | _BV(MUX3);
-#endif	
-	delayMicroseconds(200); // wait for Vref to settle
-	ADCSRA |= _BV(ADSC); // Convert
-	while (bit_is_set(ADCSRA,ADSC));
-	result = ADCL;
-	result |= ADCH<<8;
-
-	analogReference(DEFAULT);
-	
-	return  result/1023.0f;
-}
-#endif  
-
-#endif
 /**
  * SYSTEM MESSAGES
  * 
@@ -365,10 +263,6 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
  
 void setup() {
     SLIPSerial.begin(9600);   // set this as high as you can reliably run on your platform
- #if ARDUINO >= 100
-   while(!Serial)
-      ;   // Leonardo bug
- #endif
 }
 
 //reads and routes the incoming messages
@@ -396,16 +290,4 @@ void loop(){
     }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
 

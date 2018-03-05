@@ -205,9 +205,15 @@ void routeTone(OSCMessage &msg, int addrOffset ){
 
 #ifdef  BOARD_HAS_CAPACITANCE_SENSING
 #if  defined(__MKL26Z64__) 
+// teensy 3.0LC
 #define NTPINS 11
 const int cpins[NTPINS] = {22,23,19,18,17,16,15,0,1,3,4 }; 
-#else
+#elif defined(__MK66FX1M0__)
+// teensy 3.6
+#define NTPINS 12
+const int cpins[NTPINS] = {0,1,14,15,16,17,18,19,22,23,29,30 }; 
+#else 
+//Teensy 3.1 3.2
 #define NTPINS 12
 const int cpins[NTPINS] = {22,23,19,18,17,16,15,0,1,25,32, 33 }; 
 #endif
@@ -233,82 +239,7 @@ void routeTouch(OSCMessage &msg, int addrOffset )
 }
 #endif
 
-#ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
-#if defined(__MK20DX128__) || defined(__MK20DX256__)|| defined(__MKL26Z64__) 
-float getSupplyVoltage()
-{
-  int val = analogRead(39); 
-  return val>0? (1.20f*1023/val):0.0f; 
-}
 
-#else
-// power supply measurement on some Arduinos 
-float getSupplyVoltage(){
-    // powersupply
-    int result;
-    // Read 1.1V reference against AVcc
-#if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-    ADMUX = _BV(REFS0) | _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-  #elif defined (__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
-    ADMUX = _BV(MUX5) | _BV(MUX0);
-  #elif defined (__AVR_ATtiny25__) || defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__)
-    ADMUX = _BV(MUX3) | _BV(MUX2);
-  #elif  defined(__AVR_AT90USB646__) || defined(__AVR_AT90USB1286__)   
-    ADMUX = 0x40| _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1) ;
-    ADCSRB =  0;
-  #else
-    ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-  #endif  
-    delayMicroseconds(300); // wait for Vref to settle
-    ADCSRA |= _BV(ADSC); // Convert
-    while (bit_is_set(ADCSRA,ADSC));
-	result = ADCL;
-    result |= ADCH<<8;
-      
-    float supplyvoltage = 1.1264f *1023 / result;
-    return supplyvoltage;	
-}
-#endif
-
-#endif
-
-#ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
-
-
-#if defined(__MK20DX128__) || defined(__MK20DX256__)|| defined(__MKL26Z64__) 
-float getTemperature()
-{
-        analogReference(INTERNAL);
-        delay(1);
-        int val = analogRead(38); // seems to be flakey
-        analogReference(DEFAULT);
-
-        return val; //need to compute something here to get to degrees C
-}
-#else
-// temperature
-float getTemperature(){	
-	int result;
-	
-#if defined(__AVR_ATmega32U4__)
-	ADMUX =  _BV(REFS1) | _BV(REFS0) | _BV(MUX2) | _BV(MUX1) | _BV(MUX0);
-	ADCSRB =  _BV(MUX5);
-#else
-	ADMUX = _BV(REFS1) | _BV(REFS0) | _BV(MUX3);
-#endif	
-	delayMicroseconds(200); // wait for Vref to settle
-	ADCSRA |= _BV(ADSC); // Convert
-	while (bit_is_set(ADCSRA,ADSC));
-	result = ADCL;
-	result |= ADCH<<8;
-
-	analogReference(DEFAULT);
-	
-	return  result/1023.0f;
-}
-#endif  
-
-#endif
 /**
  * SYSTEM MESSAGES
  * 
@@ -389,7 +320,6 @@ void loop(){
 #endif
     }
 }
-
 
 
 

@@ -78,10 +78,10 @@ int analogInputToDigitalPin(int i)
 
 
 #ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
-#if defined(CORE_TEENSY)
-// defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MKL26Z64__)
+#if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MKL26Z64__)  || defined(__MK66FX1M0__)
 float getSupplyVoltage()
 {
+    // untested on all Teensys 3.x
     int val = analogRead(39);
     return val>0? (1.20f*1023/val):0.0f;
 }
@@ -119,13 +119,13 @@ float getSupplyVoltage(){
 
 #ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
 
-#if defined(CORE_TEENSY)
-//  defined(__MK20DX128__) || defined(__MK20DX256__)|| defined(__MKL26Z64__)
+#if   defined(__MK20DX128__) || defined(__MK20DX256__)|| defined(__MKL26Z64__)  || defined(__MK66FX1M0__)
 float getTemperature()
 {
+    // untested on all teensy 3.x
     analogReference(INTERNAL);
     delay(1);
-    int val = analogRead(38); // seems to be flakey
+    int val = analogRead(38);
     analogReference(DEFAULT);
     
     return val; //need to compute something here to get to degrees C
