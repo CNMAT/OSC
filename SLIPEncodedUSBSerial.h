@@ -10,7 +10,7 @@ Extends the Serial class to encode SLIP over serial
 #include <Stream.h>
 
 
-#if (defined(TEENSYDUINO) && defined(USB_SERIAL)) || (!defined(TEENSYDUINO) && defined(__AVR_ATmega32U4__)) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_))  || defined(_SAMD21_) || defined(__PIC32MX__)
+#if (defined(TEENSYDUINO) && defined(USB_SERIAL)) || (!defined(TEENSYDUINO) && defined(__AVR_ATmega32U4__)) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_))  || defined(_SAMD21_) || (defined(__PIC32MX__) || defined(__PIC32MZ__))
 
 
 //import the serial USB object
@@ -20,7 +20,7 @@ Extends the Serial class to encode SLIP over serial
 #include <usb_api.h>
 #elif defined(__SAM3X8E__)  || defined(_SAMD21_) 
 #include <USB/USBAPI.h>
-#elif defined(__PIC32MX__)
+#elif (defined(__PIC32MX__) || defined(__PIC32MZ__))
 #include <USB.h>
 #elif defined(__AVR_ATmega32U4__)
 #include "USBAPI.h"
@@ -42,7 +42,7 @@ private:
 #elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__) || defined(_SAMD21_)  || defined(__ARM__)
 Serial_
     
-#elif defined(__PIC32MX__)
+#elif (defined(__PIC32MX__) || defined(__PIC32MZ__))
     CDCACM
 #else
 #error Unknown USBserial type	
@@ -57,7 +57,7 @@ public:
 #elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__)  || defined(_SAMD21_)  || defined(__ARM__)
     Serial_
                          
-#elif defined(__PIC32MX__)
+#elif (defined(__PIC32MX__) || defined(__PIC32MZ__))
     CDCACM
 #else
 #error Unknown USBserial type
