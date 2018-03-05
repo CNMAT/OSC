@@ -37,7 +37,7 @@
 
 // missing specs for PIC32
 
-#if defined(__PIC32MX__)
+#if (defined(__PIC32MX__) || defined(__PIC32MZ__))
 #define NUM_ANALOG_INPUTS NUM_ANALOG_PINS
 #define NUM_DIGITAL_INPUTS NUM_DIGITAL_PINS
 #define LED_BUILTIN PIN_LED1
@@ -68,5 +68,12 @@
 int analogInputToDigitalPin(int i);
 #endif
 
+#ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
+float getTemperature();
+#endif
+
+#ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
+float getSupplyVoltage();
+#endif
 
 #endif
