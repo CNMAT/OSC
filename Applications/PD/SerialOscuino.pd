@@ -1,4 +1,4 @@
-#N canvas 601 150 1168 784 10;
+#N canvas 33 23 1015 763 10;
 #X msg 272 58 /a/*;
 #X msg 612 30 /s/a;
 #X msg 569 30 /s/d;
@@ -46,9 +46,9 @@
 -1 -1 0 1;
 #X obj 287 452 vsl 15 128 0 1023 0 0 empty empty empty 0 -9 0 10 -262144
 -1 -1 0 1;
-#X obj 161 48 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X obj 212 18 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
-#X msg 161 67 /s/l \$1;
+#X msg 212 37 /s/l \$1;
 #X obj 252 339 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
 #X obj 273 339 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
@@ -106,7 +106,7 @@
 -1 -1 0 1;
 #X obj 894 452 vsl 15 128 0 1023 0 0 empty empty empty 0 -9 0 10 -262144
 -1 -1 0 1;
-#X msg 929 65 /c/*;
+#X msg 786 80 /c/*;
 #X obj 360 452 vsl 15 128 0 1023 0 0 empty empty empty 0 -9 0 10 -262144
 -1 -1 0 1;
 #X obj 439 452 vsl 15 128 0 1023 0 0 empty empty empty 0 -9 0 10 -262144
@@ -143,22 +143,22 @@
 #X text 340 48 Pull up;
 #X text 567 10 How many pins?;
 #X text 675 9 How many milliseconds ?;
-#X text 164 29 LED;
+#X text 215 -1 LED;
 #X text 749 369 Touch Pins on Teensy 3;
 #X text 341 211 System message responses;
 #X text 356 370 Analog Values;
 #X text 27 369 Analog Values with Pullups Enabled;
 #N canvas 0 50 450 278 (subpatch) 0;
-#X array AnalogArray 16 float 2;
-#X coords 0 1023 16 0 200 140 1 0 0;
-#X restore 359 621 graph;
+#X array AnalogArray 16 float 2 black black;
+#X coords 0 1023 16 0 200 140 1;
+#X restore 31 605 graph;
 #X obj 272 35 metro 60;
-#X obj 929 24 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X obj 786 39 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
-#X obj 929 44 metro 60;
+#X obj 786 59 metro 60;
 #X obj 200 214 print;
-#X obj 160 118 print;
-#X msg 727 91 devicename /dev/tty.usbmodem122611 \, baud 9600 \, pollintervall
+#X obj 253 115 print;
+#X msg 459 107 devicename /dev/tty.usbmodem122611 \, baud 9600 \, pollintervall
 4 \, verbose 1;
 #X obj 333 96 mrpeach/packOSC;
 #X obj 333 138 mrpeach/unpackOSC;
@@ -172,10 +172,10 @@
 #X obj 27 387 mrpeach/routeOSC /0/u /1/u /2/u /3/u /4/u /5/u /6/u /7/u
 /8/u /9/u /10/u /11/u /12/u /13/u /14/u /15/u, f 54;
 #X obj 346 229 cyclone/prepend set;
-#X obj 698 205 cyclone/prepend set;
+#X obj 536 206 cyclone/prepend set;
 #X text 291 8 Retrieve analog value each 60ms, f 15;
 #X text 436 2 get digital pins 1 to 3 status, f 11;
-#X text 884 10 get Teensy 3 Touch each 60ms;
+#X text 741 25 get Teensy 3 Touch each 60ms;
 #N canvas 0 94 450 300 fillArray 0;
 #X obj 60 223 send AnalogArray;
 #X obj 60 142 mrpeach/routeOSC /1 /2 /3 /4 /5 /6 /7 /8 /9 /10 /11 /12
@@ -201,7 +201,7 @@
 #X connect 2 0 0 0;
 #X connect 3 0 1 0;
 #X restore 348 423 pd fillArray;
-#X msg 698 225;
+#X msg 536 226;
 #X msg 346 252;
 #X text 211 279 Digital pins state;
 #X obj 200 194 spigot;
@@ -209,12 +209,14 @@
 1;
 #X obj 668 651 cnv 15 400 80 empty empty empty 20 12 0 14 -258113 -66577
 0;
-#X text 666 631 Oscuino Serial Adrian Freed 2013;
-#X text 685 658 this patch depends on several third party libraries
-available through deken plugin (Help -> Find externals) :;
-#X text 704 686 - osc;
-#X text 704 696 - comport;
-#X text 704 706 - cyclone;
+#X text 26 71 Oscuino Serial Adrian Freed 2013;
+#X text 762 229 - comport;
+#X text 763 213 - cyclone;
+#X obj 530 148 import mrpeach;
+#X text 763 197 - mrpeach osc slipenc and slipdec;
+#X text 650 153 This patch depends on several third party externals
+available in PD-extended (deprecated?) \, Purr \, or through deken
+plugin (Help -> Find externals):;
 #X connect 0 0 90 0;
 #X connect 1 0 90 0;
 #X connect 2 0 90 0;
