@@ -12,7 +12,7 @@ Features:
 
 # Installation
 
-We recommend Arduino 1.05 or greater and Teensyduino 1.14 or later if you use the Teensy. Download the zip from github. Unzip it and remove text after the "-" in the name (i.e. -master) because the Arduino IDE doesn't allow certain characters in library names. Move the OSC folder into your "libraries" folder in your Arduino Sketch search path. Now you will see OSC examples under the Examples menu of Arduino. 
+We recommend Arduino 1.8.5 and a compatible Teensyduino overlay if you use the Teensy. Install using the library manager.
 
 Additional information about installing libraries on [Arduino's website](https://www.arduino.cc/en/Guide/Libraries).
 
@@ -166,13 +166,13 @@ As well as many small examples illustrating the API, there is a larger applicati
 
 ### IDEs
 
-Arduino 1.8.5 (tested for Due Serial and Teensy so far)
+Arduino 1.8.5 
 
 Best Supported Board:
-The Teensy 3.0 and 3.1 and LC have the performance and memory that afford rich OSC implementations.
-Our primary test platform for new development is the Teensy 3.2 which currently offers the best performance
+ARM boards such M0, Zero, Teensy 3.0 and 3.1 and LC have the performance and memory that afford rich OSC implementations.
+Our primary test platform for new development is the Teensy 3.x series which currently offers the best performance
 of any of the Arduinos and variants. We greatly appreciate Paul Stoffregen's ongoing work
-with "best practice" engineering of high performance microcontrollers.
+with "best practice" engineering of high performance micro-controllers.
 
 ### Unsupported boards
 
@@ -209,23 +209,27 @@ References:
 
 The serial examples use a 9600 baud rate which is reliable on most of the FTDI based Arduinos. The slow rate is required for Arduino's without clock chips such as the TinyLili. Once you have established that things work at 9600 baud you will find it very beneficial to increase the rate. e.g. `Serial.begin(345600);   // !! 115200, 230400, 345600,   460800 X`
 
-# Roadmap
+# Future development ideas
 
+* WIFI examples
+* STM32 support
+* Intel Galileo support
+* HiFive Support
+* Photon Support
 * support for special OSC types in CNMAT's "o." especially subbundles
 * examples for recent OSC support in node.js and Node Red
 * nested bundles
 * performance tuning
-* integrate spark core examples
+* Photon spark core examples
 * Better Time Tags that avoid the overflow limitation of Arduino timer code
 * Time Tag synchronization
 * Bluetooth LE 
 * TCP/IP Examples
 * examples for more applications (i.e. TouchOSC, Processing with SLIP)
 * deadline scheduling of OSC 64-bit timetags
-* Support for Arduino WiFi
 * ADK support
 
 We welcome and appreciate your contributions and feedback.
 
 # New in this release
-ESPxx support
+ESPxx, M0, PIC32
