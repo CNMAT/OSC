@@ -13,7 +13,6 @@
 
 #if defined(__MK20DX128__) ||  defined(__MK20DX256__)  || defined(__MKL26Z64__) || defined(__MK66FX1M0__)
 // Teensy 3.0  3.1  3.1LC 3.2 3.6
-// (PIC32's might have some day) TODO
 #define BOARD_HAS_CAPACITANCE_SENSING
 #endif
 

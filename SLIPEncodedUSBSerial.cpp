@@ -189,8 +189,10 @@ size_t SLIPEncodedUSBSerial::write(const uint8_t *buffer, size_t size)
 
 void SLIPEncodedUSBSerial::begin(unsigned long baudrate){
 	serial->begin(baudrate);
-    while(!serial)
-        ;
+        //
+        // needed on Leonardo?
+        // while(!serial)
+        //        ;
 }
 //SLIP specific method which begins a transmitted packet
 void SLIPEncodedUSBSerial::beginPacket() { 	serial->write(eot); }

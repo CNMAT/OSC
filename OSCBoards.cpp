@@ -78,12 +78,26 @@ int analogInputToDigitalPin(int i)
 
 
 #ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
-#if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MKL26Z64__)  || defined(__MK66FX1M0__)
+#if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MKL26Z64__)  || defined(__MK64FX512V__)  || defined(__MK66FX1M0__)
 float getSupplyVoltage()
 {
-    // untested on all Teensys 3.x
+    analogReference(DEFAULT);
+    analogReadResolution(12);
+    analogReadAveraging(32);
+    PMC_REGSC |= PMC_REGSC_BGBE; // 39=bandgap ref (PMC_REGSC |= PMC_REGSC_BGBE);
+    delay(1);
+
+#if defined(__MKL26Z64__)
+    // Teensy 3 LC
     int val = analogRead(39);
-    return val>0? (1.20f*1023/val):0.0f;
+    return val>0? (1.0f*4095/val):0.0f;
+#elif defined(__MK64FX512V__)  || defined(__MK66FX1M0__)
+    int val = analogRead(71);
+    return val>0? (1.195f*4095/val):0.0f;
+#else
+    int val = analogRead(39);
+    return val>0? (1.195f*4095/val):0.0f;
+#endif
 }
 
 #else
@@ -119,16 +133,25 @@ float getSupplyVoltage(){
 
 #ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
 
-#if   defined(__MK20DX128__) || defined(__MK20DX256__)|| defined(__MKL26Z64__)  || defined(__MK66FX1M0__)
+#if   defined(__MK20DX128__) || defined(__MK20DX256__)|| defined(__MKL26Z64__)  || defined(__MK66FX1M0__)  || defined(__MK64FX512V__)
 float getTemperature()
 {
+#if defined(__MK64FX512V__)  || defined(__MK66FX1M0__)
+    const int temppin = 70 ;
+#else
+    const int temppin = 38;
+#endif
     // untested on all teensy 3.x
     analogReference(INTERNAL);
-    delay(1);
-    int val = analogRead(38);
+    analogReadResolution(12);
+    analogReadAveraging(32);
+    delay(2);
+    
+    float val = 25.0 + 0.17083 * (2454.19 - analogRead(temppin));
+    
     analogReference(DEFAULT);
     
-    return val; //need to compute something here to get to degrees C
+    return val;
 }
 #else
 // temperature

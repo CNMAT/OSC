@@ -25,7 +25,6 @@
 
 
 #include "OSCTiming.h"
-#include "OSCBoards.h"
 
 #if defined(__MK20DX128__) ||  defined(__MK20DX256__) || defined(__MKL26Z64__)  
 extern volatile uint32_t systick_millis_count;
@@ -159,7 +158,7 @@ int adcRead(int pin, osctime_t *t)
     *t = oscTime();
     return v;
 }
-#ifdef BOARD_HAS_CAPACITANCE_SENSING
+#if defined(__MK20DX128__) ||  defined(__MK20DX256__)  || defined(__MKL26Z64__) || defined(__MK66FX1M0__)
 int capacitanceRead(int pin, osctime_t *t)
 {
     latchOscTime();
