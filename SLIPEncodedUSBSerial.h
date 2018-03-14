@@ -15,7 +15,9 @@ Extends the Serial class to encode SLIP over serial
 
 //import the serial USB object
 #if defined(TEENSYDUINO) && defined (__arm__)
+#if !defined(USB_HOST_TEENSY36_)
 #include <usb_serial.h>
+#endif
 #elif defined(TEENSYDUINO) && defined (__AVR__)
 #include <usb_api.h>
 #elif defined(__SAM3X8E__)  || defined(_SAMD21_) 
@@ -38,7 +40,11 @@ private:
 //different type for each platform
 
 #if  defined(CORE_TEENSY) 
+#if defined(USB_HOST_TEENSY36)
+    USBSerial
+#else
     usb_serial_class
+#endif
 #elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__) || defined(_SAMD21_)  || defined(__ARM__)
 Serial_
     
@@ -53,7 +59,12 @@ public:
 	SLIPEncodedUSBSerial(
 //different constructor for each platform
 #if  defined(CORE_TEENSY)
-    usb_serial_class
+#if defined(USB_HOST_TEENSY36)
+                         USBSerial
+#else
+                         usb_serial_class
+#endif
+
 #elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__)  || defined(_SAMD21_)  || defined(__ARM__)
     Serial_
                          
