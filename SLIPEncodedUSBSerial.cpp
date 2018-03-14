@@ -13,7 +13,11 @@
 SLIPEncodedUSBSerial::SLIPEncodedUSBSerial(
 
 #if  defined(CORE_TEENSY)
+#if defined(USB_HOST_TEENSY36)
+                                           USBSerial
+#else
                                            usb_serial_class
+#endif
 #elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__) || defined(_SAMD21_)  || defined(__ARM__)
                                            Serial_
                                         
