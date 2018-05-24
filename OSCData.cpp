@@ -255,7 +255,7 @@ int OSCData::getString(char * strBuffer, int length){
     }
 }
 
-// Here we can get only a part of the blob 
+// Here we can get only a part of the string 
 int OSCData::getString(char * strBuffer, int length, int offset, int size){
     if (type == 's' && size <= bytes && size <= length){
         strncpy(strBuffer, data.s + offset, size);
