@@ -104,23 +104,36 @@ Returns the boolean at the given position
 
 Returns the double at the given position. NOTE: double is not supported by most Arduino platforms. This will fail silently if double is not supported.
 
+### `int getString(char * strBuffer)`
 
-### `int getString(int position, char * str, int length)`
+Copy the string’s characters into the `strBuffer’, without any safetcheck’. 
+Returns the number of copied characters. 
 
-Copy `length` number of characters from the given position into the `str` buffer. Returns the number of copied characters. 
+### `int getString(char * strBuffer, int length)`
+
+Copy the string’s characters into the `strBuffer’, after checking that this doesn’t exceed the buffer’s ‘length’. 
+Returns the number of copied characters. 
+
+### `int getString(char * strBuffer, int length, int offset, int size)`
+
+Copy `size` number of characters from the given ‘offset’ into the `strBuffer’, after checking that this doesn’t exceed the buffer’s ‘length’. Returns the number of copied characters. 
 
 ```C++
 char str[8];
 //fill str with 8 characters from the 0th datum
-msg.getString(0, str, 8);
+msg.getString(str, 8, 0, 8);
 ```
 
+### `int getBlob(uint8_t * blobBuffer)`
 
-### `int getBlob(int position, uint8_t * blob, int length)`
+Directly copy the blob’s bytes into the `blob` buffer (without safety-check). 
+Returns the number of bytes from the blob. 
 
-Copy `length` number of bytes from the given position into the `blob` buffer. Returns the number of copied bytes. 
 
+### `int getBlob(uint8_t * blobBuffer, int length, int offset, int size)`
 
+Copy ‘size’ bytes from the blob, starting from ‘offset’,  into the given `blobBuffer’, if the size doesn’t exceed the buffer’s (or the blob’s) ‘length’. 
+Returns the number of bytes copied from the blob. 
 
 ### `char getType(int position)`
 
