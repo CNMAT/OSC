@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/CNMAT/OSC.svg?branch=master)](https://travis-ci.com/CNMAT/OSC)
+
 # OSC for Arduino
 
 This is an Arduino and Teensy library implementation of the [OSC](http://opensoundcontrol.org) (Open Sound Control) encoding.It was developed primarily by Yotam Mann and Adrian Freed at CNMAT where OSC was invented. It benefits from contributions from John MacCallum, Matt Wright, Jeff Lubow and Andy Schmeder and many beta testers.
