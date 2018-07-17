@@ -8,6 +8,7 @@ set -e
 CPP_LINT_URL="https://raw.githubusercontent.com/google/styleguide/gh-pages/cpplint/cpplint.py";
 
 SPELLINGBLACKLIST=$(cat <<-BLACKLIST
+      -wholename "./.codespellignore" -or \
       -wholename "./.git/*"
 BLACKLIST
 )
