@@ -4,7 +4,7 @@ Receives and visualizes OSCBundles sent over UDP
 Use with /examples/UDPSendMessage
 
 or with /examples/SerialSendMessage in conjunction 
-with /Applicaitons/Processing/SLIPSerialToUDP
+with /Applications/Processing/SLIPSerialToUDP
 */
 
 import oscP5.*;
