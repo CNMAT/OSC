@@ -20,7 +20,7 @@ cache:
 env:
   global:
    # Warnings are errors
-   - PLATFORMIO_BUILD_FLAGS="-Werror"
+   - PLATFORMIO_BUILD_FLAGS="-Werror -Wno-error=deprecated-declarations"
 
 matrix:
   fast_finish: true
