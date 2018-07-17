@@ -83,7 +83,7 @@ OSCMessage::~OSCMessage(){
 
 OSCMessage& OSCMessage::empty(){
     error = OSC_OK;
-    //free each of hte data in the array
+    //free each of the data in the array
     for (int i = 0; i < dataCount; i++){
         OSCData * datum = getOSCData(i);
         //explicitly destruct the data
@@ -449,7 +449,7 @@ int OSCMessage::bytes(){
     //padding amount
     int addrPad = padSize(addrLen);
     messageSize += addrPad;
-    //add the comma seperator
+    //add the comma separator
     messageSize += 1;
     //add the types
     messageSize += dataCount;
@@ -506,7 +506,7 @@ OSCMessage& OSCMessage::send(Print &p){
     while(addrPad--){
         p.write(nullChar);
     }
-    //add the comma seperator
+    //add the comma separator
     p.write((uint8_t) ',');
     //add the types
 #ifdef PAULSSUGGESTION
@@ -589,7 +589,7 @@ OSCMessage& OSCMessage::fill(uint8_t * incomingBytes, int length){
 
 void OSCMessage::decodeAddress(){
     setAddress((char *) incomingBuffer);
-    //change the error from invalide message
+    //change the error from invalid message
     error = OSC_OK;
     clearIncomingBuffer();
 }

@@ -198,7 +198,7 @@ void loop(){
 
     // The COOKED OSC address space and parameter mappings 
     // encode data for ease of use and legibility at the host. Unit intervals replace integers
-    // The names are chosen to clarify usage rather than adherance to the silkscreen
+    // The names are chosen to clarify usage rather than adherence to the silkscreen
     // also values are acquired as close together as reasonably possible to increase
     // their usability in sensor fusion contexts, i.e. in this case with the accelerometer
 
