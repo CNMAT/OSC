@@ -137,11 +137,11 @@ public:
 
 	//if the bundle contains a message that matches the pattern, 
 	//call the function callback on that message
-	bool dispatch(const char * pattern, void (*callback)(OSCMessage&), int = 0);
+	bool dispatch(const char * pattern, std::function<void(OSCMessage &)> callback, int = 0);
 	
 	//like dispatch, but allows for partial matches
 	//the address match offset is sent as an argument to the callback
-	bool route(const char * pattern, void (*callback)(OSCMessage&, int), int = 0);
+	bool route(const char * pattern, std::function<void(OSCMessage &, int)> callback, int = 0);
 	
 /*=============================================================================
      SIZE
