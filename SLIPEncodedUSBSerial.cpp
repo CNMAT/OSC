@@ -4,7 +4,7 @@
 /*
  CONSTRUCTOR
  */
-//instantiate with the tranmission layer
+//instantiate with the transmission layer
 
 #if (defined(CORE_TEENSY) && defined(USB_SERIAL)) || (!defined(CORE_TEENSY) && defined(__AVR_ATmega32U4__)) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_)) || defined(BOARD_maple_mini) || defined(_SAMD21_)  || defined(__ARM__) || (defined(__PIC32MX__) || defined(__PIC32MZ__))
 
