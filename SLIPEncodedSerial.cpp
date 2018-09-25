@@ -3,7 +3,7 @@
 /*
  CONSTRUCTOR
  */
-//instantiate with the tranmission layer
+//instantiate with the transmission layer
 //use HardwareSerial
 SLIPEncodedSerial::SLIPEncodedSerial(HardwareSerial &s){
 	serial = &s;
