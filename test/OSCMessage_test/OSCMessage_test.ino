@@ -4,14 +4,14 @@
 #define HAS_DOUBLE sizeof(double) == 8
 
 
-test(message_addres){
+test(message_address){
   OSCMessage msg("/hihi");
   char addr[6];
   msg.getAddress(addr);
   assertEqual(strcmp(addr, "/hihi"), 0);
 }
 
-test(message_addres_offset){
+test(message_address_offset){
   OSCMessage msg("/foo/bar");
   char addr[5];
   msg.getAddress(addr, 4);

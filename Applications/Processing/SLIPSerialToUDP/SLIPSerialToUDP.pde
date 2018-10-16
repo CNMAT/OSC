@@ -192,7 +192,7 @@ public void STOP() {
  SERIAL
  ************************************************************************************/
 
-//the Serial communcation to the Arduino
+//the Serial communication to the Arduino
 Serial serial;
 
 String[] serialRateStrings = {
@@ -314,7 +314,7 @@ void UDPSendBuffer(byte[] data) {
   udp.send( data, ipAddress, outPort );
 }
 
-//called when UDP recieves some data
+//called when UDP receives some data
 void receive( byte[] data) {
   drawIncomingUDP();
   //send it over to serial

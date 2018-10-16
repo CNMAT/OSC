@@ -218,7 +218,7 @@ OSCBundle& OSCBundle::send(Print &p){
         //turn the message size into a pointer
         uint32_t s32 = BigEndian((uint32_t) msgSize);
         uint8_t * sptr = (uint8_t *) &s32;
-        //write the messsage size
+        //write the message size
         p.write(sptr, 4);
         msg->send(p);
     }

@@ -111,7 +111,7 @@ public:
 	//new constructor needs an address
 	OSCMessage (const char * _address);
     //no address
-    //placeholder since it's invalide OSC
+    //placeholder since it's invalid OSC
 	OSCMessage();
 
 	//can optionally accept all of the data after the address

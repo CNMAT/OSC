@@ -50,7 +50,7 @@ char * numToOSCAddress( int pin){
  * format:
  * /tone/pin
  *   
- *   (digital value) (float value) = freqency in Hz
+ *   (digital value) (float value) = frequency in Hz
  *   (no value) disable tone
  * 
  **/
