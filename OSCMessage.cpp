@@ -486,13 +486,12 @@ int OSCMessage::bytes(){
 =============================================================================*/
 
 bool OSCMessage::hasError(){
-    bool retError = error != OSC_OK;
+	if(error != OSC_OK) return true;
     //test each of the data
     for (int i = 0; i < dataCount; i++){
-        OSCData * datum = getOSCData(i);
-        retError |= datum->error != OSC_OK;
+        if(getOSCData(i)->error) return true;
     }
-	return retError;
+	return false;
 }
 
 OSCErrorCode OSCMessage::getError(){
