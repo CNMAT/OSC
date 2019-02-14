@@ -320,7 +320,9 @@ int OSCData::getBlob(uint8_t * blobBuffer, int length, int offset, int size){
     }
 }
 
-
+const uint8_t* OSCData::getBlob() {
+    return type == 'b' ? data.b + 4 : NULL;
+}
 
 int OSCData::getBlobLength(){
   if (type == 'b'){

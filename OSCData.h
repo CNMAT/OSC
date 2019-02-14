@@ -119,6 +119,7 @@ public:
     int getBlob(uint8_t *);
     int getBlob(uint8_t *, int);
     int getBlob(uint8_t *, int, int, int); 
+    const uint8_t* getBlob();
     int getBlobLength();
     bool getBoolean();
     osctime_t getTime();

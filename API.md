@@ -136,6 +136,11 @@ Copy ‘size’ bytes from the blob, starting from ‘offset’,  into the given
 Returns the number of bytes copied from the blob. 
 
 
+### `const uint8_t* getBlob(int position)`
+
+Get a pointer to blob data.
+
+
 ### `int getBlobLength(int position)`
 
 Returns the length of the blob in bytes. 
@@ -197,6 +202,10 @@ Set the address of the OSCMessage.
 ### `OSCMessage& getAddress(char * str, int offset=0)`
 
 Copy the address of the OSCMessage into the `str` buffer. Copy after the given address offset (defaults to 0).
+
+### `const char* getAddress()`
+
+Get a pointer to the address as a C string. 
 
 
 ## Send Receive

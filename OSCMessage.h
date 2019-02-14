@@ -257,6 +257,8 @@ public:
 	int getBlob(int, uint8_t *, int);
 	//offset and size can be defined in order to only query a part of the blob's content 
 	int getBlob(int, uint8_t *, int, int, int);
+	//get pointer to blob
+	const uint8_t* getBlob(int);
 
 
 	// returns the length of blob 
@@ -271,6 +273,8 @@ public:
 	//put the address in the buffer
 	int getAddress(char * buffer, int offset = 0);
 	int getAddress(char * buffer, int offset, int len);
+	//get pointer to address
+	const char* getAddress();
 
 	// TODO: int getAddressLength(int offset = 0);
 

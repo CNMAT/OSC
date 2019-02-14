@@ -267,6 +267,15 @@ int OSCMessage::getBlob(int position, uint8_t * buffer, int bufferSize, int offs
   }
 }
 
+const uint8_t* OSCMessage::getBlob(int position) {
+	OSCData* datum = getOSCData(position);
+	if(!hasError()) {
+		return datum->getBlob();
+	} else {
+		return NULL;
+	}
+}
+
 uint32_t OSCMessage::getBlobLength(int position)
 {
   OSCData * datum = getOSCData(position);
@@ -406,6 +415,10 @@ int OSCMessage::getAddress(char * buffer, int offset){
 int OSCMessage::getAddress(char * buffer, int offset, int len){
     strncpy(buffer, address+offset, len);
 	return strlen(buffer);
+}
+
+const char* OSCMessage::getAddress(){
+	return address;
 }
 
 OSCMessage& OSCMessage::setAddress(const char * _address){
