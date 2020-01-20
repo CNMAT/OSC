@@ -8,7 +8,11 @@ Extends the Serial class to encode SLIP over serial
 
 #include "Arduino.h"
 #include <Stream.h>
+#ifdef ARDUINO_API_VERSION
+#include <api/HardwareSerial.h>
+#else
 #include <HardwareSerial.h>
+#endif
 
 
 class SLIPEncodedSerial: public Stream{
