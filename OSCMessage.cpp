@@ -371,7 +371,7 @@ int OSCMessage::match(const  char * pattern, int addr_offset){
 bool OSCMessage::fullMatch( const char * pattern, int addr_offset){
 	int pattern_offset;
 	int address_offset;
-	int ret = osc_match(address + addr_offset, pattern, &address_offset, &pattern_offset);
+	int ret = osc_match(address + addr_offset, pattern, &pattern_offset, &address_offset );
 	return (ret==3);
 }
 
