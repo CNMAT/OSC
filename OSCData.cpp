@@ -156,7 +156,7 @@ OSCData::~OSCData(){
 //sets just the type as a message placeholder
 //no data
 OSCData::OSCData(char t){
-	error = INVALID_OSC;
+	error = (t == 'T' || t == 'F') ? OSC_OK : INVALID_OSC;
 	type = t;
     bytes = 0;
 }
