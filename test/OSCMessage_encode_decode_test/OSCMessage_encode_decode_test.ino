@@ -14,7 +14,7 @@ test(message_encode_int){
   msg.add(-20);
   msg.send(printer);
   assertEqual(printer.size(), sizeof(testBuffer));
-  for (int i = 0; i < sizeof(testBuffer); i++){
+  for (unsigned int i = 0; i < sizeof(testBuffer); i++){
     assertEqual(testBuffer[i], printer.at(i));
   }
 }
@@ -28,7 +28,7 @@ test(message_encode_string){
   msg.add("howdy");
   msg.send(printer);
   assertEqual(printer.size(), sizeof(testBuffer));
-  for (int i = 0; i < sizeof(testBuffer); i++){
+  for (unsigned int i = 0; i < sizeof(testBuffer); i++){
     assertEqual(testBuffer[i], printer.at(i));
   }
 }
@@ -42,7 +42,7 @@ test(message_encode_float){
   msg.add(-2.1f);
   msg.send(printer);
   assertEqual(printer.size(), sizeof(testBuffer));
-  for (int i = 0; i < sizeof(testBuffer); i++){
+  for (unsigned int i = 0; i < sizeof(testBuffer); i++){
     assertEqual(testBuffer[i], printer.at(i));
   }
 }
@@ -59,7 +59,7 @@ test(message_encode_double){
     msg.add(d1);
     msg.send(printer);
     assertEqual(printer.size(), sizeof(testBuffer));
-    for (int i = 0; i < sizeof(testBuffer); i++){
+    for (unsigned int i = 0; i < sizeof(testBuffer); i++){
       assertEqual(testBuffer[i], printer.at(i));
     }
   }
@@ -74,7 +74,7 @@ test(message_encode_blob){
   msg.add(blob, 5);
   msg.send(printer);
   assertEqual(printer.size(), sizeof(testBuffer));
-  for (int i = 0; i < sizeof(testBuffer); i++){
+  for (unsigned int i = 0; i < sizeof(testBuffer); i++){
     assertEqual(testBuffer[i], printer.at(i));
   }
 }
@@ -89,7 +89,7 @@ test(message_encode_mixed){
   msg.add(1.0f);
   msg.send(printer);
   assertEqual(printer.size(), sizeof(testBuffer));
-  for (int i = 0; i < sizeof(testBuffer); i++){
+  for (unsigned int i = 0; i < sizeof(testBuffer); i++){
     assertEqual(testBuffer[i], printer.at(i));
   }
 }
