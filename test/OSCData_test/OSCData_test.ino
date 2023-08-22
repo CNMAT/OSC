@@ -18,7 +18,7 @@ test(data_float){
 }
 
 test(data_string){
-  char * testStr = "data";
+  const char * testStr = "data";
   int testStrLen = strlen(testStr) + 1;
   OSCData datum(testStr);
   char str[testStrLen];
@@ -28,7 +28,7 @@ test(data_string){
 }
 
 test(data_string_partial_copy){
-  char * testStr = "data";
+  const char * testStr = "data";
   int testStrLen = strlen(testStr) + 1;
   OSCData datum(testStr);
   char str[testStrLen];
@@ -43,7 +43,7 @@ test(data_bool){
 }
 
 test(has_double){ 
-  assertEqual(sizeof(double), 8);
+  assertEqual(sizeof(double), 8U);
 }
 
 test(data_double){ 
