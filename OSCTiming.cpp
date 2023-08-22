@@ -26,7 +26,7 @@
 
 #include "OSCTiming.h"
 
-#if defined(__MK20DX128__) ||  defined(__MK20DX256__) || defined(__MKL26Z64__)  
+#if defined(TEENSYDUINO) && defined(__arm__)
 extern volatile uint32_t systick_millis_count;
 static uint32_t savedcount, savedcurrent;
 
