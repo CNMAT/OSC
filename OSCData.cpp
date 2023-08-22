@@ -240,7 +240,7 @@ int OSCData::getString(char * strBuffer){
     }
 }
 
-// it's possible to pass strBuffer's size as argument (length) 
+// it's possible to pass strBuffer's size as argument (length)
 // in order to check that it won't be overflown
 int OSCData::getString(char * strBuffer, int length){
     if (type == 's' && bytes <= length){
@@ -289,7 +289,7 @@ int OSCData::getBlob(uint8_t * blobBuffer){
     }
 }
 
-// it's possible to pass blobBuffer's size as argument (length) 
+// it's possible to pass blobBuffer's size as argument (length)
 // in order to check that it won't be overflown
 int OSCData::getBlob(uint8_t * blobBuffer, int length){
     //jump over the first 4 bytes which encode the length
@@ -306,7 +306,7 @@ int OSCData::getBlob(uint8_t * blobBuffer, int length){
     }
 }
 
-// Here we can get only a part of the blob 
+// Here we can get only a part of the blob
 int OSCData::getBlob(uint8_t * blobBuffer, int length, int offset, int size){
     //jump over the first 4 bytes which encode the length
     int blobLength =  bytes-4-offset;
@@ -322,7 +322,9 @@ int OSCData::getBlob(uint8_t * blobBuffer, int length, int offset, int size){
     }
 }
 
-
+const uint8_t* OSCData::getBlob() {
+    return type == 'b' ? data.b + 4 : NULL;
+}
 
 int OSCData::getBlobLength(){
   if (type == 'b'){
