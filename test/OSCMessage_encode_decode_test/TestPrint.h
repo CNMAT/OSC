@@ -9,7 +9,7 @@ class TestPrint : public Print {
     uint8_t buffer[64];
     
     //pointer to the current write spot
-    int bufferPointer;
+    unsigned int bufferPointer;
   
   public: 
   
@@ -22,7 +22,7 @@ class TestPrint : public Print {
       return character;
     }
     
-    int size(){
+    unsigned int size(){
       return bufferPointer; 
     }
 
