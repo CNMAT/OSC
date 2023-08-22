@@ -89,7 +89,7 @@ test(mixed_message_type){
   assertTrue(msg.isInt(2));
   assertTrue(msg.isString(3));
   assertEqual(msg.getInt(2), 2);
-  assertEqual(msg.getInt(3), NULL);
+  assertEqual(msg.getInt(3), (int)NULL);
 }
 
 void setup()
