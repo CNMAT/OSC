@@ -141,7 +141,7 @@ OSCMessage * OSCBundle::getOSCMessage(int pos){
  =============================================================================*/
 
 
-bool OSCBundle::dispatch(const char * pattern, void (*callback)(OSCMessage&), int initial_offset){
+bool OSCBundle::dispatch(const char * pattern, std::function<void(OSCMessage &)> callback, int initial_offset){
 	bool called = false;
 	for (int i = 0; i < numMessages; i++){
         OSCMessage msg = getOSCMessage(i);
@@ -151,7 +151,7 @@ bool OSCBundle::dispatch(const char * pattern, void (*callback)(OSCMessage&), in
 }
 
 
-bool OSCBundle::route(const char * pattern, void (*callback)(OSCMessage&, int), int initial_offset){
+bool OSCBundle::route(const char * pattern, std::function<void(OSCMessage &, int)> callback, int initial_offset){
 	bool called = false;
 	for (int i = 0; i < numMessages; i++){
         OSCMessage msg = getOSCMessage(i);

@@ -32,12 +32,24 @@ int analogInputToDigitalPin(int i)
 {
     switch(i)
     {
-        case  0: return A0;
+#ifdef A0
+        case 0: return A0;
+#endif
+#ifdef A1
         case 1: return A1;
+#endif
+#ifdef A2
         case 2: return A2;
+#endif
+#ifdef A3
         case 3: return A3;
+#endif
+#ifdef A4
         case 4: return A4;
+#endif
+#ifdef A5
         case 5: return A5;
+#endif
 #ifdef A6
         case 6: return A6;
 #endif

@@ -28,6 +28,7 @@
 
 #include "OSCData.h"
 #include <Print.h>
+#include <functional>
 
 
 class OSCMessage
@@ -273,10 +274,11 @@ public:
 	//put the address in the buffer
 	int getAddress(char * buffer, int offset = 0);
 	int getAddress(char * buffer, int offset, int len);
-	//get pointer to address
-	const char* getAddress();
 
-	// TODO: int getAddressLength(int offset = 0);
+	const char* getAddress();
+	
+	// Find out address length so we can create a buffer
+	int getAddressLength(int offset = 0);
 
 
 /*=============================================================================
@@ -306,12 +308,12 @@ public:
 	int match( const char * pattern, int = 0);
 
 	//calls the function with the message as the arg if it was a full match
-	bool dispatch(const char * pattern, void (*callback)(OSCMessage &), int = 0);
+	bool dispatch(const char * pattern, std::function<void(OSCMessage &)> callback, int = 0);
 
 	//like dispatch, but allows for partial matches
 	//the address match offset is sent as an argument to the callback
 	//also room for an option address offset to allow for multiple nested routes
-	bool route(const char * pattern, void (*callback)(OSCMessage &, int), int = 0);
+	bool route(const char * pattern, std::function<void(OSCMessage &, int)> callback, int = 0);
 
 
 

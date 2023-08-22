@@ -380,11 +380,11 @@ int OSCMessage::match(const  char * pattern, int addr_offset){
 bool OSCMessage::fullMatch( const char * pattern, int addr_offset){
 	int pattern_offset;
 	int address_offset;
-	int ret = osc_match(address + addr_offset, pattern, &address_offset, &pattern_offset);
+	int ret = osc_match(address + addr_offset, pattern, &pattern_offset, &address_offset );
 	return (ret==3);
 }
 
-bool OSCMessage::dispatch(const char * pattern, void (*callback)(OSCMessage &), int addr_offset){
+bool OSCMessage::dispatch(const char * pattern, std::function<void(OSCMessage &)> callback, int addr_offset){
 	if (fullMatch(pattern, addr_offset)){
 		callback(*this);
 		return true;
@@ -393,7 +393,7 @@ bool OSCMessage::dispatch(const char * pattern, void (*callback)(OSCMessage &), 
 	}
 }
 
-bool OSCMessage::route(const char * pattern, void (*callback)(OSCMessage &, int), int initial_offset){
+bool OSCMessage::route(const char * pattern, std::function<void(OSCMessage &, int)> callback, int initial_offset){
 	int match_offset = match(pattern, initial_offset);
 	if (match_offset>0){
 		callback(*this, match_offset + initial_offset);
@@ -408,17 +408,37 @@ bool OSCMessage::route(const char * pattern, void (*callback)(OSCMessage &, int)
  =============================================================================*/
 
 int OSCMessage::getAddress(char * buffer, int offset){
-    strcpy(buffer, address+offset);
-	return strlen(buffer);
+	int result = strlen(address);
+	if (result > offset)
+		strcpy(buffer, address+offset);
+	else
+		*buffer = 0;
+	return result - offset; // could be negative!
 }
 
 int OSCMessage::getAddress(char * buffer, int offset, int len){
-    strncpy(buffer, address+offset, len);
+	int result = strlen(address);
+	
+	if (result > offset)
+	{
+		strncpy(buffer, address+offset, len); // N.B. NOT guaranteed to null-terminate! So...
+		buffer[len-1] = 0; // ...prevent strlen() blowing up
+	}
+	else
+		*buffer = 0;
 	return strlen(buffer);
 }
 
 const char* OSCMessage::getAddress(){
 	return address;
+}
+
+int OSCMessage::getAddressLength(int offset)
+{
+	int result = (int) strlen(address) - offset;
+	if (result < 0) // offset past end!
+		result = 0; // do the best we can
+	return result;
 }
 
 OSCMessage& OSCMessage::setAddress(const char * _address){
