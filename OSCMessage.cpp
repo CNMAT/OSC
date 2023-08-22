@@ -399,14 +399,35 @@ bool OSCMessage::route(const char * pattern, void (*callback)(OSCMessage &, int)
  =============================================================================*/
 
 int OSCMessage::getAddress(char * buffer, int offset){
-    strcpy(buffer, address+offset);
-	return strlen(buffer);
+	int result = strlen(address);
+	if (result > offset)
+		strcpy(buffer, address+offset);
+	else
+		*buffer = 0;
+	return result - offset; // could be negative!
 }
 
 int OSCMessage::getAddress(char * buffer, int offset, int len){
-    strncpy(buffer, address+offset, len);
+	int result = strlen(address);
+	
+	if (result > offset)
+	{
+		strncpy(buffer, address+offset, len); // N.B. NOT guaranteed to null-terminate! So...
+		buffer[len-1] = 0; // ...prevent strlen() blowing up
+	}
+	else
+		*buffer = 0;
 	return strlen(buffer);
 }
+
+int OSCMessage::getAddressLength(int offset)
+{
+	int result = (int) strlen(address) - offset;
+	if (result < 0) // offset past end!
+		result = 0; // do the best we can
+	return result;
+}
+
 
 OSCMessage& OSCMessage::setAddress(const char * _address){
     //free the previous address

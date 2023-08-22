@@ -271,8 +271,9 @@ public:
 	//put the address in the buffer
 	int getAddress(char * buffer, int offset = 0);
 	int getAddress(char * buffer, int offset, int len);
-
-	// TODO: int getAddressLength(int offset = 0);
+	
+	// Find out address length so we can create a buffer
+	int getAddressLength(int offset = 0);
 
 
 /*=============================================================================

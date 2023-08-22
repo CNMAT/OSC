@@ -106,22 +106,21 @@ Returns the double at the given position. NOTE: double is not supported by most 
 
 ### `int getString(int position, char * strBuffer)`
 
-Copy the string’s characters into the `strBuffer’, without any safetcheck’. 
+Copy the string’s characters into the `strBuffer`, without any safety check. 
 Returns the number of copied characters. 
 
 ### `int getString(int position, char * strBuffer, int length)`
 
-Copy the string’s characters into the `strBuffer’, after checking that this doesn’t exceed the buffer’s ‘length’. 
-Returns the number of copied characters. 
+Copy the string’s characters into the `strBuffer`, after checking that this doesn’t exceed the buffer’s `length`. 
+Returns the number of copied characters. NOTE that if the string length is greater than the available buffer length, then NO characters are copied.
 
 ### `int getString(int position, char * strBuffer, int length, int offset, int size)`
 
-Copy `size` number of characters from the given ‘offset’ into the `strBuffer’, after checking that this doesn’t exceed the buffer’s ‘length’. Returns the number of copied characters. 
-
+Copy `size` number of characters from the given `offset` into the `strBuffer`, after checking that this doesn’t exceed the buffer’s `length`. Returns `size`, even if the number of copied characters is lower. 
 ```C++
 char str[8];
 //fill str with 8 characters from the 0th datum
-msg.getString(str, 8, 0, 8);
+msg.getString(0, str, 8, 0, 8);
 ```
 
 ### `int getBlob(int position, uint8_t * blobBuffer)`
@@ -130,10 +129,15 @@ Directly copy the blob’s bytes into the `blob` buffer (without safety-check).
 Returns the number of bytes from the blob. 
 
 
+### `int getBlob(int position, uint8_t * blobBuffer, int length)`
+
+Copy the blob's bytes into the given `blobBuffer`, if the blob's size doesn’t exceed the blobBuffer's `length`. 
+Returns the number of bytes copied from the blob. NOTE that if the blob length is greater than the available buffer length, then NO bytes are copied.
+
 ### `int getBlob(int position, uint8_t * blobBuffer, int length, int offset, int size)`
 
-Copy ‘size’ bytes from the blob, starting from ‘offset’,  into the given `blobBuffer’, if the size doesn’t exceed the buffer’s (or the blob’s) ‘length’. 
-Returns the number of bytes copied from the blob. 
+Copy `size` bytes from the blob, starting from `offset`,  into the given `blobBuffer`, if the size doesn’t exceed the buffer’s  `length` or the blob’s data length. 
+Returns the number of bytes copied from the blob. NOTE that if the requested size is greater than *either* the available buffer length *or* the (partial) blob length, then NO bytes are copied.
 
 
 ### `int getBlobLength(int position)`
@@ -194,10 +198,18 @@ Returns the size of the OSCMessage in bytes (if everything is 32-bit aligned).
 
 Set the address of the OSCMessage. 
 
-### `OSCMessage& getAddress(char * str, int offset=0)`
+### `int getAddress(char * str, int offset=0)`
 
-Copy the address of the OSCMessage into the `str` buffer. Copy after the given address offset (defaults to 0).
+Copy the address of the OSCMessage into the `str` buffer. Copy after the given address `offset` (defaults to 0). Returns the length of the resulting string. If the offset is past the end of the address an empty string / zero length are returned.
 
+### `int getAddress(char * str, int offset, int len)`
+
+Copy a maximum of len characters of the address of the OSCMessage into the `str` buffer, starting at at the given address `offset`. Returns the length of the resulting string. If the offset is past the end of the address an empty string / zero length are returned.
+
+### `int getAddressLength(int offset=0)`
+
+Returns the length of the OSCMessage's address, starting after the given address `offset` (defaults to 0). If the offset is 
+greater than the address length then it returns zero.
 
 ## Send Receive
 
@@ -215,7 +227,7 @@ Add the incoming byte to the OSCMessage where it will be decoded.
 
 ### `OSCMessage& fill(uint8_t * bytes, int length)`
 
-Add and decode the array of bytes as an OSCMessage. 
+Add and decode the array of `bytes` as an OSCMessage. 
 
 
 
@@ -223,7 +235,7 @@ Add and decode the array of bytes as an OSCMessage.
 
 ### `bool fullMatch( const char * pattern, int offset = 0)`
 
-Returns true if the message's address is a full match to the given pattern after the offset. 
+Returns true if the message's address is a full match to the given `pattern` after the `offset`. 
 
 ```C++
 OSCMessage msg("/a/0");
@@ -232,7 +244,7 @@ msg.fullMatch("/0", 2); // ->returns true
 
 ### `int match( const char * pattern, int offset = 0)`
 
-Returns the number of matched characters of the message's address against the given pattern (optionally with an offset). Unlike `fullMatch`, `match` allows for partial matches
+Returns the number of matched characters of the message's address against the given `pattern` (optionally with an `offset`). Unlike `fullMatch`, `match` allows for partial matches
 
 ```C++
 OSCMessage msg("/a/0");
@@ -241,11 +253,11 @@ msg.match("/a"); // ->returns 2
 
 ### `bool dispatch(const char * pattern, void (*callback)(OSCMessage &), int offset = 0)`
 
-Invoke the given callback if the address if a full match with the pattern (after the offset). The message is passed into the callback function. Returns true if the pattern was a match and the callback function was invoked. 
+Invoke the given `callback` if the address is a full match with the `pattern` (after the `offset`). The message is passed into the callback function. Returns true if the pattern was a match and the callback function was invoked. 
 
 ### `bool route(const char * pattern, void (*callback)(OSCMessage &, int), int offset = 0)`
 
-Invoke the given callback if the address if a match with the pattern (after the offset). The OSCMessage and the address offset is passed into the callback function. Returns true if the pattern was a match and the callback function was invoked. 
+Invoke the given `callback` if the address if a match with the `pattern` (after the `offset`). The OSCMessage and the address offset is passed into the callback function. Returns true if the pattern was a match and the callback function was invoked. 
 
 ```C++
 //define a callback function for matching messages
@@ -292,7 +304,7 @@ Construct the bundle with a timetag. timetag defaults to 0 (immediate).
 
 ### `OSCMessage & add(char * address)`
 
-Create a new message with the given address in the bundle. Returns the newly created OSCMessage. 
+Create a new message with the given `address` in the bundle. Returns the newly created OSCMessage. 
 
 ```C++
 //create a new OSCMessage and add some data to it
@@ -304,7 +316,7 @@ bundle.add("/message").add("data");
 
 ### `OSCMessage * getOSCMessage(int position)`
 
-Return the OSCMessage in the bundle at the given position.
+Return the OSCMessage in the bundle at the given `position`.
 
 ```C++
 OSCBundle bundle
@@ -329,7 +341,7 @@ bundle.getOSCMessage("/b");//returns the second OSCMessage in the bundle
 
 ### `bool dispatch(const char * pattern, void (*callback)(OSCMessage&), int offset = 0)`
 
-Invoke the callback function with all messages in the bundle which match the given pattern after the offset. 
+Invoke the `callback` function with all messages in the bundle which match the given pattern after the offset. 
 
 ```C++
 bundle.add("/a/0");
@@ -339,7 +351,7 @@ bundle.dispatch("/0", dispatchZero, 2);
 
 ### `bool route(const char * pattern, void (*callback)(OSCMessage &, int), int offset = 0)`
 
-Invoke the callback with all the OSCMessages in the bundle which match the given pattern. `route` allows for partial matches. 
+Invoke the `callback` with all the OSCMessages in the bundle which match the given `pattern`. `route` allows for partial matches. 
 
 
 
