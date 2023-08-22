@@ -375,7 +375,7 @@ bool OSCMessage::fullMatch( const char * pattern, int addr_offset){
 	return (ret==3);
 }
 
-bool OSCMessage::dispatch(const char * pattern, void (*callback)(OSCMessage &), int addr_offset){
+bool OSCMessage::dispatch(const char * pattern, std::function<void(OSCMessage &)> callback, int addr_offset){
 	if (fullMatch(pattern, addr_offset)){
 		callback(*this);
 		return true;
@@ -384,7 +384,7 @@ bool OSCMessage::dispatch(const char * pattern, void (*callback)(OSCMessage &), 
 	}
 }
 
-bool OSCMessage::route(const char * pattern, void (*callback)(OSCMessage &, int), int initial_offset){
+bool OSCMessage::route(const char * pattern, std::function<void(OSCMessage &, int)> callback, int initial_offset){
 	int match_offset = match(pattern, initial_offset);
 	if (match_offset>0){
 		callback(*this, match_offset + initial_offset);
