@@ -29,8 +29,6 @@
 
 
 #if defined(__AVR_ATmega32U4__)  || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined (__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__) || defined (__AVR_ATtiny25__) || defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__) || defined(__AVR_AT90USB646__) || defined(__AVR_AT90USB1286__)    || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega328_) ||   defined(__AVR_ATmega128__)
-
-
 #define BOARD_HAS_ANALOG_PULLUP
 #endif
 
@@ -40,8 +38,7 @@
 #define NUM_ANALOG_INPUTS NUM_ANALOG_PINS
 #define NUM_DIGITAL_INPUTS NUM_DIGITAL_PINS
 #define LED_BUILTIN PIN_LED1
-#define BOARD_HAS_USB_SERIAL
-#define thisBoardsSerialUSB Serial
+
 #endif
 
 #if defined(_SAMD21_)
@@ -50,19 +47,32 @@
 #if defined(ARDUINO_SAMD_ZERO)
 // Adafruit breaks with tradition here
 #define thisBoardsSerialUSB Serial
+typedef decltype(Serial) actualUSBtype;
+
 #else
 #define thisBoardsSerialUSB SerialUSB
+typedef decltype(SerialUSB) actualUSBtype;
+
 #endif
 #elif defined(__SAM3X8E__)
 
 #define BOARD_HAS_USB_SERIAL
 // Required for Serial on Zero based boards
 #define thisBoardsSerialUSB SerialUSB
+typedef decltype(SerialUSB) actualUSBtype;
+
 // defined(__SAM3X8E__)
-#elif  defined(ARDUINO_USB_CDC_ON_BOOT)
+#elif  defined(ARDUINO_USB_CDC_ON_BOOT) || defined(CORE_TEENSY)  || defined(__AVR_ATmega32U4__) || (defined(__PIC32MX__) || defined(__PIC32MZ__))
 #define BOARD_HAS_USB_SERIAL
 #define thisBoardsSerialUSB Serial
+typedef decltype(Serial) actualUSBtype;
+#elif  defined(ARDUINO_ARCH_RP2040)
+#define BOARD_HAS_USB_SERIAL
+#define thisBoardsSerialUSB Serial
+typedef decltype(Serial) actualUSBtype;
+
 #endif
+
 #ifndef analogInputToDigitalPin
 int analogInputToDigitalPin(int i);
 #endif
