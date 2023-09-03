@@ -53,16 +53,16 @@
 #else
 #define thisBoardsSerialUSB SerialUSB
 #endif
-#endif
-// missing specs for Arduino Due
-#if defined(__SAM3X8E__)
+#elif defined(__SAM3X8E__)
 
 #define BOARD_HAS_USB_SERIAL
 // Required for Serial on Zero based boards
 #define thisBoardsSerialUSB SerialUSB
-
-#endif // defined(__SAM3X8E__)
-
+// defined(__SAM3X8E__)
+#elif  defined(ARDUINO_USB_CDC_ON_BOOT)
+#define BOARD_HAS_USB_SERIAL
+#define thisBoardsSerialUSB Serial
+#endif
 #ifndef analogInputToDigitalPin
 int analogInputToDigitalPin(int i);
 #endif

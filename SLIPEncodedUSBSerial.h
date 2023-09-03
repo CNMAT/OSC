@@ -10,7 +10,7 @@ Extends the Serial class to encode SLIP over serial
 #include <Stream.h>
 
 
-#if (defined(TEENSYDUINO) && (defined(USB_SERIAL) || defined(USB_DUAL_SERIAL) || defined(USB_TRIPLE_SERIAL) || defined(USB_SERIAL_HID) || defined(USB_MIDI_SERIAL) || defined(USB_MIDI_AUDIO_DUAL_SERIAL) || defined(USB_MIDI4_SERIAL) || defined(USB_MIDI16_SERIAL) || defined(USB_MIDI_AUDIO_SERIAL) || defined(USB_MIDI16_AUDIO_SERIAL))) || (!defined(TEENSYDUINO) && defined(__AVR_ATmega32U4__)) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_))  || defined(_SAMD21_) || (defined(__PIC32MX__) || defined(__PIC32MZ__))
+#if (defined(TEENSYDUINO) && (defined(USB_SERIAL) || defined(USB_DUAL_SERIAL) || defined(USB_TRIPLE_SERIAL) || defined(USB_SERIAL_HID) || defined(USB_MIDI_SERIAL) || defined(USB_MIDI_AUDIO_DUAL_SERIAL) || defined(USB_MIDI4_SERIAL) || defined(USB_MIDI16_SERIAL) || defined(USB_MIDI_AUDIO_SERIAL) || defined(USB_MIDI16_AUDIO_SERIAL))) || (!defined(TEENSYDUINO) && defined(__AVR_ATmega32U4__)) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_))  || defined(_SAMD21_) || defined(__PIC32MX__) || defined(__PIC32MZ__) || defined(ARDUINO_USB_CDC_ON_BOOT)
 
 
 //import the serial USB object
@@ -22,7 +22,7 @@ Extends the Serial class to encode SLIP over serial
 #include <usb_api.h>
 #elif defined(__SAM3X8E__)  || defined(_SAMD21_) 
 #include <USB/USBAPI.h>
-#elif (defined(__PIC32MX__) || defined(__PIC32MZ__))
+#elif (defined(__PIC32MX__) || defined(__PIC32MZ__) || defined(ARDUINO_USB_CDC_ON_BOOT))
 #include <USB.h>
 #elif defined(__AVR_ATmega32U4__)
 #include "USBAPI.h"
@@ -48,8 +48,10 @@ private:
 #elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__) || defined(_SAMD21_)  || defined(__ARM__)
 Serial_
     
-#elif (defined(__PIC32MX__) || defined(__PIC32MZ__))
+#elif (defined(__PIC32MX__) || defined(__PIC32MZ__) )
     CDCACM
+#elif defined(ARDUINO_USB_CDC_ON_BOOT)
+	HWCDC
 #else
 #error Unknown USBserial type	
 #endif
@@ -68,8 +70,10 @@ public:
 #elif defined(__SAM3X8E__) || defined(__AVR_ATmega32U4__)  || defined(_SAMD21_)  || defined(__ARM__)
     Serial_
                          
-#elif (defined(__PIC32MX__) || defined(__PIC32MZ__))
+#elif (defined(__PIC32MX__) || defined(__PIC32MZ__) )
     CDCACM
+#elif defined(ARDUINO_USB_CDC_ON_BOOT)
+	HWCDC
 #else
 #error Unknown USBserial type
 #endif
@@ -77,7 +81,7 @@ public:
 	
 	int available();
 	int read();
-    int readBytes( uint8_t *buffer, size_t size);
+    size_t readBytes( uint8_t *buffer, size_t size);
 
 	int peek();
 	void flush();
