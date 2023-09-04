@@ -220,6 +220,10 @@ public:
 	void begin(unsigned long baudrate){
 		serial->begin(baudrate);
 	}
+	// for bluetooth
+	void begin(char *name){
+		serial->begin(name);
+	}
 	//SLIP specific method which begins a transmitted packet
 	void beginPacket() { 	serial->write(eot); }
 
@@ -264,8 +268,25 @@ typedef decltype(Serial) actualUSBtype;
 using  SLIPEncodedUSBSerial =  _SLIPSerial<actualUSBtype>;
 template <> void _SLIPSerial<actualUSBtype>::endPacket(){
 		serial->write(eot);
+#if defined(CORE_TEENSY)
   		serial->send_now();
+#endif
 }
 #endif
 
+// Bluetooth Example
+// #include "BluetoothSerial.h"
+// #if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
+// BluetoothSerial bluetoothserialinstance;
+// SLIPEncodedBluetoothSerial SLIPSerial(bluetoothserialinstance);
+// #endif
+
+#if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
+#include "BluetoothSerial.h"
+using  SLIPEncodedBluetoothSerial =  _SLIPSerial<BluetoothSerial>;
+template <>  void _SLIPSerial<BluetoothSerial>::endPacket(){
+		serial->write(eot);
+
+	}
+#endif
 #endif
