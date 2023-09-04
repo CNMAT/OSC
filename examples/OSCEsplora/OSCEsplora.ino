@@ -13,7 +13,7 @@
 #include <Esplora.h>
 #include <OSCBundle.h>
 //Teensy and Leonardo variants have special USB serial
-#include <SLIPEncodedUSBSerial.h>
+#include <SLIPEncodedSerial.h>
 
 #if !defined(__AVR_ATmega32U4__)
 #error select Arduino Esplora in board menu
@@ -148,6 +148,7 @@ unsigned int myReadChannel(byte channel) {
 
   return analogRead(MUX_COM_PIN);
 }
+
 
 SLIPEncodedUSBSerial SLIPSerial(Serial);
 void setup() {

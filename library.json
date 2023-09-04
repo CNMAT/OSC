@@ -20,11 +20,6 @@
     "url": "https://github.com/CNMAT/OSC.git"
   },
   "frameworks": "arduino",
-  "platforms": [
-    "atmelavr",
-    "atmelsam",
-    "teensy",
-    "espressif32",
-    "espressif8266"
+  "platforms": "*"
   ]
 }

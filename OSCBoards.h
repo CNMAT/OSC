@@ -10,7 +10,6 @@
 #define _OSCBoards_h
 
 
-
 #if defined(__MK20DX128__) ||  defined(__MK20DX256__)  || defined(__MKL26Z64__) || defined(__MK66FX1M0__)
 // Teensy 3.0  3.1  3.1LC 3.2 3.6
 #define BOARD_HAS_CAPACITANCE_SENSING
@@ -41,37 +40,6 @@
 
 #endif
 
-#if defined(_SAMD21_)
-#define BOARD_HAS_USB_SERIAL
-// Required for Serial on Zero based boards
-#if defined(ARDUINO_SAMD_ZERO)
-// Adafruit breaks with tradition here
-#define thisBoardsSerialUSB Serial
-typedef decltype(Serial) actualUSBtype;
-
-#else
-#define thisBoardsSerialUSB SerialUSB
-typedef decltype(SerialUSB) actualUSBtype;
-
-#endif
-#elif defined(__SAM3X8E__)
-
-#define BOARD_HAS_USB_SERIAL
-// Required for Serial on Zero based boards
-#define thisBoardsSerialUSB SerialUSB
-typedef decltype(SerialUSB) actualUSBtype;
-
-// defined(__SAM3X8E__)
-#elif  defined(ARDUINO_USB_CDC_ON_BOOT) || defined(CORE_TEENSY)  || defined(__AVR_ATmega32U4__) || (defined(__PIC32MX__) || defined(__PIC32MZ__))
-#define BOARD_HAS_USB_SERIAL
-#define thisBoardsSerialUSB Serial
-typedef decltype(Serial) actualUSBtype;
-#elif  defined(ARDUINO_ARCH_RP2040)
-#define BOARD_HAS_USB_SERIAL
-#define thisBoardsSerialUSB Serial
-typedef decltype(Serial) actualUSBtype;
-
-#endif
 
 #ifndef analogInputToDigitalPin
 int analogInputToDigitalPin(int i);

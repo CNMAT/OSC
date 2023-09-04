@@ -4,13 +4,14 @@
 #include <OSCBoards.h>
 #include <OSCBundle.h>
 
-#ifdef BOARD_HAS_USB_SERIAL
-#include <SLIPEncodedUSBSerial.h>
-SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
-#else
 #include <SLIPEncodedSerial.h>
-SLIPEncodedSerial SLIPSerial(Serial1);
+
+#ifdef BOARD_HAS_USB_SERIAL
+SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
+#else
+ SLIPEncodedSerial SLIPSerial(Serial); // Change to Serial1 or Serial2 etc. for boards with multiple serial ports that don’t have Serial
 #endif
+
 
 constexpr unsigned long blinkInterval = 2500;
 unsigned long blinkNow;
