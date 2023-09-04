@@ -228,7 +228,9 @@ public:
 	void beginPacket() { 	serial->write(eot); }
 
 	//signify the end of the packet with an EOT
-	void endPacket();
+	void endPacket(){
+		serial->write(eot);
+	}
 
 	void flush(){
 		serial->flush();
@@ -237,10 +239,10 @@ public:
 };
 
 using SLIPEncodedSerial =  _SLIPSerial<HardwareSerial> ;
-template <>  void _SLIPSerial<HardwareSerial>::endPacket(){
-		serial->write(eot);
+// template <>  void _SLIPSerial<HardwareSerial>::endPacket(){
+// 		serial->write(eot);
 
-	}
+// 	}
 
 #ifdef BOARD_HAS_USB_SERIAL
 
@@ -264,29 +266,27 @@ typedef decltype(SerialUSB) actualUSBtype;
 #define thisBoardsSerialUSB Serial
 typedef decltype(Serial) actualUSBtype;
 #endif
-
 using  SLIPEncodedUSBSerial =  _SLIPSerial<actualUSBtype>;
+#if defined(CORE_TEENSY)
 template <> void _SLIPSerial<actualUSBtype>::endPacket(){
 		serial->write(eot);
-#if defined(CORE_TEENSY)
   		serial->send_now();
-#endif
 }
 #endif
 
+#endif
+
 // Bluetooth Example
+
+// #if BOARD_HAS_BLUETOOTH_SERIAL
 // #include "BluetoothSerial.h"
-// #if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
 // BluetoothSerial bluetoothserialinstance;
 // SLIPEncodedBluetoothSerial SLIPSerial(bluetoothserialinstance);
-// #endif
 
-#if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
+#if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED) && !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32S3) && !defined(CONFIG_IDF_TARGET_ESP32S2)
 #include "BluetoothSerial.h"
 using  SLIPEncodedBluetoothSerial =  _SLIPSerial<BluetoothSerial>;
-template <>  void _SLIPSerial<BluetoothSerial>::endPacket(){
-		serial->write(eot);
+#define BOARD_HAS_BLUETOOTH_SERIAL
 
-	}
 #endif
 #endif
