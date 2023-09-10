@@ -11,7 +11,7 @@
 #ifdef BOARD_HAS_USB_SERIAL
 SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
 #else
- SLIPEncodedSerial SLIPSerial(Serial); // Change to Serial1 or Serial2 etc. for boards with multiple serial ports that don’t have Serial
+SLIPEncodedSerial SLIPSerial(Serial); // Change to Serial1 or Serial2 etc. for boards with multiple serial ports that don’t have Serial
 #endif
 
 
