@@ -198,7 +198,7 @@ OSCBundle& OSCBundle::send(Print &p){
         return *this;
     }
     //write the bundle header
-    static uint8_t header[] = {'#', 'b', 'u', 'n', 'd', 'l', 'e', 0};
+    static const uint8_t header[] = {'#', 'b', 'u', 'n', 'd', 'l', 'e', 0};
     p.write(header, 8);
     //write the timetag
 {
@@ -213,11 +213,11 @@ OSCBundle& OSCBundle::send(Print &p){
 
     //send the messages
     for (int i = 0; i < numMessages; i++){
-        OSCMessage * msg = getOSCMessage(i);
+        const auto msg = getOSCMessage(i);
         int msgSize = msg->bytes();
         //turn the message size into a pointer
-        uint32_t s32 = BigEndian((uint32_t) msgSize);
-        uint8_t * sptr = (uint8_t *) &s32;
+        const uint32_t s32 = BigEndian((uint32_t) msgSize);
+        const uint8_t * sptr = (uint8_t *) &s32;
         //write the message size
         p.write(sptr, 4);
         msg->send(p);
