@@ -1,0 +1,92 @@
+language: python
+python:
+  - "2.7"
+
+os: linux
+dist: trusty
+# Short duration job, use the container/without sudo image as it boots faster
+sudo: false
+# Use the latest Travis images since they are more up to date than the stable release.
+group: edge
+
+before_cache:
+  - rm -f $HOME/.cache/pip/log/debug.log # erase log
+
+cache:
+  directories:
+    - "~/.platformio"
+    - $HOME/.cache/pip # pip cache
+
+env:
+  global:
+   # Warnings are errors
+   - PLATFORMIO_BUILD_FLAGS="-Werror -Wno-error=deprecated-declarations"
+
+matrix:
+  fast_finish: true
+  include:
+    - env: BOARD=teensylc PLATFORMIO_CI_SRC=examples/UDPReceive
+    - env: BOARD=teensylc PLATFORMIO_CI_SRC=examples/UDPSendBundle
+    - env: BOARD=teensylc PLATFORMIO_CI_SRC=examples/UDPSendBundlewithTimeTag
+    - env: BOARD=teensylc PLATFORMIO_CI_SRC=examples/UDPSendMessage
+
+    - env: BOARD=teensy30 PLATFORMIO_CI_SRC=examples/UDPReceive
+    - env: BOARD=teensy30 PLATFORMIO_CI_SRC=examples/UDPSendBundle
+    - env: BOARD=teensy30 PLATFORMIO_CI_SRC=examples/UDPSendBundlewithTimeTag
+    - env: BOARD=teensy30 PLATFORMIO_CI_SRC=examples/UDPSendMessage
+
+    - env: BOARD=teensy31 PLATFORMIO_CI_SRC=examples/UDPReceive
+    - env: BOARD=teensy31 PLATFORMIO_CI_SRC=examples/UDPSendBundle
+    - env: BOARD=teensy31 PLATFORMIO_CI_SRC=examples/UDPSendBundlewithTimeTag
+    - env: BOARD=teensy31 PLATFORMIO_CI_SRC=examples/UDPSendMessage
+
+    - env: BOARD=teensy35 PLATFORMIO_CI_SRC=examples/UDPReceive
+    - env: BOARD=teensy35 PLATFORMIO_CI_SRC=examples/UDPSendBundle
+    - env: BOARD=teensy35 PLATFORMIO_CI_SRC=examples/UDPSendBundlewithTimeTag
+    - env: BOARD=teensy35 PLATFORMIO_CI_SRC=examples/UDPSendMessage
+
+    - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/UDPReceive
+    - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/UDPSendBundle
+    - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/UDPSendBundlewithTimeTag
+    - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/UDPSendMessage
+
+    - os: linux
+      dist: trusty
+      # Short duration job, would use the container/without sudo image as it boots faster, but we need a backported lintian, so don't
+      sudo: required
+      env: TASK='spellintian'
+      addons:
+        apt:
+          packages:
+           - moreutils
+    - os: linux
+      dist: trusty
+      # Short duration job, would use the container/without sudo image as it boots faster, but we need a backported lintian, so don't
+      sudo: required
+      env: TASK='spellintian-duplicates'
+      addons:
+        apt:
+          packages:
+           - moreutils
+    - os: linux
+      dist: trusty
+      env: TASK='codespell'
+      addons:
+        apt:
+          packages:
+           - moreutils
+
+  allow_failures:
+    - os: linux
+      dist: trusty
+      env: TASK='spellintian-duplicates'
+
+before_install:
+ - if [ "$TASK" == "spellintian" -o "$TASK" == "spellintian-duplicates" ]; then sudo add-apt-repository ppa:waja/trusty-backports -y; sudo apt-get update -qq; sudo apt-get install lintian -y; fi # Install a late enough lintian
+
+install:
+  - if [ -z "$TASK" ]; then pip install --upgrade platformio; fi
+  - if [ "$TASK" = "codespell" ]; then pip install --upgrade git+https://github.com/codespell-project/codespell.git; fi
+
+script:
+  - bash -ex .travis-ci.sh
