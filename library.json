@@ -12,14 +12,12 @@
     {
       "name": "Yotam Mann",
       "url": "http://yotammann.info"
-    }    
+    }
   ],
-  "repository":
-  {
+  "repository": {
     "type": "git",
     "url": "https://github.com/CNMAT/OSC.git"
   },
   "frameworks": "arduino",
   "platforms": "*"
-  ]
 }
