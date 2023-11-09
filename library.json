@@ -12,7 +12,7 @@
     {
       "name": "Yotam Mann",
       "url": "http://yotammann.info"
-    }    
+    }
   ],
   "repository":
   {
@@ -21,5 +21,4 @@
   },
   "frameworks": "arduino",
   "platforms": "*"
-  ]
 }
