@@ -91,7 +91,7 @@ public:
 	back:
 		uint8_t cnt = serial->available();
 		
-		if(cnt==0)
+		if((cnt==0) && (serial->peek()==-1))
 			return 0;
 		if(rstate==CHAR)
 		{
