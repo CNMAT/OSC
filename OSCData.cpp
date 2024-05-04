@@ -34,6 +34,13 @@ OSCData::OSCData(int32_t i){
 	bytes = 4;
 	data.i = i;
 }
+OSCData::OSCData(uint32_t i){
+	error = OSC_OK;
+	type = 'i';
+	bytes = 4;
+	data.i = i;
+}
+
 #ifndef ESPxx
 OSCData::OSCData(int i){
 	error = OSC_OK;
@@ -41,13 +48,14 @@ OSCData::OSCData(int i){
 	bytes = 4;
 	data.i = i;
 }
-#endif
 OSCData::OSCData(unsigned int i){
 	error = OSC_OK;
 	type = 'i';
 	bytes = 4;
 	data.i = i;
 }
+#endif
+
 #if defined(__SAM3X8E__)
 OSCData::OSCData(int16_t i){
 	error = OSC_OK;
