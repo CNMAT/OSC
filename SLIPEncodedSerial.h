@@ -74,7 +74,7 @@ public:
 		}
 		if (rstate==FIRSTEOT)
 		{
-			if(serial->available())
+			if(serial->available() || (serial->peek() != -1))
 			{
 				uint8_t c =serial->peek();
 				if(c==eot)
@@ -91,7 +91,7 @@ public:
 	back:
 		uint8_t cnt = serial->available();
 		
-		if(cnt==0)
+		if((cnt==0) && (serial->peek()==-1))
 			return 0;
 		if(rstate==CHAR)
 		{
@@ -183,7 +183,7 @@ public:
 	}
 	// as close as we can get to correct behavior
 	int peek(){
-		uint8_t c = serial->peek();
+		int c = serial->peek();
 		if(rstate==SLIPESC)
 		{
 			if(c==slipescend)
