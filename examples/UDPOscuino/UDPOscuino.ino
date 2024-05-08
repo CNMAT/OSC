@@ -3,10 +3,10 @@
 // system, analog and digital pin control and monitoring for Arduino
 // Yotam Mann and Adrian Freed
 
+#include <SPI.h>    
 
 #include <Ethernet.h>  
 #include <EthernetUdp.h> 
-#include <SPI.h>    
 #include <OSCBundle.h>
 #include <OSCBoards.h>
 
@@ -307,7 +307,7 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
   
 // this is disabled because many ethernet boards use the
 // LED pin for ethernet pin 13
-#if LED_BUILTIN!=13
+#if defined(LED_BUILTIN) && (LED_BUILTIN!=13)
 
   if (msg.fullMatch("/l", addrOffset)){
 

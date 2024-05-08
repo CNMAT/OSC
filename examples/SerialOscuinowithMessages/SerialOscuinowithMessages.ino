@@ -275,6 +275,7 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
   if (msg.fullMatch("/a", addrOffset)){
     { OSCMessage  msgOut("/s/a"); msgOut.add(NUM_ANALOG_INPUTS);         SLIPSerial.beginPacket();msgOut.send(SLIPSerial); SLIPSerial.endPacket(); }
   }
+#ifdef LED_BUILTIN
   if (msg.fullMatch("/l", addrOffset)){
 
     if (msg.isInt(0)){
@@ -285,6 +286,7 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
         { OSCMessage  msgOut("/s/l"); msgOut.add(i);         SLIPSerial.beginPacket();msgOut.send(SLIPSerial); SLIPSerial.endPacket(); }
         }
   }
+#endif
 }
 
 /**

@@ -258,6 +258,7 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
   if (msg.fullMatch("/a", addrOffset)){
     bundleOUT.add("/s/a").add(NUM_ANALOG_INPUTS);
   }
+#ifdef LED_BUILTIN
   if (msg.fullMatch("/l", addrOffset)){
     if (msg.isInt(0)){
              pinMode(LED_BUILTIN, OUTPUT);
@@ -267,6 +268,7 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
         bundleOUT.add("/s/l").add(i);
       }
   }
+#endif
 }
 
 /**
