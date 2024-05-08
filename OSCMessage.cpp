@@ -124,7 +124,7 @@ OSCData * OSCMessage::getOSCData(int position){
 	}
 }
 
-int32_t OSCMessage::getInt(int position){
+intOSC_t OSCMessage::getInt(int position){
 	const auto datum = getOSCData(position);
 	if (!hasError()){
 		return datum->getInt();
@@ -595,11 +595,11 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                     if (incomingBufferSize == 4){
                         //parse the buffer as an int
                         union {
-                            int32_t i;
+                            intOSC_t i;
                             uint8_t b[4];
                         } u;
                         memcpy(u.b, incomingBuffer, 4);
-                        int32_t dataVal = BigEndian(u.i);
+                        intOSC_t dataVal = BigEndian(u.i);
                         set(i, dataVal);
                         clearIncomingBuffer();
                     }

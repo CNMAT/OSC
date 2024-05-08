@@ -26,22 +26,15 @@ OSCData::OSCData(const char * s){
 }
 
 
-
-
-OSCData::OSCData(int32_t i){
+#if INT_MAX!=2147483647
+OSCData::OSCData(intOSC_t i){
 	error = OSC_OK;
 	type = 'i';
 	bytes = 4;
 	data.i = i;
 }
-OSCData::OSCData(uint32_t i){
-	error = OSC_OK;
-	type = 'i';
-	bytes = 4;
-	data.i = i;
-}
+#endif
 
-#ifndef ESPxx
 OSCData::OSCData(int i){
 	error = OSC_OK;
 	type = 'i';
@@ -54,7 +47,6 @@ OSCData::OSCData(unsigned int i){
 	bytes = 4;
 	data.i = i;
 }
-#endif
 
 #if defined(__SAM3X8E__)
 OSCData::OSCData(int16_t i){

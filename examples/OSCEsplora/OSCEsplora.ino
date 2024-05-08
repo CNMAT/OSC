@@ -107,13 +107,13 @@ void setup() {
   SLIPSerial.begin(115200);  // set this as high as you can reliably run on your platform
 }
 
-int32_t counter = 0;
-const int32_t serialnumber = 2;
-const int32_t num_components = 4;  //currently break the bundle up into 4 bundles
+intOSC_t counter = 0;
+const intOSC_t serialnumber = 2;
+const intOSC_t num_components = 4;  //currently break the bundle up into 4 bundles
 
 void loop() {
   OSCBundle bndl;
-  int32_t manifest_count = 1;
+  intOSC_t manifest_count = 1;
 
   if (!SLIPSerial.available()) {
 
@@ -134,22 +134,22 @@ void loop() {
     // the data at lowest level without calibration or scaling
     // The names are chosen to match what is on the silkscreen of the board where it is found
     SLIPSerial.beginPacket();
-    bndl.add("/mic").add((int32_t)Esplora.readMicrophone());
-    bndl.add("/temp/sensor/celsius").add((int32_t)Esplora.readTemperature(DEGREES_C));
-    bndl.add("/temp/sensor/fahrenheit").add((int32_t)Esplora.readTemperature(DEGREES_F));
-    bndl.add("/linear/potentiometer").add((int32_t)Esplora.readSlider());
-    bndl.add("/light/sensor").add((int32_t)Esplora.readLightSensor());
-    bndl.add("/switch/1").add((int32_t)Esplora.readButton(SWITCH_1));
-    bndl.add("/switch/2").add((int32_t)Esplora.readButton(SWITCH_2));
-    bndl.add("/switch/3").add((int32_t)Esplora.readButton(SWITCH_3));
-    bndl.add("/switch/4").add((int32_t)Esplora.readButton(SWITCH_4));
-    bndl.add("/joystick/X").add((int32_t)Esplora.readJoystickX());
-    bndl.add("/joystick/Y").add((int32_t)Esplora.readJoystickY());
-    bndl.add("/joystick/switch").add((int32_t)Esplora.readJoystickSwitch());
-    bndl.add("/joystick/switch/1").add((int32_t)Esplora.readButton(JOYSTICK_DOWN));
-    bndl.add("/joystick/switch/2").add((int32_t)Esplora.readButton(JOYSTICK_LEFT));
-    bndl.add("/joystick/switch/3").add((int32_t)Esplora.readButton(JOYSTICK_UP));
-    bndl.add("/joystick/switch/4").add((int32_t)Esplora.readButton(JOYSTICK_RIGHT));
+    bndl.add("/mic").add((intOSC_t)Esplora.readMicrophone());
+    bndl.add("/temp/sensor/celsius").add((intOSC_t)Esplora.readTemperature(DEGREES_C));
+    bndl.add("/temp/sensor/fahrenheit").add((intOSC_t)Esplora.readTemperature(DEGREES_F));
+    bndl.add("/linear/potentiometer").add((intOSC_t)Esplora.readSlider());
+    bndl.add("/light/sensor").add((intOSC_t)Esplora.readLightSensor());
+    bndl.add("/switch/1").add((intOSC_t)Esplora.readButton(SWITCH_1));
+    bndl.add("/switch/2").add((intOSC_t)Esplora.readButton(SWITCH_2));
+    bndl.add("/switch/3").add((intOSC_t)Esplora.readButton(SWITCH_3));
+    bndl.add("/switch/4").add((intOSC_t)Esplora.readButton(SWITCH_4));
+    bndl.add("/joystick/X").add((intOSC_t)Esplora.readJoystickX());
+    bndl.add("/joystick/Y").add((intOSC_t)Esplora.readJoystickY());
+    bndl.add("/joystick/switch").add((intOSC_t)Esplora.readJoystickSwitch());
+    bndl.add("/joystick/switch/1").add((intOSC_t)Esplora.readButton(JOYSTICK_DOWN));
+    bndl.add("/joystick/switch/2").add((intOSC_t)Esplora.readButton(JOYSTICK_LEFT));
+    bndl.add("/joystick/switch/3").add((intOSC_t)Esplora.readButton(JOYSTICK_UP));
+    bndl.add("/joystick/switch/4").add((intOSC_t)Esplora.readButton(JOYSTICK_RIGHT));
     bndl.add("/accelerometer/x").add(Esplora.readAccelerometer(X_AXIS));
     bndl.add("/accelerometer/y").add(Esplora.readAccelerometer(Y_AXIS));
     bndl.add("/accelerometer/z").add(Esplora.readAccelerometer(Z_AXIS));
@@ -199,10 +199,10 @@ void loop() {
     SLIPSerial.beginPacket();
     bndl.add("/connector/white/left").add(myReadChannel(CH_MIC + 1) * oneover1023);
     bndl.add("/connector/white/right").add(myReadChannel(CH_MIC + 2) * oneover1023);
-    bndl.add("/led/red").add((int32_t)Esplora.readRed());
-    bndl.add("/led/green").add((int32_t)Esplora.readGreen());
-    bndl.add("/led/blue").add((int32_t)Esplora.readBlue());
-    bndl.add("/led/rgb").add((int32_t)Esplora.readRed()).add((int32_t)Esplora.readGreen()).add((int32_t)Esplora.readBlue());
+    bndl.add("/led/red").add((intOSC_t)Esplora.readRed());
+    bndl.add("/led/green").add((intOSC_t)Esplora.readGreen());
+    bndl.add("/led/blue").add((intOSC_t)Esplora.readBlue());
+    bndl.add("/led/rgb").add((intOSC_t)Esplora.readRed()).add((intOSC_t)Esplora.readGreen()).add((intOSC_t)Esplora.readBlue());
     bndl.add("/connector/orange/right").add(digitalRead(3) == HIGH);
     bndl.add("/connector/orange/left").add(digitalRead(11) == HIGH);
     bndl.add("/vendor").add("Arduino");

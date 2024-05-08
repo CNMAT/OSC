@@ -48,6 +48,11 @@
 #if defined(ESP8266) || defined(ESP32)
 #define ESPxx
 #endif
+#if INT_MAX!=2147483647
+typedef int32_t intOSC_t;
+#else
+typedef int intOSC_t;
+#endif
 
 //ERRORS/////////////////////////////////////////////////
 typedef enum { OSC_OK = 0,
@@ -92,9 +97,11 @@ public:
 	OSCData(const char * s);
 #if defined(__SAM3X8E__)
 	OSCData (int16_t);
+	OSCData (uint16_t);
 #endif
-	OSCData (int32_t);
-#ifndef ESPxx
+
+	 OSCData (intOSC_t);
+#if INT_MAX!=2147483647
     OSCData (int);
 #endif
     OSCData (unsigned int);

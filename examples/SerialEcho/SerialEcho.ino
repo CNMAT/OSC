@@ -34,9 +34,9 @@ void loop(){
 
     if(!bndl.hasError())
     {
-        static int32_t sequencenumber=0;
+        static intOSC_t sequencenumber=0;
         // we can sneak an addition onto the end of the bundle
-        bndl.add("/micros").add((int32_t)micros()); // (int32_t) is the type of OSC Integers
+        bndl.add("/micros").add((intOSC_t)micros()); // (int32_t) is the type of OSC Integers
         bndl.add("/sequencenumber").add(sequencenumber++);
         bndl.add("/digital/5").add(digitalRead(5)==HIGH);
         bndl.add("/lsb").add((sequencenumber &1)==1);

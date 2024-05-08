@@ -138,7 +138,7 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
         strcat(outputAddress,"/u");
         //do the analog read and send the results
         {
-            OSCMessage  msgOut(outputAddress); msgOut.add((int32_t)analogRead(pin));
+            OSCMessage  msgOut(outputAddress); msgOut.add((intOSC_t)analogRead(pin));
             SLIPSerial.beginPacket();msgOut.send(SLIPSerial); SLIPSerial.endPacket();
         }  
       } //else without a pullup 
@@ -154,7 +154,7 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
         strcat(outputAddress, numToOSCAddress(pin));
         //do the analog read and send the results
         {
-            OSCMessage  msgOut(outputAddress); msgOut.add((int32_t)analogRead(pin));
+            OSCMessage  msgOut(outputAddress); msgOut.add((intOSC_t)analogRead(pin));
             SLIPSerial.beginPacket(); msgOut.send(SLIPSerial); SLIPSerial.endPacket();
         }
       }
@@ -267,7 +267,7 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
   }
 #endif
   if (msg.fullMatch("/m", addrOffset)){
-    { OSCMessage  msgOut("/s/m"); msgOut.add((int32_t)micros());         SLIPSerial.beginPacket();msgOut.send(SLIPSerial); SLIPSerial.endPacket(); }
+    { OSCMessage  msgOut("/s/m"); msgOut.add((intOSC_t)micros());         SLIPSerial.beginPacket();msgOut.send(SLIPSerial); SLIPSerial.endPacket(); }
   }
   if (msg.fullMatch("/d", addrOffset)){
     { OSCMessage  msgOut("/s/d"); msgOut.add(NUM_DIGITAL_PINS);         SLIPSerial.beginPacket();msgOut.send(SLIPSerial); SLIPSerial.endPacket(); }

@@ -68,10 +68,10 @@ void loop(){
               //and echo it back
              if(bndl.size() > 0)
              {
-                static int32_t sequencenumber=0;
+                static intOSC_t sequencenumber=0;
 
                 // we can sneak an addition onto the end of the bundle
-               bndl.add("/micros").add((int32_t)micros()); // (int32_t) is the type of OSC Integers
+               bndl.add("/micros").add((intOSC_t)micros()); // (intOSC_t) is the type of OSC Integers
                 bndl.add("/sequencenumber").add(sequencenumber++);
 
                 Udp.beginPacket(Udp.remoteIP(), outPort);

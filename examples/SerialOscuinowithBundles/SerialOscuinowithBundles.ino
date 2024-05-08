@@ -134,7 +134,7 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
         strcat(outputAddress, numToOSCAddress(pin));
         strcat(outputAddress,"/u");
        //do the analog read and send the results
-        bundleOUT.add(outputAddress).add((int32_t)analogRead(pin));       
+        bundleOUT.add(outputAddress).add((intOSC_t)analogRead(pin));       
       } //else without a pullup 
 #endif
 
@@ -148,7 +148,7 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
         strcpy(outputAddress, "/a");
         strcat(outputAddress, numToOSCAddress(pin));
         //do the analog read and send the results
-        bundleOUT.add(outputAddress).add((int32_t)analogRead(pin));         
+        bundleOUT.add(outputAddress).add((intOSC_t)analogRead(pin));         
       }
     }
   }
@@ -250,7 +250,7 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
   }
 #endif
   if (msg.fullMatch("/m", addrOffset)){
-    bundleOUT.add("/s/m").add((int32_t)micros());
+    bundleOUT.add("/s/m").add((intOSC_t)micros());
   }
   if (msg.fullMatch("/d", addrOffset)){
     bundleOUT.add("/s/d").add(NUM_DIGITAL_PINS);

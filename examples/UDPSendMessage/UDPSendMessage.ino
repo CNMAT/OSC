@@ -1,13 +1,11 @@
-#include <OSCMessage.h>
-
 /*
     Make an OSC message and send it over UDP
     
     Adrian Freed
  */
+#include <SPI.h>    
 #include <Ethernet.h>
 #include <EthernetUdp.h>
-#include <SPI.h>    
 #include <OSCMessage.h>
 
 EthernetUDP Udp;
@@ -30,7 +28,7 @@ void setup() {
 void loop(){
   //the message wants an OSC address as first argument
   OSCMessage msg("/analog/0");
-  msg.add((int32_t)analogRead(0));
+  msg.add((intOSC_t)analogRead(0));
   
   Udp.beginPacket(outIp, outPort);
     msg.send(Udp); // send the bytes to the SLIP stream

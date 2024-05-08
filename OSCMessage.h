@@ -237,7 +237,7 @@ public:
 	getters take a position as an argument
 =============================================================================*/
 
-	int32_t getInt(int);
+	intOSC_t getInt(int);
     osctime_t getTime(int);
 
 	float getFloat(int);

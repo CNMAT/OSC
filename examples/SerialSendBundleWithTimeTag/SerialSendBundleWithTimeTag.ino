@@ -29,10 +29,10 @@ void loop(){
     osctime_t timetag;
     
     //OSCBundle's add' returns the OSCMessage so the message's 'add' can be composed together
-    bndl.add("/analog/0").add((int32_t)adcRead(0, &timetag));
+    bndl.add("/analog/0").add((intOSC_t)adcRead(0, &timetag));
     bndl.add("/analog/0/time").add(timetag);
     
-    bndl.add("/analog/1").add((int32_t)adcRead(1, &timetag));
+    bndl.add("/analog/1").add((intOSC_t)adcRead(1, &timetag));
     bndl.add("/analog/1/time").add(timetag);
    
     bndl.add("/digital/5").add((digitalRead(5)==HIGH)?"HIGH":"LOW");
