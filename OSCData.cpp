@@ -3,6 +3,9 @@
 
 
 osctime_t zerotime = {0,0};
+rgba_t zeroRgba = {0,0,0,0};
+midi_t zeroMidi = {0,0,0,0};
+
 /*=============================================================================
 	CONSTRUCTORS
 
@@ -46,6 +49,18 @@ OSCData::OSCData(unsigned int i){
 	type = 'i';
 	bytes = 4;
 	data.i = i;
+}
+OSCData::OSCData(rgba_t rgba){
+	error = OSC_OK;
+	type = 'r';
+	bytes = 4;
+	data.rgba = rgba;
+}
+OSCData::OSCData(midi_t midi){
+	error = OSC_OK;
+	type = 'm';
+	bytes = 4;
+	data.midi = midi;
 }
 
 #if defined(__SAM3X8E__)
@@ -123,7 +138,7 @@ OSCData::OSCData (OSCData * datum){
 	type = datum->type;
 	bytes = datum->bytes;
 	if ( (type == 'i') || (type == 'f') || (type == 'd') || (type == 't')
-        || (type == 'h') || (type == 'c') || (type == 'r') || (type == 'm')
+        || (type == 'h') || (type == 'c') || (type == 'r') || (type == 'm') 
         )
     {
 		data = datum->data;
@@ -222,6 +237,20 @@ bool OSCData::getBoolean(){
     #else
         return -1;
     #endif
+}
+rgba_t OSCData::getRgba() {
+	if (type == 'r'){
+		return data.rgba;
+	} else {
+	return zeroRgba;
+	}
+}
+midi_t OSCData::getMidi() {
+	if (type == 'm'){
+		return data.midi;
+	} else {
+	return zeroMidi;
+	}
 }
 
 
