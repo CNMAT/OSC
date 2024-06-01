@@ -307,6 +307,12 @@ bool OSCMessage::isString(int position){
 bool OSCMessage::isDouble(int position){
 	return testType(position, 'd');
 }
+bool OSCMessage::isMidi(int position){
+	return testType(position, 'm');
+}
+bool OSCMessage::isRgba(int position){
+	return testType(position, 'r');
+}
 bool OSCMessage::isBoolean(int position){
 	return testType(position, 'T') || testType(position, 'F');
 }
@@ -613,6 +619,32 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                         } u;
                         memcpy(u.b, incomingBuffer, 4);
                         float dataVal = BigEndian(u.f);
+                        set(i, dataVal);
+                        clearIncomingBuffer();
+                    }
+                    break;
+                case 'r':
+                    if (incomingBufferSize == 4){
+                        //parse the buffer as a float
+                        union {
+                            oscrgba_t rgba;
+                            uint8_t b[4];
+                        } u;
+                        memcpy(u.b, incomingBuffer, 4);
+                        oscrgba_t dataVal = BigEndian(u.rgba);
+                        set(i, dataVal);
+                        clearIncomingBuffer();
+                    }
+                    break;
+                case 'm':
+                    if (incomingBufferSize == 4){
+                        //parse the buffer as a float
+                        union {
+                            oscmidi_t_t m;
+                            uint8_t b[4];
+                        } u;
+                        memcpy(u.b, incomingBuffer, 4);
+                        oscmidi_t_t dataVal = BigEndian(u.m);
                         set(i, dataVal);
                         clearIncomingBuffer();
                     }

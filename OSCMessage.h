@@ -243,6 +243,8 @@ public:
 	float getFloat(int);
 	double getDouble(int);
     bool getBoolean(int);
+    oscrgba_t getRgba(int);
+    oscmidi_t_t getMidi(int);
 
 	//return the copied string's length
 	int getString(int, char *);
@@ -294,6 +296,8 @@ public:
 	bool isDouble(int);
     bool isBoolean(int);
     bool isTime(int);
+    bool isRgba(int);
+    bool isMidi(int);
 
 /*=============================================================================
 	PATTERN MATCHING

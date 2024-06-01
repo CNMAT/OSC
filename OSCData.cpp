@@ -3,8 +3,8 @@
 
 
 osctime_t zerotime = {0,0};
-rgba_t zeroRgba = {0,0,0,0};
-midi_t zeroMidi = {0,0,0,0};
+oscrgba_t zeroRgba = {0,0,0,0};
+oscmidi_t_t zeroMidi = {0,0,0,0};
 
 /*=============================================================================
 	CONSTRUCTORS
@@ -50,13 +50,13 @@ OSCData::OSCData(unsigned int i){
 	bytes = 4;
 	data.i = i;
 }
-OSCData::OSCData(rgba_t rgba){
+OSCData::OSCData(oscrgba_t rgba){
 	error = OSC_OK;
 	type = 'r';
 	bytes = 4;
 	data.rgba = rgba;
 }
-OSCData::OSCData(midi_t midi){
+OSCData::OSCData(osc_oscmidi_t_t midi){
 	error = OSC_OK;
 	type = 'm';
 	bytes = 4;
@@ -238,14 +238,14 @@ bool OSCData::getBoolean(){
         return -1;
     #endif
 }
-rgba_t OSCData::getRgba() {
+oscrgba_t OSCData::getRgba() {
 	if (type == 'r'){
 		return data.rgba;
 	} else {
 	return zeroRgba;
 	}
 }
-midi_t OSCData::getMidi() {
+oscmidi_t_t OSCData::getMidi() {
 	if (type == 'm'){
 		return data.midi;
 	} else {
