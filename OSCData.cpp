@@ -4,7 +4,7 @@
 
 osctime_t zerotime = {0,0};
 oscrgba_t zeroRgba = {0,0,0,0};
-oscmidi_t_t zeroMidi = {0,0,0,0};
+oscmidi_t zeroMidi = {0,0,0,0};
 
 /*=============================================================================
 	CONSTRUCTORS
@@ -56,7 +56,7 @@ OSCData::OSCData(oscrgba_t rgba){
 	bytes = 4;
 	data.rgba = rgba;
 }
-OSCData::OSCData(osc_oscmidi_t_t midi){
+OSCData::OSCData(oscmidi_t midi){
 	error = OSC_OK;
 	type = 'm';
 	bytes = 4;
