@@ -50,6 +50,14 @@ OSCData::OSCData(unsigned int i){
 	bytes = 4;
 	data.i = i;
 }
+
+OSCData::OSCData(int64_t i){
+	error = OSC_OK;
+	type = 'h';
+	bytes = 8;
+	data.i = i;
+}
+
 OSCData::OSCData(oscrgba_t rgba){
 	error = OSC_OK;
 	type = 'r';
@@ -183,6 +191,17 @@ OSCData::OSCData(char t){
     otherwise returns NULL
 =============================================================================*/
 
+int64_t OSCData::getInt64(){
+    if (type == 'h'){
+        return data.i;
+    } else {
+    #ifndef ESPxx
+        return (int64_t)NULL;
+    #else
+        return -1;
+    #endif
+    }
+}
 int32_t OSCData::getInt(){
     if (type == 'i'){
         return data.i;

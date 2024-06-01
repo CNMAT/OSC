@@ -132,6 +132,14 @@ intOSC_t OSCMessage::getInt(int position){
         return 0;
     }
 }
+int64_t OSCMessage::getInt64(int position){
+	const auto datum = getOSCData(position);
+	if (!hasError()){
+		return datum->getInt64();
+    } else {
+        return 0;
+    }
+}
 osctime_t OSCMessage::getTime(int position){
 	const auto datum = getOSCData(position);
 	if (!hasError()){
@@ -148,7 +156,22 @@ float OSCMessage::getFloat(int position){
         return 0.0f;
     }
 }
-
+oscrgba_t OSCMessage::getRgba(int position) {
+	const auto datum = getOSCData(position);
+	if (!hasError()){
+		return datum->getRgba();
+	} else {
+	return zeroRgba;
+	}
+}
+oscmidi_t OSCMessage::getMidi(int position) {
+	const auto datum = getOSCData(position);
+	if (!hasError()){
+		return datum->getMidi();
+	} else {
+	return zeroMidi;
+	}
+}
 double OSCMessage::getDouble(int position){
 	const auto datum = getOSCData(position);
 	if (!hasError()){
@@ -282,7 +305,9 @@ bool OSCMessage::testType(int position, char type){
 bool OSCMessage::isInt(int position){
 	return testType(position, 'i');
 }
-
+bool OSCMessage::isInt64(int position){
+	return testType(position, 'h');
+}
 bool OSCMessage::isTime(int position){
 	return testType(position, 't');
 }
@@ -625,7 +650,7 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                     break;
                 case 'r':
                     if (incomingBufferSize == 4){
-                        //parse the buffer as a float
+                        //parse the buffer as a rgba
                         union {
                             oscrgba_t rgba;
                             uint8_t b[4];
@@ -636,9 +661,23 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                         clearIncomingBuffer();
                     }
                     break;
+                case 'h':
+                    if (incomingBufferSize == 8){
+                        //parse the buffer as a 64 bit integer
+                        union {
+                            int64_t longint;
+                            uint8_t b[4];
+                        } u;
+                        memcpy(u.b, incomingBuffer, 8);
+                        int64_t dataVal = BigEndian(u.longint);
+                        set(i, dataVal);
+                        clearIncomingBuffer();
+                    }
+                    break;
+
                 case 'm':
                     if (incomingBufferSize == 4){
-                        //parse the buffer as a float
+                        //parse the buffer as midi bytes
                         union {
                             oscmidi_t m;
                             uint8_t b[4];

@@ -65,7 +65,9 @@ typedef struct  {
 typedef struct  {
 	uint8_t port, status, channel, data1, data2;
 } oscmidi_t;
-
+extern osctime_t zerotime;
+extern oscrgba_t zeroRgba;
+extern oscmidi_t zeroMidi;
 class OSCData
 {
 
@@ -95,7 +97,7 @@ public:
 		int32_t i; //int
 		float f; //float
 		double d; //double
-        uint64_t l; //long
+        int64_t l; //long
 		uint8_t * b; //blob
 		oscrgba_t rgba;
 		oscmidi_t midi;
@@ -110,6 +112,7 @@ public:
 #endif
 
 	 OSCData (intOSC_t);
+	 OSCData (int64_t);
 #if INT_MAX!=2147483647
     OSCData (int);
 #endif
@@ -130,6 +133,8 @@ public:
 
     //GETTERS
     int32_t getInt();
+    int64_t getInt64();
+
     float getFloat();
     double getDouble();
     int getString(char *);

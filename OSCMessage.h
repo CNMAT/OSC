@@ -240,6 +240,7 @@ public:
 	intOSC_t getInt(int);
     osctime_t getTime(int);
 
+	int64_t getInt64(int);
 	float getFloat(int);
 	double getDouble(int);
     bool getBoolean(int);
@@ -289,6 +290,7 @@ public:
 =============================================================================*/
 
 	bool isInt(int);
+	bool isInt64(int);
 	bool isFloat(int);
 	bool isBlob(int);
 	bool isChar(int);
