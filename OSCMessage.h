@@ -244,7 +244,7 @@ public:
 	double getDouble(int);
     bool getBoolean(int);
     oscrgba_t getRgba(int);
-    oscmidi_t_t getMidi(int);
+    oscmidi_t getMidi(int);
 
 	//return the copied string's length
 	int getString(int, char *);

@@ -640,11 +640,11 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                     if (incomingBufferSize == 4){
                         //parse the buffer as a float
                         union {
-                            oscmidi_t_t m;
+                            oscmidi_t m;
                             uint8_t b[4];
                         } u;
                         memcpy(u.b, incomingBuffer, 4);
-                        oscmidi_t_t dataVal = BigEndian(u.m);
+                        oscmidi_t dataVal = BigEndian(u.m);
                         set(i, dataVal);
                         clearIncomingBuffer();
                     }

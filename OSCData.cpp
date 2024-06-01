@@ -245,7 +245,7 @@ oscrgba_t OSCData::getRgba() {
 	return zeroRgba;
 	}
 }
-oscmidi_t_t OSCData::getMidi() {
+oscmidi_t OSCData::getMidi() {
 	if (type == 'm'){
 		return data.midi;
 	} else {

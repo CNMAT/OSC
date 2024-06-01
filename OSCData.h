@@ -58,13 +58,13 @@ typedef int intOSC_t;
 typedef enum { OSC_OK = 0,
 	BUFFER_FULL, INVALID_OSC, ALLOCFAILED, INDEX_OUT_OF_BOUNDS
 } OSCErrorCode;
-typedef struct rgba {
+typedef struct  {
 	uint8_t r,g,b,a;
 	} oscrgba_t;
 	
-typedef struct midi {
+typedef struct  {
 	uint8_t port, status, channel, data1, data2;
-} oscmidi_t_t;
+} oscmidi_t;
 
 class OSCData
 {
@@ -98,7 +98,7 @@ public:
         uint64_t l; //long
 		uint8_t * b; //blob
 		oscrgba_t rgba;
-		oscmidi_t_t midi;
+		oscmidi_t midi;
         osctime_t time;
 	} data;
 
@@ -121,7 +121,7 @@ public:
 	OSCData (OSCData *);
     OSCData  (boolean);
     OSCData  (oscrgba_t);
-    OSCData  (oscmidi_t_t);
+    OSCData  (oscmidi_t);
 
     OSCData  (osctime_t);
 
@@ -142,7 +142,7 @@ public:
     int getBlobLength();
     bool getBoolean();
     oscrgba_t getRgba();
-    oscmidi_t_t getMidi();
+    oscmidi_t getMidi();
 
     osctime_t getTime();
 
