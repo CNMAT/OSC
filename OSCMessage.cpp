@@ -191,6 +191,14 @@ bool  OSCMessage::getBoolean(int position){
     }
 }
 
+oscevent_t  OSCMessage::getEvent(int position){
+	const auto datum = getOSCData(position);
+	if (!hasError()){
+		return datum->getEvent();
+    } else {
+        return OSC_NULL;
+    }
+}
 
 int OSCMessage::getString(int position, char * buffer){
     const auto datum = getOSCData(position);
@@ -337,6 +345,9 @@ bool OSCMessage::isMidi(int position){
 }
 bool OSCMessage::isRgba(int position){
 	return testType(position, 'r');
+}
+bool OSCMessage::isEvent(int position){
+	return testType(position, 'N') || testType(position, 'I');
 }
 bool OSCMessage::isBoolean(int position){
 	return testType(position, 'T') || testType(position, 'F');
@@ -666,7 +677,7 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                         //parse the buffer as a 64 bit integer
                         union {
                             int64_t longint;
-                            uint8_t b[4];
+                            uint8_t b[8];
                         } u;
                         memcpy(u.b, incomingBuffer, 8);
                         int64_t dataVal = BigEndian(u.longint);

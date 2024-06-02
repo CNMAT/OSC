@@ -68,6 +68,12 @@ typedef struct  {
 extern osctime_t zerotime;
 extern oscrgba_t zeroRgba;
 extern oscmidi_t zeroMidi;
+
+typedef enum {
+OSC_NULL, OSC_IMPULSE
+} oscevent_t;
+	
+	
 class OSCData
 {
 
@@ -102,6 +108,7 @@ public:
 		oscrgba_t rgba;
 		oscmidi_t midi;
         osctime_t time;
+        oscevent_t event;
 	} data;
 
 	//overload the constructor to account for all the types and sizes
@@ -125,7 +132,7 @@ public:
     OSCData  (boolean);
     OSCData  (oscrgba_t);
     OSCData  (oscmidi_t);
-
+	OSCData  (oscevent_t);
     OSCData  (osctime_t);
 
 	//destructor
@@ -148,6 +155,7 @@ public:
     bool getBoolean();
     oscrgba_t getRgba();
     oscmidi_t getMidi();
+    oscevent_t getEvent();
 
     osctime_t getTime();
 

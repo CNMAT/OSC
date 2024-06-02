@@ -246,6 +246,7 @@ public:
     bool getBoolean(int);
     oscrgba_t getRgba(int);
     oscmidi_t getMidi(int);
+    oscevent_t getEvent(int);
 
 	//return the copied string's length
 	int getString(int, char *);
@@ -300,6 +301,7 @@ public:
     bool isTime(int);
     bool isRgba(int);
     bool isMidi(int);
+    bool isEvent(int);
 
 /*=============================================================================
 	PATTERN MATCHING

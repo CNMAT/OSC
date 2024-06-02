@@ -5,6 +5,7 @@
 osctime_t zerotime = {0,0};
 oscrgba_t zeroRgba = {0,0,0,0};
 oscmidi_t zeroMidi = {0,0,0,0};
+oscevent_t zeroEvent = OSC_NULL;
 
 /*=============================================================================
 	CONSTRUCTORS
@@ -93,12 +94,17 @@ OSCData::OSCData(osctime_t t){
 	bytes = 8;
 	data.time = t;
 }
+OSCData::OSCData(oscevent_t event){
+	error = OSC_OK;
+	type = (event==OSC_IMPULSE)?'I':'N';
+	bytes = 0;
+}
+
 OSCData::OSCData(boolean b){
 	error = OSC_OK;
 	type = b?'T':'F';
 	bytes = 0;
 }
-
 
 OSCData::OSCData(double d){
 	error = OSC_OK;
@@ -256,6 +262,15 @@ bool OSCData::getBoolean(){
     #else
         return -1;
     #endif
+}
+oscevent_t OSCData::getEvent() {
+	if (type == 'N'){
+		return OSC_NULL;
+	} else if (type=='I'){
+		return OSC_IMPULSE;
+	} else {
+	return zeroEvent;
+	}
 }
 oscrgba_t OSCData::getRgba() {
 	if (type == 'r'){
