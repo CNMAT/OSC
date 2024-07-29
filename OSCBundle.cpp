@@ -277,7 +277,7 @@ void OSCBundle::decodeMessage(uint8_t incomingByte){
             //move onto the next message
             decodeState = MESSAGE_SIZE;
             clearIncomingBuffer();
-        } else if (incomingBufferSize > incomingMessageSize){
+        } else if (incomingMessageSize > 0 && incomingBufferSize > incomingMessageSize){
             error = INVALID_OSC;
         }
     }
@@ -294,6 +294,9 @@ void OSCBundle::decode(uint8_t incomingByte){
                 add();//add a simple message to the bundle
                 decodeMessage(incomingByte);
                 decodeState = MESSAGE;
+                //in this special case we initialize the message size
+                //to zero to skip the later error check
+                incomingMessageSize = 0;
             }
             break;
         case HEADER:
