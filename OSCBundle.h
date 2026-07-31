@@ -135,10 +135,17 @@ public:
     //gets the message the matches the address string
 	//will do regex matching
 	OSCMessage * getOSCMessage(char * addr);
-	
+
 	//get message by position
 	OSCMessage * getOSCMessage(int position);
-	
+
+	//the bundle's timetag, in host order.
+	//A received bundle reports the timetag it arrived with; one built without
+	//an explicit timetag reports immediatetime.
+	osctime_t getTimetag(){
+		return timetag;
+	}
+
 /*=============================================================================
     MATCHING
 =============================================================================*/

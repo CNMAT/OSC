@@ -106,7 +106,8 @@ def check(name, got, want):
 
 
 def main():
-    cases = {}
+    cases = {}     # name -> raw bytes,      from "<name> <hex>" lines
+    fields = {}    # name -> {key: value},   from "<name> k=v k=v" lines
     lines = []
     for line in sys.stdin:
         line = line.strip()
@@ -115,9 +116,11 @@ def main():
         lines.append(line)
         if line.startswith("#"):
             continue
-        name, _, hexbytes = line.partition(" ")
-        if all(c in "0123456789abcdef" for c in hexbytes) and hexbytes:
-            cases[name] = bytes.fromhex(hexbytes)
+        name, _, rest = line.partition(" ")
+        if "=" in rest:
+            fields[name] = dict(kv.split("=", 1) for kv in rest.split())
+        elif rest and all(c in "0123456789abcdef" for c in rest):
+            cases[name] = bytes.fromhex(rest)
 
     for line in lines:
         print("  " + line)
@@ -169,6 +172,22 @@ def main():
     check("roundtrip.bundle_timetag.timetag", timetag, 0x83AA7E8040000000)
     check("roundtrip.bundle_timetag.elements", elements,
           [("/a", ",i", [("i", 1)])])
+
+    # -- decoded values as the sketch sees them ------------------------------
+    check("decode.rgba", fields["decode.rgba"],
+          {"r": "11", "g": "22", "b": "33", "a": "44", "err": "0"})
+    check("decode.midi", fields["decode.midi"],
+          {"port": "01", "status": "92", "channel": "02",
+           "data1": "3c", "data2": "40", "err": "0"})
+    check("decode.midi_syscommon", fields["decode.midi_syscommon"],
+          {"port": "00", "status": "f2", "channel": "00",
+           "data1": "2a", "data2": "01", "err": "0"})
+    check("roundtrip.rgba", fields["roundtrip.rgba"],
+          {"r": "de", "g": "ad", "b": "be", "a": "ef", "err": "0"})
+    check("decode.bundle_timetag", fields["decode.bundle_timetag"],
+          {"seconds": "83aa7e80", "fraction": "40000000", "err": "0"})
+    check("default.bundle_timetag", fields["default.bundle_timetag"],
+          {"seconds": "00000000", "fraction": "00000001"})
 
     for name in PASS:
         print("  PASS %s" % name)

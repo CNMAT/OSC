@@ -378,6 +378,21 @@ received and forwarded re-sends its timetag unchanged.
 Up to 3.5.8 this was a raw `memcpy`, which byte-swapped the timetag on
 little-endian hosts.
 
+### `osctime_t getTimetag()`
+
+Returns the bundle's timetag in host order. A received bundle reports the
+timetag it arrived with; a bundle built without an explicit one reports
+`immediatetime`.
+
+```C++
+OSCBundle bundle;
+bundle.fill(packet, length);
+osctime_t t = bundle.getTimetag();
+```
+
+New in 4.0.0 — before that `timetag` was private with no accessor, so a
+received bundle's timetag could not be read from a sketch at all.
+
 ## Add OSCMessage
 
 ### `OSCMessage & add(char * address)`

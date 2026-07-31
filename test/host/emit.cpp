@@ -139,9 +139,22 @@ int main() {
 
         OSCBundle b;
         b.fill((uint8_t *) wire, sizeof(wire));
+
+        //and the sketch-visible timetag must match what arrived
+        osctime_t t = b.getTimetag();
+        printf("decode.bundle_timetag seconds=%08x fraction=%08x err=%d\n",
+               t.seconds, t.fractionofseconds, (int) b.hasError());
+
         Print p;
         b.send(p);
         dump("roundtrip.bundle_timetag", p);
+    }
+    {
+        //a bundle built without a timetag reports "immediately"
+        OSCBundle b;
+        osctime_t t = b.getTimetag();
+        printf("default.bundle_timetag seconds=%08x fraction=%08x\n",
+               t.seconds, t.fractionofseconds);
     }
     {
         // rgba round trip through encode -> decode
