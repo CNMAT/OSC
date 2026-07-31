@@ -29,6 +29,7 @@
 #include "OSCMessage.h"
 
 extern osctime_t zerotime;
+extern osctime_t immediatetime;
 class OSCBundle
 {
 
@@ -90,8 +91,9 @@ public:
 	CONSTRUCTORS / DESTRUCTOR
 =============================================================================*/
 		
-    //default timetag of
-      	OSCBundle(osctime_t = zerotime);
+    //default timetag of "immediately" - OSC 1.0 reserves the value 1 for that.
+    //(A timetag of 0 is a valid absolute time, 1900-01-01, not "immediately".)
+      	OSCBundle(osctime_t = immediatetime);
 
 	//DESTRUCTOR
 	~OSCBundle();

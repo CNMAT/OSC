@@ -58,16 +58,44 @@ typedef int intOSC_t;
 typedef enum { OSC_OK = 0,
 	BUFFER_FULL, INVALID_OSC, ALLOCFAILED, INDEX_OUT_OF_BOUNDS
 } OSCErrorCode;
+//OSC 1.0 'r': a 32-bit RGBA colour, sent as the four bytes r,g,b,a in that
+//order.  These are already in wire order - they must not be byte-swapped.
 typedef struct  {
 	uint8_t r,g,b,a;
 	} oscrgba_t;
-	
+
+//OSC 1.0 'm': a 4-byte MIDI message, sent as port id, status, data1, data2.
+//
+//OSC has no separate slot for the MIDI channel - a channel-voice channel lives
+//in the low nibble of the status byte.  `channel` is kept here as a
+//convenience and is folded into `status` when the message is encoded (see
+//oscMidiStatusByte below), so both of these put 0x92 on the wire:
+//
+//    oscmidi_t m = {1, 0x90, 2, 0x3C, 0x40};  //status + separate channel
+//    oscmidi_t m = {1, 0x92, 0, 0x3C, 0x40};  //channel already in the status
+//
+//On decode `status` holds the status byte exactly as received and `channel`
+//mirrors its low nibble for channel-voice messages, so a decoded message
+//re-encodes to the identical bytes.
 typedef struct  {
 	uint8_t port, status, channel, data1, data2;
 } oscmidi_t;
 extern osctime_t zerotime;
+//OSC 1.0 reserves the timetag value 1 for "immediately"; 0 is 1900-01-01
+extern osctime_t immediatetime;
 extern oscrgba_t zeroRgba;
 extern oscmidi_t zeroMidi;
+
+//merges oscmidi_t's convenience `channel` field into the MIDI status byte.
+//System messages (0xF0..0xFF) have no channel nibble and are left alone.
+static inline uint8_t oscMidiStatusByte(const oscmidi_t & m){
+	return (m.status < 0xF0) ? (uint8_t)(m.status | (m.channel & 0x0F)) : m.status;
+}
+
+//the channel a received status byte implies, or 0 if it carries no channel
+static inline uint8_t oscMidiChannelOf(uint8_t status){
+	return (status < 0xF0) ? (uint8_t)(status & 0x0F) : 0;
+}
 
 typedef enum {
 OSC_NULL, OSC_IMPULSE

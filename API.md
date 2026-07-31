@@ -76,6 +76,39 @@ Set the data at the given position to be a blob of the given length.
 
 Append a double precision floating point value to the OSCMessage. NOTE: double is not supported on most Arduino platforms. It will fall back to float, when double is not supported. 
 
+### `OSCMessage& add(oscrgba_t colour)`
+
+Append an OSC 1.0 `'r'` 32-bit RGBA colour. The four bytes go on the wire in
+`r`, `g`, `b`, `a` order.
+
+```C++
+oscrgba_t colour = {0x11, 0x22, 0x33, 0x44};   // r, g, b, a
+msg.add(colour);                               // wire: 11 22 33 44
+```
+
+### `OSCMessage& add(oscmidi_t midi)`
+
+Append an OSC 1.0 `'m'` 4-byte MIDI message. The four bytes go on the wire as
+port id, status, data1, data2.
+
+```C++
+typedef struct { uint8_t port, status, channel, data1, data2; } oscmidi_t;
+```
+
+OSC's `'m'` type has no separate slot for the MIDI channel — for channel-voice
+messages the channel lives in the low nibble of the status byte. `oscmidi_t`
+keeps `channel` as a convenience field and folds it into `status` when the
+message is encoded, so these are equivalent:
+
+```C++
+oscmidi_t m = {1, 0x90, 2, 0x3C, 0x40};   // status + separate channel
+oscmidi_t m = {1, 0x92, 0, 0x3C, 0x40};   // channel already in the status byte
+// both send: 01 92 3c 40  (port 1, note-on channel 2, note 60, velocity 64)
+```
+
+System messages (status `0xF0`–`0xFF`) carry no channel nibble and are sent
+with the status byte untouched.
+
 ## Get Data
 
 
@@ -103,6 +136,19 @@ Returns the boolean at the given position
 ### `double getDouble(int position)`
 
 Returns the double at the given position. NOTE: double is not supported by most Arduino platforms. This will fail silently if double is not supported.
+
+### `oscrgba_t getRgba(int position)`
+
+Returns the `'r'` RGBA colour at the given position, with `r`, `g`, `b`, `a`
+taken from the wire bytes in that order.
+
+### `oscmidi_t getMidi(int position)`
+
+Returns the `'m'` MIDI message at the given position. `status` holds the status
+byte exactly as received, and `channel` mirrors its low nibble for
+channel-voice messages (0 for system messages). Wire bytes `01 92 3c 40` decode
+to `{port: 1, status: 0x92, channel: 2, data1: 0x3C, data2: 0x40}`, which
+re-encodes to the identical four bytes.
 
 ### `int getString(int position, char * strBuffer)`
 
@@ -303,9 +349,14 @@ A bundle is a group of OSCMessages with a timetag.
 
 Construct an empty OSCBundle. 
 
-### `OSCBundle(osctime_t = zerotime)`
+### `OSCBundle(osctime_t = immediatetime)`
 
-Construct the bundle with a timetag. timetag defaults to 0 (immediate). 
+Construct the bundle with a timetag. The timetag defaults to `immediatetime`,
+the value OSC 1.0 reserves to mean "immediately" (seconds 0, fraction 1).
+
+Note that a timetag of 0 is **not** "immediately" — it is the absolute time
+1900-01-01. Versions up to 3.5.8 sent 0 here; use `zerotime` explicitly if you
+need the old behaviour.
 
 
 

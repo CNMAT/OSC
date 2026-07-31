@@ -15,6 +15,8 @@ getFloat	KEYWORD2
 getBoolean	KEYWORD2
 getTime	KEYWORD2
 getDouble	KEYWORD2
+getRgba	KEYWORD2
+getMidi	KEYWORD2
 getBlob	KEYWORD2
 getString	KEYWORD2
 getAddress	KEYWORD2
@@ -28,6 +30,8 @@ isString	KEYWORD2
 isBoolean	KEYWORD2
 isDouble	KEYWORD2
 isTime	KEYWORD2
+isRgba	KEYWORD2
+isMidi	KEYWORD2
 size	KEYWORD2
 bytes	KEYWORD2
 empty	KEYWORD2
@@ -35,6 +39,11 @@ OSCBundle	KEYWORD1
 OSCMessage	KEYWORD1
 OSCMatch	KEYWORD1
 OSCData	KEYWORD1
+oscrgba_t	KEYWORD1
+oscmidi_t	KEYWORD1
+osctime_t	KEYWORD1
+zerotime	LITERAL1
+immediatetime	LITERAL1
 endTransmission	KEYWORD1
 endofTransmission	KEYWORD1
 SLIPEncodedSerial	KEYWORD3

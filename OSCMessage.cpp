@@ -583,6 +583,18 @@ OSCMessage& OSCMessage::send(Print &p){
             ptr = (uint8_t *)    &d;
             p.write(ptr, 4);
 
+        } else if (datum->type == 'r'){
+            //'r' is a byte array, not a scalar: r,g,b,a already in wire order,
+            //so it must not go through BigEndian()
+            const oscrgba_t & c = datum->data.rgba;
+            uint8_t rgba[4] = { c.r, c.g, c.b, c.a };
+            p.write(rgba, 4);
+        } else if (datum->type == 'm'){
+            //'m' is a byte array too: port id, status, data1, data2.
+            //oscmidi_t's separate `channel` field folds into the status byte.
+            const oscmidi_t & m = datum->data.midi;
+            uint8_t midi[4] = { m.port, oscMidiStatusByte(m), m.data1, m.data2 };
+            p.write(midi, 4);
         } else if (datum->type == 'T' || datum->type == 'F')
                     { }
         else { // float or int
@@ -661,13 +673,12 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                     break;
                 case 'r':
                     if (incomingBufferSize == 4){
-                        //parse the buffer as a rgba
-                        union {
-                            oscrgba_t rgba;
-                            uint8_t b[4];
-                        } u;
-                        memcpy(u.b, incomingBuffer, 4);
-                        oscrgba_t dataVal = BigEndian(u.rgba);
+                        //the four bytes are r,g,b,a in wire order - no swap
+                        oscrgba_t dataVal;
+                        dataVal.r = incomingBuffer[0];
+                        dataVal.g = incomingBuffer[1];
+                        dataVal.b = incomingBuffer[2];
+                        dataVal.a = incomingBuffer[3];
                         set(i, dataVal);
                         clearIncomingBuffer();
                     }
@@ -688,13 +699,15 @@ void OSCMessage::decodeData(uint8_t incomingByte){
 
                 case 'm':
                     if (incomingBufferSize == 4){
-                        //parse the buffer as midi bytes
-                        union {
-                            oscmidi_t m;
-                            uint8_t b[4];
-                        } u;
-                        memcpy(u.b, incomingBuffer, 4);
-                        oscmidi_t dataVal = BigEndian(u.m);
+                        //port id, status, data1, data2 in wire order - no swap.
+                        //`status` is kept exactly as received and `channel`
+                        //mirrors its low nibble, so this re-encodes unchanged.
+                        oscmidi_t dataVal;
+                        dataVal.port = incomingBuffer[0];
+                        dataVal.status = incomingBuffer[1];
+                        dataVal.channel = oscMidiChannelOf(incomingBuffer[1]);
+                        dataVal.data1 = incomingBuffer[2];
+                        dataVal.data2 = incomingBuffer[3];
                         set(i, dataVal);
                         clearIncomingBuffer();
                     }

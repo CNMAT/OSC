@@ -3,8 +3,10 @@
 
 
 osctime_t zerotime = {0,0};
+//OSC 1.0's "immediately" timetag: the special value 1, not 0
+osctime_t immediatetime = {0,1};
 oscrgba_t zeroRgba = {0,0,0,0};
-oscmidi_t zeroMidi = {0,0,0,0};
+oscmidi_t zeroMidi = {0,0,0,0,0};
 oscevent_t zeroEvent = OSC_NULL;
 
 /*=============================================================================
@@ -68,6 +70,8 @@ OSCData::OSCData(oscrgba_t rgba){
 OSCData::OSCData(oscmidi_t midi){
 	error = OSC_OK;
 	type = 'm';
+	//4, not sizeof(oscmidi_t): `channel` is a convenience field that is folded
+	//into the status byte on the wire, so only four bytes are transmitted
 	bytes = 4;
 	data.midi = midi;
 }
