@@ -116,9 +116,15 @@ public:
         timetag = (osctime_t) t;
         return *this;
     }
-    //sets the timetag from a buffer
+    //sets the timetag from 8 bytes in OSC wire order (big-endian).
+    //A plain memcpy here would byte-swap the timetag on little-endian hosts,
+    //which is what send() reads back out.
     OSCBundle& setTimetag(uint8_t * buff){
-        memcpy(&timetag, buff, 8);
+        timetag.seconds = ((uint32_t) buff[0] << 24) | ((uint32_t) buff[1] << 16)
+                        | ((uint32_t) buff[2] <<  8) |  (uint32_t) buff[3];
+        timetag.fractionofseconds
+                        = ((uint32_t) buff[4] << 24) | ((uint32_t) buff[5] << 16)
+                        | ((uint32_t) buff[6] <<  8) |  (uint32_t) buff[7];
         return *this;
     }
     

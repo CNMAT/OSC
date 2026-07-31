@@ -358,7 +358,25 @@ Note that a timetag of 0 is **not** "immediately" — it is the absolute time
 1900-01-01. Versions up to 3.5.8 sent 0 here; use `zerotime` explicitly if you
 need the old behaviour.
 
+## Timetag
 
+### `OSCBundle& setTimetag(osctime_t t)`
+
+Set the bundle's timetag.
+
+```C++
+bundle.setTimetag(oscTime());       //now
+bundle.setTimetag(immediatetime);   //"immediately" (the default)
+```
+
+### `OSCBundle& setTimetag(uint8_t * buff)`
+
+Set the timetag from 8 bytes in OSC wire order (big-endian), the layout
+`send()` produces. This is what a decoded bundle uses, so a bundle that is
+received and forwarded re-sends its timetag unchanged.
+
+Up to 3.5.8 this was a raw `memcpy`, which byte-swapped the timetag on
+little-endian hosts.
 
 ## Add OSCMessage
 

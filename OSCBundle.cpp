@@ -246,10 +246,8 @@ OSCBundle& OSCBundle::fill(const uint8_t * incomingBytes, int length){
  =============================================================================*/
 
 void OSCBundle::decodeTimetag(){
-    //parse the incoming buffer as a uint64
+    //parse the incoming buffer as a uint64; setTimetag handles the endianness
     setTimetag(incomingBuffer);
-    //make sure the endianness is right
-    //xxx time tag    timetag = BigEndian(timetag);
     decodeState = MESSAGE_SIZE;
     clearIncomingBuffer();
 }

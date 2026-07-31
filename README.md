@@ -35,10 +35,16 @@ nibble of the status byte when the message is encoded; setting the channel in
 `status` directly and leaving `channel` at 0 works too. See
 [API.md](./API.md#oscmessage-addoscmidi_t-midi).
 
-Also in 4.0.0, an `OSCBundle` built without an explicit timetag now sends
-`0x0000000000000001`, the value OSC 1.0 reserves for "immediately", rather than
-`0x0000000000000000`, which means 1900-01-01. Pass `zerotime` explicitly for the
-old behaviour.
+Two bundle timetag fixes also land in 4.0.0:
+
+* A bundle built without an explicit timetag now sends `0x0000000000000001`, the
+  value OSC 1.0 reserves for "immediately", rather than `0x0000000000000000`,
+  which means 1900-01-01. Pass `zerotime` explicitly for the old behaviour.
+* Timetags are no longer byte-swapped on receive. `setTimetag(uint8_t *)` read
+  its 8 bytes with a raw `memcpy`, so on a little-endian host a bundle that was
+  received and forwarded came back out reversed — a timetag of
+  `0x0000000000000001` re-sent as `0x0000000001000000`. It now reads the buffer
+  in OSC wire order.
 
 # Installation
 
