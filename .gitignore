@@ -2,3 +2,8 @@
 
 .DS_Store
 *.code-workspace
+
+# test/host build artifacts
+test/host/emit
+test/host/emit.dSYM/
+test/host/oscmatch.o
