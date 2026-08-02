@@ -114,6 +114,23 @@
         { "label": "micros", "addr": "/s/m", "args": "" }
       ],
       "note": "Build with USB CDC On Boot enabled so that Serial is the native USB port rather than UART0. ADC2 channels are unavailable while WiFi is active."
+    },
+    {
+      "id": "M5NanoC6",
+      "name": "M5Stack NanoC6",
+      "mcu": "ESP32-C6FH4",
+      "fqbn": "esp32:esp32:m5stack_nanoc6",
+      "nativeUSB": true,
+      "usbFilters": [
+        { "usbVendorId": "0x303A", "usbProductId": "0x1001" }
+      ],
+      "chips": [
+        { "label": "read G1 (A1)", "addr": "/a/1", "args": "" },
+        { "label": "read G2 (A2)", "addr": "/a/2", "args": "" },
+        { "label": "button G9", "addr": "/d/9/u", "args": "" },
+        { "label": "blue LED G7 on", "addr": "/d/7", "args": "1" }
+      ],
+      "note": "RISC-V. Use the espressif core's esp32:esp32:m5stack_nanoc6, which sets USB CDC On Boot by default; the M5Stack core's m5stack:esp32:m5stack_nano_c6 defaults it OFF, which leaves Serial on UART0 and the page seeing nothing. Only G1 and G2 are brought out, on the HY2.0-4P Grove header; G7 is the blue LED, G9 the button (also the download-mode strap, so hold it while plugging in if auto-reset fails), G3 the IR LED. G19/G20 drive the RGB LED and its power enable -- do not repurpose them. No pinClamp: the pins above sit past any small clamp, and routeDigital only touches a pin when it is addressed."
     }
   ]
 }
