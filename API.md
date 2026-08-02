@@ -79,9 +79,10 @@ Append a double precision floating point value to the OSCMessage. NOTE: double i
 ## Get Data
 
 
-### `int getInt(int position)`
+### `intOSC_t getInt(int position)`
 
-Returns the integer at the given position
+Returns the integer at the given position. `intOSC_t` is `int32_t`; OSC's `'i'`
+type is 32 bits wide on every platform.
 
 ```C++
 //returns the integer at the third position
@@ -145,7 +146,7 @@ Returns the number of bytes copied from the blob. NOTE that if the requested siz
 Get a pointer to blob data.
 
 
-### `int getBlobLength(int position)`
+### `uint32_t getBlobLength(int position)`
 
 Returns the length of the blob in bytes. 
 
@@ -391,5 +392,23 @@ Many methods return `this` which enables you to string together multiple command
 This technique allows multiple lines to be condensed into one:
 
 ```C++
+OSCMessage msg("/address");
+msg.add("data").add(0).send(SLIPSerial).empty();
+```
+
+Take care when chaining off `OSCBundle::add()`: it returns a reference to the
+newly created `OSCMessage`, not to the bundle. So in
+
+```C++
 bundle.add("/address").add("data").add(0).send(SLIPSerial).empty();
+```
+
+every call after `add("/address")` acts on that one message — it sends the bare
+message rather than the bundle, and empties the message rather than the bundle.
+To send a bundle, build it first and then send it:
+
+```C++
+bundle.add("/address").add("data").add(0);
+bundle.send(SLIPSerial);
+bundle.empty();
 ```

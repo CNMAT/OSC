@@ -5,10 +5,46 @@ This is an Arduino and Teensy library implementation of the [OSC](http://opensou
 Features: 
 
 * Supports the four basic OSC data types (32-bit integers, 32-bit floats, strings, and blobs - arbitrary length byte sequences)
-* Supports the optional 64-bit timetag data type and Booleans
+* Supports the optional 64-bit timetag data type, Booleans, RGBA colours and MIDI messages
 * Address pattern matching
 * Dynamic memory allocation
 * Sends and receives OSC packets over transport layers that implements the Arduino Stream Class such as Serial and  Ethernet UDP
+
+# Wire format change in 4.0.0
+
+**4.0.0 changes the bytes this library puts on the wire. It does not interoperate
+with 3.5.8 and earlier for the affected types — both ends of a link must be updated.**
+
+Up to and including 3.5.8, the `'r'` (RGBA colour) and `'m'` (MIDI) types were
+encoded and decoded byte-reversed, and `'m'` dropped its `data2` byte (MIDI
+velocity) while transmitting a `channel` byte that OSC's `'m'` type has no slot
+for. Because the encoder and decoder were reversed symmetrically, CNMAT-to-CNMAT
+links round-tripped correctly and the fault was invisible unless you talked to
+other OSC software — with which these two types could never interoperate.
+
+4.0.0 encodes and decodes both per OSC 1.0:
+
+| type | 3.5.8 wire bytes | 4.0.0 wire bytes |
+|---|---|---|
+| `oscrgba_t {0x11, 0x22, 0x33, 0x44}` | `44 33 22 11` | `11 22 33 44` |
+| `oscmidi_t {1, 0x90, 2, 0x3C, 0x40}` | `3c 02 90 01` | `01 92 3c 40` |
+
+`oscmidi_t` keeps its five fields, so existing sketches still compile. OSC's
+`'m'` type has no separate channel slot, so `channel` is now folded into the low
+nibble of the status byte when the message is encoded; setting the channel in
+`status` directly and leaving `channel` at 0 works too. See
+[API.md](./API.md#oscmessage-addoscmidi_t-midi).
+
+Two bundle timetag fixes also land in 4.0.0:
+
+* A bundle built without an explicit timetag now sends `0x0000000000000001`, the
+  value OSC 1.0 reserves for "immediately", rather than `0x0000000000000000`,
+  which means 1900-01-01. Pass `zerotime` explicitly for the old behaviour.
+* Timetags are no longer byte-swapped on receive. `setTimetag(uint8_t *)` read
+  its 8 bytes with a raw `memcpy`, so on a little-endian host a bundle that was
+  received and forwarded came back out reversed — a timetag of
+  `0x0000000000000001` re-sent as `0x0000000001000000`. It now reads the buffer
+  in OSC wire order.
 
 # Installation
 
@@ -132,7 +168,11 @@ An OSCBundle is a group of OSCMessage that can be sent and received together.
 ```C++
 OSCBundle bundle;
 //add a new OSCMessage to the bundle with the address "/a"
-OSCMessage msgA = bundle.add("/a");
+//NOTE the reference: bundle.add() returns OSCMessage&, and OSCMessage has no
+//deep copy constructor. Binding it to a value (OSCMessage msgA = ...) takes a
+//shallow copy, so the data is added to the copy instead of to the bundle, and
+//when the copy goes out of scope it frees memory the bundle still owns.
+OSCMessage& msgA = bundle.add("/a");
 //add some data to that message
 msgA.add("some data");
 //append another OSCMessage, this time chaining 'add' calls
