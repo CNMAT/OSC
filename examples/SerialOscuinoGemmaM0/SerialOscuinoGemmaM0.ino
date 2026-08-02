@@ -9,10 +9,15 @@ Adafruit_FreeTouch qt_1 = Adafruit_FreeTouch(A1, OVERSAMPLE_4, RESISTOR_50K, FRE
 Adafruit_FreeTouch qt_2 = Adafruit_FreeTouch(A2, OVERSAMPLE_4, RESISTOR_50K, FREQ_MODE_NONE);
   Adafruit_FreeTouch *p[3] = { &qt_0, &qt_1, &qt_2 };
 
+// Gemma M0 routes only three pads. Clamp the macros this sketch actually reads:
+// the loops below use NUM_DIGITAL_PINS and NUM_ANALOG_INPUTS. Redefining
+// NUM_ANALOG_PINS did nothing, because OSCBoards.h only aliases
+// NUM_ANALOG_INPUTS to it on PIC32 -- every other core, this one included,
+// defines NUM_ANALOG_INPUTS directly in its variant header.
 #undef NUM_DIGITAL_PINS
 #define NUM_DIGITAL_PINS 3
-#undef NUM_ANALOG_PINS
-#define NUM_ANALOG_PINS 3
+#undef NUM_ANALOG_INPUTS
+#define NUM_ANALOG_INPUTS 3
 
 SLIPEncodedUSBSerial SLIPSerial( Serial );
 
@@ -70,7 +75,7 @@ void routeDigital(OSCMessage &msg, int addrOffset ){
         digitalWrite(pin, (msg.getInt(0)>0) ? HIGH:LOW);
        } 
       else if(msg.isFloat(0)){
-        analogWrite(pin, (int)(msg.getFloat(0)*255.0f));
+        analogWrite(analogInputToDigitalPin(pin), (int)(msg.getFloat(0)*255.0f));
       }
      
       //otherwise it's an digital read
@@ -126,7 +131,7 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
         digitalWrite(analogInputToDigitalPin(pin), (msg.getInt(0) > 0)? HIGH: LOW);
       } 
       else if(msg.isFloat(0)){
-        analogWrite(pin, (int)(msg.getFloat(0)*255.0f));
+        analogWrite(analogInputToDigitalPin(pin), (int)(msg.getFloat(0)*255.0f));
       }
 #ifdef BOARD_HAS_ANALOG_PULLUP
     //with a pullup?

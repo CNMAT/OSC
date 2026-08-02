@@ -62,7 +62,7 @@ void routeDigital(OSCMessage &msg, int addrOffset ){
         digitalWrite(pin, (msg.getInt(0)>0) ? HIGH:LOW);
        } 
       else if(msg.isFloat(0)){
-        analogWrite(pin, (int)(msg.getFloat(0)*255.0f));
+        analogWrite(analogInputToDigitalPin(pin), (int)(msg.getFloat(0)*255.0f));
       }
      
       //otherwise it's an digital read
@@ -118,7 +118,7 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
         digitalWrite(analogInputToDigitalPin(pin), (msg.getInt(0) > 0)? HIGH: LOW);
       } 
       else if(msg.isFloat(0)){
-        analogWrite(pin, (int)(msg.getFloat(0)*255.0f));
+        analogWrite(analogInputToDigitalPin(pin), (int)(msg.getFloat(0)*255.0f));
       }
 #ifdef BOARD_HAS_ANALOG_PULLUP
     //with a pullup?
