@@ -19,7 +19,10 @@ class TestPrint : public Print {
    
     size_t write(uint8_t character) {
       buffer[bufferPointer++] = character;
-      return character;
+      //Print::write() returns the number of bytes written, not the byte.
+      //Returning the byte made every caller that checks the return value see a
+      //bogus count -- and made a written 0x00 look like a failed write.
+      return 1;
     }
     
     unsigned int size(){

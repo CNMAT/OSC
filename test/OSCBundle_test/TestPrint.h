@@ -19,7 +19,7 @@ class TestPrint : public Print {
    
     size_t write(uint8_t character) {
       buffer[bufferPointer++] = character;
-      return character;
+      return 1;  // byte count, not the byte
     }
     
     int size(){
