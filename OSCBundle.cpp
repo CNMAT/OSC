@@ -60,6 +60,11 @@ OSCBundle& OSCBundle::empty(){
     messages = NULL;
     clearIncomingBuffer();
     numMessages = 0;
+    //Reset the decoder too.  Without this a bundle left in any state other
+    //than STANDBY stayed there forever, so the usual pattern of one long-lived
+    //OSCBundle refilled in loop() accepted the first packet and then rejected
+    //every packet after it, permanently.
+    decodeState = STANDBY;
     return *this;
 }
 
@@ -246,10 +251,8 @@ OSCBundle& OSCBundle::fill(const uint8_t * incomingBytes, int length){
  =============================================================================*/
 
 void OSCBundle::decodeTimetag(){
-    //parse the incoming buffer as a uint64
+    //parse the incoming buffer as a uint64; setTimetag handles the endianness
     setTimetag(incomingBuffer);
-    //make sure the endianness is right
-    //xxx time tag    timetag = BigEndian(timetag);
     decodeState = MESSAGE_SIZE;
     clearIncomingBuffer();
 }
@@ -317,7 +320,10 @@ void OSCBundle::decode(uint8_t incomingByte){
                 int32_t msgSize;
                 memcpy(&msgSize, incomingBuffer, 4);
                 msgSize = BigEndian(msgSize);
-                if (msgSize % 4 != 0 || msgSize == 0){
+                //msgSize <= 0, not just == 0: the element size is a signed
+                //value taken straight off the wire, so a negative one passed
+                //both of the old tests and was then used as a byte count.
+                if (msgSize <= 0 || msgSize % 4 != 0){
                     error = INVALID_OSC;
                 } else {
                     //add a message to the buffer

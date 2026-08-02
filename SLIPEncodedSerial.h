@@ -134,7 +134,15 @@ public:
 	//reads a byte from the buffer
 	int read(){
 	back:
-		uint8_t c = serial->read();
+		//Take the underlying read() as an int and reject its -1 before
+		//narrowing.  Assigning it straight into a uint8_t turned "nothing
+		//available" into a perfectly ordinary 0xFF data byte, which was then
+		//fed into the message as content.
+		int ci = serial->read();
+		if (ci < 0){
+			return -1;
+		}
+		uint8_t c = (uint8_t) ci;
 		if(rstate==CHAR)
 		{
 			if(c==slipesc)
@@ -246,17 +254,32 @@ using SLIPEncodedSerial =  _SLIPSerial<HardwareSerial> ;
 
 // 	}
 
-#ifdef BOARD_HAS_USB_SERIAL 
-#if defined(_SAMD21_)
-// Required for Serial on Zero based boards
-#if defined(ARDUINO_SAMD_ZERO)
-// Adafruit breaks with tradition here
+#ifdef BOARD_HAS_USB_SERIAL
+// Ask the core which port is the USB CDC port rather than guessing from board
+// macros.  Every core built on the Arduino variant convention defines
+// SERIAL_PORT_USBVIRTUAL in its variant header; the hand-maintained ladder
+// below kept missing variants.  Adafruit's Gemma M0 is the case that broke:
+// its native USB port is named Serial, but it is a SAMD21 that does not pass
+// -DARDUINO_SAMD_ZERO, so it fell through to the SerialUSB branch and failed
+// to compile on a name that does not exist on that board.  OSCData.h defines
+// this macro to the same token so the two definitions stay identical.
+// Zero-derived boards keep their historical binding. ARDUINO_SAMD_ZERO is
+// auto-defined from build.board=SAMD_ZERO, so it covers both Arduino Zero
+// variants, where Serial is a hardware Uart rather than the USB CDC port.
+// Selecting SERIAL_PORT_USBVIRTUAL for them would move an existing sketch's
+// output from the programming-port UART to native USB -- a behaviour change,
+// not a compile fix, so it is deliberately left alone here.
+#if defined(_SAMD21_) && defined(ARDUINO_SAMD_ZERO)
 #define thisBoardsSerialUSB Serial
 typedef decltype(Serial) actualUSBtype;
-#else
+
+#elif defined(SERIAL_PORT_USBVIRTUAL)
+#define thisBoardsSerialUSB SERIAL_PORT_USBVIRTUAL
+typedef decltype(SERIAL_PORT_USBVIRTUAL) actualUSBtype;
+
+#elif defined(_SAMD21_)
 #define thisBoardsSerialUSB SerialUSB
 typedef decltype(SerialUSB) actualUSBtype;
-#endif
 
 #elif defined(__SAM3X8E__)
 // Required for Serial on Zero based boards

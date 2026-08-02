@@ -179,18 +179,20 @@ public:
 	//sets the data at a position
 	template <typename T>
 	OSCMessage& set(int position, T datum){
-		if (position < dataCount){
-			//replace the OSCData with a new one
-			OSCData * oldDatum = getOSCData(position);
-			//destroy the old one
-			delete oldDatum;
-			//make a new one
+		if (position >= 0 && position < dataCount){
+			//Build the replacement BEFORE destroying the old one.  The old
+			//order deleted first and then only stored the new pointer on
+			//success, so a failed allocation left data[position] pointing at
+			//freed memory -- read by the next getOSCData() and freed a second
+			//time by empty()/~OSCMessage().
 			OSCData * newDatum = new OSCData(datum);
-			//test if there was an error
-			if (newDatum->error == ALLOCFAILED){
+			if (newDatum == NULL){
 				error = ALLOCFAILED;
+			} else if (newDatum->error == ALLOCFAILED){
+				error = ALLOCFAILED;
+				delete newDatum;
 			} else {
-				//otherwise, put it in the data array
+				delete data[position];
 				data[position] = newDatum;
 			}
 		} else if (position == (dataCount)){

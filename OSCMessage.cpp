@@ -115,7 +115,9 @@ OSCMessage::OSCMessage(OSCMessage * msg){
 =============================================================================*/
 
 OSCData * OSCMessage::getOSCData(int position){
-	if (position < dataCount){
+	//position >= 0: without the lower bound a negative index read data[-1]
+	//and then dereferenced whatever happened to be in front of the array
+	if (position >= 0 && position < dataCount){
 		const auto datum = data[position];
 		return datum;
 	} else {
@@ -302,12 +304,17 @@ int OSCMessage::getDataLength(int position){
 =============================================================================*/
 
 bool OSCMessage::testType(int position, char type){
-	const auto datum = getOSCData(position);
-	if (!hasError()){
-		return datum->type == type;
-	} else {
+	//Bounds-check directly instead of going through getOSCData(), which raises
+	//INDEX_OUT_OF_BOUNDS on the message. That error is sticky and message-wide,
+	//so probing a position that turned out not to exist -- the natural way to
+	//use these predicates -- permanently poisoned the message, after which
+	//send() refused to emit anything at all.
+	if (position < 0 || position >= dataCount){
 		return false;
 	}
+	//Nor should an unrelated pre-existing error make a type test lie; report
+	//what the datum actually is.
+	return data[position]->type == type;
 }
 
 bool OSCMessage::isInt(int position){
@@ -574,6 +581,13 @@ OSCMessage& OSCMessage::send(Print &p){
             double d = BigEndian(datum->data.d);
             uint8_t * ptr = (uint8_t *) &d;
             p.write(ptr, 8);
+        } else if (datum->type == 'h'){
+            //the 32-bit branch below byte-swapped only the low word and then
+            //read 8 bytes out of a 4-byte local, so 'h' went on the wire as
+            //garbage plus whatever followed it on the stack
+            int64_t l = BigEndian(datum->data.l);
+            uint8_t * ptr = (uint8_t *) &l;
+            p.write(ptr, 8);
         } else if (datum->type == 't'){
             osctime_t time =  datum->data.time;
             uint32_t d = BigEndian(time.seconds);
@@ -583,6 +597,18 @@ OSCMessage& OSCMessage::send(Print &p){
             ptr = (uint8_t *)    &d;
             p.write(ptr, 4);
 
+        } else if (datum->type == 'r'){
+            //'r' is a byte array, not a scalar: r,g,b,a already in wire order,
+            //so it must not go through BigEndian()
+            const oscrgba_t & c = datum->data.rgba;
+            uint8_t rgba[4] = { c.r, c.g, c.b, c.a };
+            p.write(rgba, 4);
+        } else if (datum->type == 'm'){
+            //'m' is a byte array too: port id, status, data1, data2.
+            //oscmidi_t's separate `channel` field folds into the status byte.
+            const oscmidi_t & m = datum->data.midi;
+            uint8_t midi[4] = { m.port, oscMidiStatusByte(m), m.data1, m.data2 };
+            p.write(midi, 4);
         } else if (datum->type == 'T' || datum->type == 'F')
                     { }
         else { // float or int
@@ -616,8 +642,14 @@ OSCMessage& OSCMessage::fill(uint8_t * incomingBytes, int length){
 
 void OSCMessage::decodeAddress(){
     setAddress((char *) incomingBuffer);
-    //change the error from invalid message
-    error = OSC_OK;
+    //Only clear the "not decoded yet" error if the address was actually
+    //stored.  setAddress() reports a failed malloc by setting ALLOCFAILED and
+    //leaving address NULL; clearing error unconditionally erased that, so the
+    //message reported hasError()==false with a NULL address and every
+    //match()/send()/getAddress() path dereferenced it.
+    if (address != NULL){
+        error = OSC_OK;
+    }
     clearIncomingBuffer();
 }
 
@@ -661,13 +693,12 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                     break;
                 case 'r':
                     if (incomingBufferSize == 4){
-                        //parse the buffer as a rgba
-                        union {
-                            oscrgba_t rgba;
-                            uint8_t b[4];
-                        } u;
-                        memcpy(u.b, incomingBuffer, 4);
-                        oscrgba_t dataVal = BigEndian(u.rgba);
+                        //the four bytes are r,g,b,a in wire order - no swap
+                        oscrgba_t dataVal;
+                        dataVal.r = incomingBuffer[0];
+                        dataVal.g = incomingBuffer[1];
+                        dataVal.b = incomingBuffer[2];
+                        dataVal.a = incomingBuffer[3];
                         set(i, dataVal);
                         clearIncomingBuffer();
                     }
@@ -688,13 +719,15 @@ void OSCMessage::decodeData(uint8_t incomingByte){
 
                 case 'm':
                     if (incomingBufferSize == 4){
-                        //parse the buffer as midi bytes
-                        union {
-                            oscmidi_t m;
-                            uint8_t b[4];
-                        } u;
-                        memcpy(u.b, incomingBuffer, 4);
-                        oscmidi_t dataVal = BigEndian(u.m);
+                        //port id, status, data1, data2 in wire order - no swap.
+                        //`status` is kept exactly as received and `channel`
+                        //mirrors its low nibble, so this re-encodes unchanged.
+                        oscmidi_t dataVal;
+                        dataVal.port = incomingBuffer[0];
+                        dataVal.status = incomingBuffer[1];
+                        dataVal.channel = oscMidiChannelOf(incomingBuffer[1]);
+                        dataVal.data1 = incomingBuffer[2];
+                        dataVal.data2 = incomingBuffer[3];
                         set(i, dataVal);
                         clearIncomingBuffer();
                     }
@@ -737,7 +770,11 @@ void OSCMessage::decodeData(uint8_t incomingByte){
                     }
                     break;
                 case 'b':
-                    if (incomingBufferSize > 4){
+                    //>= 4, not > 4: a zero-length blob is four bytes of length
+                    //prefix and no payload, so the buffer never grows past 4
+                    //and the test never fired.  Such a blob is legal OSC and
+                    //this library emits it, but could not read its own output.
+                    if (incomingBufferSize >= 4){
                         //compute the expected blob size
                         union {
                             uint32_t i;
@@ -811,15 +848,35 @@ void OSCMessage::decode(uint8_t incomingByte){
             decodeData(incomingByte);
             break;
 		case DATA_PADDING:{
-                //get the last valid data
+                //Find the datum whose padding we are consuming.  Only 's' and
+                //'b' enter this state, so the datum we just completed always
+                //has bytes > 0.  Data not yet decoded are still INVALID_OSC,
+                //which is what makes this backwards scan work -- but the
+                //zero-byte types 'T' 'F' 'I' 'N' are OSC_OK from the moment
+                //their type tag is read.  Without the bytes>0 test, a zero-byte
+                //type sitting after the string would be picked up here instead,
+                //padSize(0) would report no padding, and the string's pad byte
+                //would be left in the buffer and consumed as the first byte of
+                //the next argument -- silently shifting every remaining
+                //argument by one byte, with no error raised.
                 for (int i = dataCount - 1; i >= 0; i--){
                     const auto datum = getOSCData(i);
-                    if (datum->error == OSC_OK){
+                    if (datum->error == OSC_OK && datum->bytes > 0){
                         //compute the padding size for the data
                         int dataPad = padSize(datum->bytes);
                         //  if there is no padding required, switch back to DATA, and don't clear the incomingBuffer because it holds next data
                         if (dataPad == 0){
                              decodeState = DATA;
+                             //This byte belongs to the next argument.  It is
+                             //already in the buffer, but it has never been
+                             //offered to decodeData(), and the 's' handler
+                             //triggers on the byte's *value* rather than on the
+                             //buffer contents.  A zero-length string is nothing
+                             //but its terminating null, so without this
+                             //dispatch that terminator is never seen: the empty
+                             //string instead swallows the first byte of
+                             //whatever follows and every later argument shifts.
+                             decodeData(incomingByte);
                         }
                         else if (incomingBufferSize == dataPad){
                             clearIncomingBuffer();

@@ -1,10 +1,14 @@
 
 #include "OSCData.h"
 
+#include <limits.h>	// LONG_MAX, to pick the OSC type code for long
+
 
 osctime_t zerotime = {0,0};
+//OSC 1.0's "immediately" timetag: the special value 1, not 0
+osctime_t immediatetime = {0,1};
 oscrgba_t zeroRgba = {0,0,0,0};
-oscmidi_t zeroMidi = {0,0,0,0};
+oscmidi_t zeroMidi = {0,0,0,0,0};
 oscevent_t zeroEvent = OSC_NULL;
 
 /*=============================================================================
@@ -30,34 +34,47 @@ OSCData::OSCData(const char * s){
 }
 
 
-#if INT_MAX!=2147483647
-OSCData::OSCData(intOSC_t i){
-	error = OSC_OK;
-	type = 'i';
-	bytes = 4;
-	data.i = i;
-}
-#endif
+/*
+	Integer constructors.
 
-OSCData::OSCData(int i){
+	One body per width, then one thin constructor per fundamental integer
+	type.  long is the only type whose width varies across the targets this
+	library builds for (4 bytes on AVR/ARM/Xtensa, 8 bytes on a 64-bit host
+	build of the tests), so it is the only one that needs a conditional -- and
+	the conditional selects a type code, not which overloads exist.  Testing
+	sizeof() at runtime instead would drag the 64-bit path into AVR builds.
+*/
+void OSCData::initInt32(int32_t v){
 	error = OSC_OK;
 	type = 'i';
 	bytes = 4;
-	data.i = i;
-}
-OSCData::OSCData(unsigned int i){
-	error = OSC_OK;
-	type = 'i';
-	bytes = 4;
-	data.i = i;
+	data.i = v;
 }
 
-OSCData::OSCData(int64_t i){
+void OSCData::initInt64(int64_t v){
 	error = OSC_OK;
 	type = 'h';
 	bytes = 8;
-	data.i = i;
+	data.l = v;
 }
+
+OSCData::OSCData(signed char v)   { initInt32((int32_t) v); }
+OSCData::OSCData(unsigned char v) { initInt32((int32_t)(uint32_t) v); }
+OSCData::OSCData(short v)         { initInt32((int32_t) v); }
+OSCData::OSCData(unsigned short v){ initInt32((int32_t)(uint32_t) v); }
+OSCData::OSCData(int v)           { initInt32((int32_t) v); }
+OSCData::OSCData(unsigned int v)  { initInt32((int32_t)(uint32_t) v); }
+
+#if LONG_MAX > 2147483647L
+OSCData::OSCData(long v)          { initInt64((int64_t) v); }
+OSCData::OSCData(unsigned long v) { initInt64((int64_t)(uint64_t) v); }
+#else
+OSCData::OSCData(long v)          { initInt32((int32_t) v); }
+OSCData::OSCData(unsigned long v) { initInt32((int32_t)(uint32_t) v); }
+#endif
+
+OSCData::OSCData(long long v)          { initInt64((int64_t) v); }
+OSCData::OSCData(unsigned long long v) { initInt64((int64_t)(uint64_t) v); }
 
 OSCData::OSCData(oscrgba_t rgba){
 	error = OSC_OK;
@@ -68,18 +85,11 @@ OSCData::OSCData(oscrgba_t rgba){
 OSCData::OSCData(oscmidi_t midi){
 	error = OSC_OK;
 	type = 'm';
+	//4, not sizeof(oscmidi_t): `channel` is a convenience field that is folded
+	//into the status byte on the wire, so only four bytes are transmitted
 	bytes = 4;
 	data.midi = midi;
 }
-
-#if defined(__SAM3X8E__)
-OSCData::OSCData(int16_t i){
-	error = OSC_OK;
-	type = 'i';
-	bytes = 4;
-	data.i = i;
-}
-#endif
 
 OSCData::OSCData(float f){
 	error = OSC_OK;
@@ -185,7 +195,14 @@ OSCData::~OSCData(){
 //sets just the type as a message placeholder
 //no data
 OSCData::OSCData(char t){
-	error = (t == 'T' || t == 'F') ? OSC_OK : INVALID_OSC;
+	//The zero-byte types carry no payload, so decoding is complete the moment
+	//the type tag is read -- nothing later will arrive to clear an error on
+	//them.  'I' (impulse) and 'N' (null) were omitted here, which left every
+	//inbound message containing one permanently INVALID_OSC.  Because
+	//hasError() is message-wide, a single impulse or null argument discarded
+	//the whole message including its other, perfectly good arguments, even
+	//though this library emits 'I' and 'N' itself.
+	error = (t == 'T' || t == 'F' || t == 'I' || t == 'N') ? OSC_OK : INVALID_OSC;
 	type = t;
     bytes = 0;
 }
@@ -199,7 +216,9 @@ OSCData::OSCData(char t){
 
 int64_t OSCData::getInt64(){
     if (type == 'h'){
-        return data.i;
+        //data.l, not data.i: reading the 32-bit union member truncated the
+        //value and left the high word indeterminate
+        return data.l;
     } else {
     #ifndef ESPxx
         return (int64_t)NULL;

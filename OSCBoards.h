@@ -31,6 +31,19 @@
 #define BOARD_HAS_ANALOG_PULLUP
 #endif
 
+// The Oscuino examples guard their /tone handler with #ifdef BOARD_HAS_TONE,
+// but nothing in the library ever defined it, so /tone was dead code in every
+// one of them. Define it where tone()/noTone() actually exist.
+//
+// Checked by compiling a tone()/noTone() probe against every installed core:
+// arduino:avr, arduino:megaavr, arduino:renesas_uno, arduino:samd,
+// adafruit:samd, adafruit:nrf52, teensy:avr, esp32:esp32 and rp2040:rp2040 all
+// provide it. arduino:sam (SAM3X8E / Due) is the one that does not.
+// Define OSC_NO_TONE before including the library to force it off elsewhere.
+#if !defined(OSC_NO_TONE) && !defined(__SAM3X8E__)
+#define BOARD_HAS_TONE
+#endif
+
 // missing specs for PIC32
 
 #if (defined(__PIC32MX__) || defined(__PIC32MZ__))

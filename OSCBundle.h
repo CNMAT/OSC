@@ -29,6 +29,7 @@
 #include "OSCMessage.h"
 
 extern osctime_t zerotime;
+extern osctime_t immediatetime;
 class OSCBundle
 {
 
@@ -90,8 +91,9 @@ public:
 	CONSTRUCTORS / DESTRUCTOR
 =============================================================================*/
 		
-    //default timetag of
-      	OSCBundle(osctime_t = zerotime);
+    //default timetag of "immediately" - OSC 1.0 reserves the value 1 for that.
+    //(A timetag of 0 is a valid absolute time, 1900-01-01, not "immediately".)
+      	OSCBundle(osctime_t = immediatetime);
 
 	//DESTRUCTOR
 	~OSCBundle();
@@ -114,9 +116,17 @@ public:
         timetag = (osctime_t) t;
         return *this;
     }
-    //sets the timetag from a buffer
+    //sets the timetag from 8 bytes in OSC wire order (big-endian).
+    //A plain memcpy here would byte-swap the timetag on little-endian hosts,
+    //which is what send() reads back out.
     OSCBundle& setTimetag(uint8_t * buff){
-        memcpy(&timetag, buff, 8);
+        //Assembled byte by byte rather than memcpy'd and byte-swapped: this
+        //reads the same on a big-endian host, where a swap would be wrong.
+        timetag.seconds = ((uint32_t) buff[0] << 24) | ((uint32_t) buff[1] << 16)
+                        | ((uint32_t) buff[2] <<  8) |  (uint32_t) buff[3];
+        timetag.fractionofseconds
+                        = ((uint32_t) buff[4] << 24) | ((uint32_t) buff[5] << 16)
+                        | ((uint32_t) buff[6] <<  8) |  (uint32_t) buff[7];
         return *this;
     }
     
@@ -127,10 +137,17 @@ public:
     //gets the message the matches the address string
 	//will do regex matching
 	OSCMessage * getOSCMessage(char * addr);
-	
+
 	//get message by position
 	OSCMessage * getOSCMessage(int position);
-	
+
+	//the bundle's timetag, in host order.
+	//A received bundle reports the timetag it arrived with; one built without
+	//an explicit timetag reports immediatetime.
+	osctime_t getTimetag(){
+		return timetag;
+	}
+
 /*=============================================================================
     MATCHING
 =============================================================================*/

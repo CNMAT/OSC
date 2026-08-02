@@ -70,15 +70,24 @@ int osc_match(const char *pattern, const char *address, int *pattern_offset, int
 			if(!(n = osc_match_single_char(pattern, address))){
 				return 0;
 			}
+			/* These skip-to-the-closer scans had no upper bound, so an
+			   unterminated '[' or '{' in an incoming pattern ran off the end
+			   of the string.  Stop at the terminator and report no match. */
 			if(*pattern == '['){
-				while(*pattern != ']'){
+				while(*pattern != ']' && *pattern != '\0'){
 					pattern++;
+				}
+				if(*pattern == '\0'){
+					return 0;
 				}
 				pattern++;
 				address++;
 			}else if(*pattern == '{'){
-				while(*pattern != '}'){
+				while(*pattern != '}' && *pattern != '\0'){
 					pattern++;
+				}
+				if(*pattern == '\0'){
+					return 0;
 				}
 				pattern++;
 				address += n;
@@ -234,17 +243,17 @@ static int osc_match_single_char(const char *pattern, const char *address)
 		case '[':
 			return osc_match_bracket(pattern, address);
 		case ']':
-			while(*pattern != '['){
-				pattern--;
-			}
-			return osc_match_bracket(pattern, address);
+			/* A ']' reached as a pattern character has no opener in front of
+			   it -- a well-formed '[...]' is consumed as a unit by the caller,
+			   which never lands here.  The old code scanned backwards for '['
+			   with no lower bound and walked off the front of the buffer on
+			   malformed input.  Malformed pattern, so: no match. */
+			return 0;
 		case '{':
 			return osc_match_curly_brace(pattern, address);
 		case '}':
-			while(*pattern != '{'){
-				pattern--;
-			}
-			return osc_match_curly_brace(pattern, address);
+			/* Same as ']' above. */
+			return 0;
 		case '?':
 			return 1;
 		default:
