@@ -1,0 +1,119 @@
+{
+  "_comment": [
+    "One entry per generated example. `id` becomes <id>Oscuino, both as the",
+    "examples/ folder name and as the .ino and .html basename inside it.",
+    "",
+    "usbFilters narrows the browser's port chooser to this board. Every page",
+    "also offers a 'show all ports' checkbox, so a stale or wrong id here",
+    "degrades to a longer list rather than a board that cannot be selected.",
+    "",
+    "pinClamp is for variants whose NUM_*_PINS macros overstate what is",
+    "actually routed to a pad. Omit it to trust the core."
+  ],
+
+  "boards": [
+    {
+      "id": "Gemma",
+      "name": "Adafruit Gemma M0",
+      "mcu": "SAMD21E18A",
+      "fqbn": "adafruit:samd:adafruit_gemma_m0",
+      "nativeUSB": true,
+      "usbFilters": [
+        { "usbVendorId": "0x239A", "usbProductId": "0x801C" },
+        { "usbVendorId": "0x239A", "usbProductId": "0x001C" }
+      ],
+      "pinClamp": { "digital": 3, "analog": 3 },
+      "chips": [
+        { "label": "read D0", "addr": "/d/0", "args": "" },
+        { "label": "read A0", "addr": "/a/0", "args": "" },
+        { "label": "read A1", "addr": "/a/1", "args": "" }
+      ],
+      "note": "Three pads only: D0/A2, D1/A0, D2/A1. The variant declares more analog inputs than it routes, so the sketch clamps both counts to 3 — see the pin note in the sketch header."
+    },
+    {
+      "id": "Playground",
+      "name": "Adafruit Circuit Playground Express",
+      "mcu": "SAMD21G18A",
+      "fqbn": "adafruit:samd:adafruit_circuitplayground_m0",
+      "nativeUSB": true,
+      "usbFilters": [
+        { "usbVendorId": "0x239A", "usbProductId": "0x8018" },
+        { "usbVendorId": "0x239A", "usbProductId": "0x0019" }
+      ],
+      "chips": [
+        { "label": "read A1", "addr": "/a/1", "args": "" },
+        { "label": "read A2", "addr": "/a/2", "args": "" },
+        { "label": "button A (D4)", "addr": "/d/4/u", "args": "" },
+        { "label": "slide switch (D7)", "addr": "/d/7/u", "args": "" }
+      ],
+      "note": "A1-A7 are the alligator-clip pads. D4/D5 are the buttons and D7 the slide switch, all read with /u for the internal pullup."
+    },
+    {
+      "id": "LilyPad",
+      "name": "LilyPad Arduino USB",
+      "mcu": "ATmega32U4",
+      "fqbn": "arduino:avr:LilyPadUSB",
+      "nativeUSB": true,
+      "usbFilters": [
+        { "usbVendorId": "0x1B4F", "usbProductId": "0x9207" },
+        { "usbVendorId": "0x1B4F", "usbProductId": "0x9208" }
+      ],
+      "chips": [
+        { "label": "read A2", "addr": "/a/2", "args": "" },
+        { "label": "read A3", "addr": "/a/3", "args": "" },
+        { "label": "PWM D9 50%", "addr": "/d/9", "args": "0.5" }
+      ],
+      "note": "Sew tabs are A2-A5 and D2, D3, D9, D10, D11. D9/D10/D11 are the PWM-capable tabs — send a float to /d/<pin> for analogWrite."
+    },
+    {
+      "id": "Teensy",
+      "name": "Teensy 4.0 / 4.1",
+      "mcu": "i.MX RT1062",
+      "fqbn": "teensy:avr:teensy40",
+      "nativeUSB": true,
+      "usbFilters": [
+        { "usbVendorId": "0x16C0", "usbProductId": "0x0483" }
+      ],
+      "chips": [
+        { "label": "read A0", "addr": "/a/0", "args": "" },
+        { "label": "read A1", "addr": "/a/1", "args": "" },
+        { "label": "PWM D3 50%", "addr": "/d/3", "args": "0.5" },
+        { "label": "tone D2 440Hz", "addr": "/tone/2", "args": "440" }
+      ],
+      "note": "14 analog inputs and PWM on most digital pins. The USB stack ignores the baud rate entirely."
+    },
+    {
+      "id": "RP2040",
+      "name": "Raspberry Pi Pico (RP2040)",
+      "mcu": "RP2040",
+      "fqbn": "rp2040:rp2040:rpipico",
+      "nativeUSB": true,
+      "usbFilters": [
+        { "usbVendorId": "0x2E8A", "usbProductId": "0x000A" },
+        { "usbVendorId": "0x2E8A", "usbProductId": "0x010A" }
+      ],
+      "chips": [
+        { "label": "read A0 (GP26)", "addr": "/a/0", "args": "" },
+        { "label": "read A1 (GP27)", "addr": "/a/1", "args": "" },
+        { "label": "PWM GP15 50%", "addr": "/d/15", "args": "0.5" }
+      ],
+      "note": "Three ADC channels: A0-A2 are GP26-GP28. Every digital pin can do PWM. Built for the Earle Philhower core."
+    },
+    {
+      "id": "ESP32S3",
+      "name": "ESP32-S3",
+      "mcu": "ESP32-S3",
+      "fqbn": "esp32:esp32:esp32s3",
+      "nativeUSB": true,
+      "usbFilters": [
+        { "usbVendorId": "0x303A", "usbProductId": "0x1001" }
+      ],
+      "chips": [
+        { "label": "read A0", "addr": "/a/0", "args": "" },
+        { "label": "read A1", "addr": "/a/1", "args": "" },
+        { "label": "micros", "addr": "/s/m", "args": "" }
+      ],
+      "note": "Build with USB CDC On Boot enabled so that Serial is the native USB port rather than UART0. ADC2 channels are unavailable while WiFi is active."
+    }
+  ]
+}

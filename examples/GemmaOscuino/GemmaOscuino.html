@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<!--
+  GENERATED FILE — do not edit directly.
+  Source: extras/webserial/template.html + extras/webserial/boards.json
+  Regenerate:  cd extras/webserial && make generate
+  Verify:      cd extras/webserial && make check
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GemmaOscuino &mdash; OSC over Web Serial</title>
+<style>
+  :root {
+    --bg: #10131a;
+    --panel: #171b24;
+    --panel-2: #1e2430;
+    --line: #2a3140;
+    --text: #dde3ec;
+    --dim: #8b95a7;
+    --accent: #5eead4;
+    --tx: #7dd3fc;
+    --rx: #86efac;
+    --err: #fca5a5;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  h1 { font-size: 18px; margin: 0 0 2px; font-weight: 600; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 20px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 16px; margin-bottom: 14px;
+  }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  label { color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  input, select, button {
+    font: inherit; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 7px; padding: 8px 10px;
+  }
+  input[type=text] { font-family: var(--mono); font-size: 13px; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: #06231f; border-color: var(--accent); font-weight: 600; }
+  .grow { flex: 1; min-width: 120px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #555e6e; display: inline-block; }
+  .dot.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .chips button { font-family: var(--mono); font-size: 12px; padding: 5px 9px; }
+  #log {
+    font-family: var(--mono); font-size: 12.5px;
+    height: 320px; overflow-y: auto;
+    background: #0c0f15; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; white-space: pre-wrap; word-break: break-word;
+  }
+  .e { padding: 1px 0; }
+  .t { color: #5b6478; }
+  .tx .a { color: var(--tx); }
+  .rx .a { color: var(--rx); }
+  .sys { color: var(--dim); }
+  .err { color: var(--err); }
+  .hex { color: #6b7488; font-size: 11.5px; }
+  .note { color: var(--dim); font-size: 12.5px; margin-top: 10px; }
+  code { font-family: var(--mono); background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+  .unsupported { border-color: var(--err); }
+  .board { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>GemmaOscuino</h1>
+  <div class="sub">
+    OSC over Web Serial for <span class="board">Adafruit Gemma M0</span> (SAMD21E18A).
+    Browser &harr; SLIP &harr; USB serial &harr; the CNMAT OSC library.
+    Pair with <code>GemmaOscuino.ino</code>. No server, no dependencies.
+  </div>
+
+  <div class="panel" id="connPanel">
+    <div class="row">
+      <span class="dot" id="dot"></span>
+      <span id="status" class="grow">Not connected</span>
+      <label><input type="checkbox" id="allPorts"> show all ports</label>
+      <label for="baud">Baud</label>
+      <select id="baud">
+        <option>9600</option>
+        <option selected>115200</option>
+        <option>230400</option>
+        <option>460800</option>
+        <option>921600</option>
+      </select>
+      <button id="connect" class="primary">Connect</button>
+      <button id="disconnect" disabled>Disconnect</button>
+    </div>
+    <div class="note" id="support"></div>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <input type="text" id="addr" class="grow" value="/s/m" placeholder="/address/path" aria-label="OSC address">
+      <input type="text" id="args" class="grow" value="" placeholder="args, e.g.  1  0.5  f:1  s:hi  T" aria-label="OSC arguments">
+      <label><input type="checkbox" id="bundle" checked> bundle</label>
+      <button id="send" disabled>Send</button>
+    </div>
+    <div class="chips">
+      <button data-a="/d/0" data-g="">read D0</button>
+      <button data-a="/a/0" data-g="">read A0</button>
+      <button data-a="/a/1" data-g="">read A1</button>
+    </div>
+    <div class="note">
+      Args are typed automatically: <code>1</code> &rarr; int, <code>0.5</code> &rarr; float, anything else &rarr; string.
+      Force a type with <code>i:</code> <code>f:</code> <code>s:</code>, or use bare <code>T</code> <code>F</code> <code>N</code>.
+      <b>bundle</b> is ticked by default because <code>GemmaOscuino.ino</code> reads with <code>OSCBundle</code>,
+      as do the stock Oscuino examples and the CNMAT Max patches.
+      <br><br>
+      <b>Adafruit Gemma M0.</b> Three pads only: D0/A2, D1/A0, D2/A1. The variant declares more analog inputs than it routes, so the sketch clamps both counts to 3 — see the pin note in the sketch header.
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row" style="margin-bottom:10px">
+      <label class="grow">Traffic</label>
+      <label><input type="checkbox" id="showHex"> show raw bytes</label>
+      <button id="clear">Clear</button>
+    </div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   0. Board identity — the only generated part of this script
+   ============================================================ */
+
+const BOARD_NAME  = "Adafruit Gemma M0";
+const BOARD_FQBN  = "adafruit:samd:adafruit_gemma_m0";
+const USB_FILTERS = [
+  { usbVendorId: 0x239A, usbProductId: 0x801C },
+  { usbVendorId: 0x239A, usbProductId: 0x001C },
+];
+const NATIVE_USB  = true;
+
+/* ============================================================
+   1. OSC 1.0 codec  —  zero dependencies, Uint8Array in/out
+   ------------------------------------------------------------
+   Swap this whole section for osc.js (osc.writePacket /
+   osc.readPacket) if you'd rather use a maintained codec;
+   sections 2-4 don't care where the bytes come from.
+   ============================================================ */
+
+const TE = new TextEncoder();
+const TD = new TextDecoder();
+
+class Writer {
+  constructor() {
+    this.buf = new Uint8Array(256);
+    this.view = new DataView(this.buf.buffer);
+    this.len = 0;
+  }
+  _grow(extra) {
+    if (this.len + extra <= this.buf.length) return;
+    let cap = this.buf.length;
+    while (cap < this.len + extra) cap *= 2;
+    const next = new Uint8Array(cap);
+    next.set(this.buf.subarray(0, this.len));
+    this.buf = next;
+    this.view = new DataView(next.buffer);
+  }
+  u8(v)      { this._grow(1); this.buf[this.len++] = v; }
+  int32(v)   { this._grow(4); this.view.setInt32(this.len, v, false);   this.len += 4; }
+  float32(v) { this._grow(4); this.view.setFloat32(this.len, v, false); this.len += 4; }
+  raw(bytes) { this._grow(bytes.length); this.buf.set(bytes, this.len); this.len += bytes.length; }
+  pad()      { while (this.len % 4 !== 0) this.u8(0); }
+  // OSC string: contents, at least one NUL, padded to a multiple of 4
+  string(s)  { this.raw(TE.encode(s)); this.u8(0); this.pad(); }
+  // OSC blob: int32 length, contents, padded to a multiple of 4
+  blob(b)    { this.int32(b.length); this.raw(b); this.pad(); }
+  done()     { return this.buf.slice(0, this.len); }
+}
+
+class Reader {
+  constructor(bytes) {
+    this.b = bytes;
+    this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    this.pos = 0;
+  }
+  get left() { return this.b.length - this.pos; }
+  int32()    { const v = this.view.getInt32(this.pos, false);   this.pos += 4; return v; }
+  float32()  { const v = this.view.getFloat32(this.pos, false); this.pos += 4; return v; }
+  raw(n)     { const v = this.b.slice(this.pos, this.pos + n);  this.pos += n; return v; }
+  string() {
+    const start = this.pos;
+    let end = start;
+    while (end < this.b.length && this.b[end] !== 0) end++;
+    const s = TD.decode(this.b.subarray(start, end));
+    this.pos = start + (((end - start) + 4) & ~3);
+    return s;
+  }
+  blob() {
+    const n = this.int32();
+    const v = this.b.slice(this.pos, this.pos + n);
+    this.pos += (n + 3) & ~3;
+    return v;
+  }
+}
+
+function normalizeArg(a) {
+  if (a && typeof a === "object" && !(a instanceof Uint8Array) && "type" in a) return a;
+  if (typeof a === "number")  return Number.isInteger(a) ? { type: "i", value: a } : { type: "f", value: a };
+  if (typeof a === "string")  return { type: "s", value: a };
+  if (typeof a === "boolean") return { type: a ? "T" : "F" };
+  if (a === null)             return { type: "N" };
+  if (a instanceof Uint8Array) return { type: "b", value: a };
+  throw new Error("unsupported OSC argument: " + a);
+}
+
+function encodeMessage(address, args = []) {
+  const list = args.map(normalizeArg);
+  const w = new Writer();
+  w.string(address);
+  w.string("," + list.map(a => a.type).join(""));
+  for (const a of list) {
+    switch (a.type) {
+      case "i": w.int32(a.value | 0); break;
+      case "f": w.float32(Number(a.value)); break;
+      case "s": w.string(String(a.value)); break;
+      case "b": w.blob(a.value); break;
+      case "T": case "F": case "N": case "I": break; // type tag only, no payload
+      default: throw new Error("unsupported type tag: " + a.type);
+    }
+  }
+  return w.done();
+}
+
+const TIMETAG_IMMEDIATE = new Uint8Array([0, 0, 0, 0, 0, 0, 0, 1]);
+
+function encodeBundle(elements, timetag = TIMETAG_IMMEDIATE) {
+  const w = new Writer();
+  w.string("#bundle");
+  w.raw(timetag);
+  for (const el of elements) { w.int32(el.length); w.raw(el); }
+  return w.done();
+}
+
+function decodePacket(bytes) {
+  // '#' (0x23) at offset 0 means "#bundle"
+  if (bytes.length >= 16 && bytes[0] === 0x23) {
+    const r = new Reader(bytes);
+    r.string();                       // "#bundle"
+    const timetag = r.raw(8);
+    const packets = [];
+    while (r.left >= 4) {
+      const size = r.int32();
+      if (size <= 0 || size > r.left) break;
+      packets.push(decodePacket(r.raw(size)));
+    }
+    return { bundle: true, timetag, packets };
+  }
+  return decodeMessage(bytes);
+}
+
+function decodeMessage(bytes) {
+  const r = new Reader(bytes);
+  const address = r.string();
+  const args = [];
+  if (r.left > 0) {
+    const tags = r.string();
+    if (tags.startsWith(",")) {
+      for (const t of tags.slice(1)) {
+        switch (t) {
+          case "i": args.push({ type: "i", value: r.int32() }); break;
+          case "f": args.push({ type: "f", value: r.float32() }); break;
+          case "s": args.push({ type: "s", value: r.string() }); break;
+          case "b": args.push({ type: "b", value: r.blob() }); break;
+          case "T": args.push({ type: "T", value: true }); break;
+          case "F": args.push({ type: "F", value: false }); break;
+          case "N": args.push({ type: "N", value: null }); break;
+          case "I": args.push({ type: "I", value: Infinity }); break;
+          // Unknown tag: payload size is unknown, so stop rather than misparse.
+          default: args.push({ type: t, value: "<unhandled>" }); return { address, args };
+        }
+      }
+    }
+  }
+  return { address, args };
+}
+
+/* ============================================================
+   2. SLIP framing (RFC 1055) — what CNMAT's SLIPEncodedSerial
+      puts on the wire. Encode to bytes, decode as a stream.
+   ============================================================ */
+
+const END = 0xC0, ESC = 0xDB, ESC_END = 0xDC, ESC_ESC = 0xDD;
+
+function slipEncode(data) {
+  const out = new Uint8Array(data.length * 2 + 1);
+  let n = 0;
+  for (let i = 0; i < data.length; i++) {
+    const b = data[i];
+    if (b === END)      { out[n++] = ESC; out[n++] = ESC_END; }
+    else if (b === ESC) { out[n++] = ESC; out[n++] = ESC_ESC; }
+    else                { out[n++] = b; }
+  }
+  out[n++] = END;                     // trailing END only. CNMAT's own
+  return out.slice(0, n);             // beginPacket() also emits a *leading*
+}                                     // END, which is why the decoder below
+                                      // has to tolerate empty frames.
+
+class SlipDecoder {                   // used as a TransformStream transformer
+  constructor() { this.acc = []; this.esc = false; }
+  transform(chunk, controller) {
+    for (let i = 0; i < chunk.length; i++) {
+      const b = chunk[i];
+      if (this.esc) {
+        this.acc.push(b === ESC_END ? END : b === ESC_ESC ? ESC : b);
+        this.esc = false;
+      } else if (b === ESC) {
+        this.esc = true;
+      } else if (b === END) {
+        if (this.acc.length) {        // skip empty frames (leading ENDs, line noise)
+          controller.enqueue(Uint8Array.from(this.acc));
+          this.acc.length = 0;
+        }
+      } else {
+        this.acc.push(b);
+      }
+    }
+  }
+  flush() { this.acc.length = 0; }
+}
+
+/* ============================================================
+   3. Web Serial transport
+   ============================================================ */
+
+let port = null, writer = null, reader = null, pipeDone = null;
+
+async function connect(baudRate, allPorts) {
+  // Filtering narrows the chooser to this board. "show all ports" drops the
+  // filter, so a board whose USB id differs from the table above (a clone, a
+  // bootloader PID, a USB-serial bridge) is still reachable.
+  const opts = allPorts || !USB_FILTERS.length ? {} : { filters: USB_FILTERS };
+  port = await navigator.serial.requestPort(opts);
+  await port.open({ baudRate, bufferSize: 8192 });
+
+  writer = port.writable.getWriter();
+
+  const slip = new TransformStream(new SlipDecoder());
+  pipeDone = port.readable.pipeTo(slip.writable).catch(() => {});
+  reader = slip.readable.getReader();
+
+  readLoop();                          // fire and forget
+}
+
+async function readLoop() {
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      try {
+        logPacket("rx", decodePacket(value), value);
+      } catch (e) {
+        logLine("err", "decode failed: " + e.message);
+      }
+    }
+  } catch (e) {
+    logLine("err", "read loop ended: " + e.message);
+  }
+}
+
+async function disconnect() {
+  try { await reader?.cancel(); } catch {}
+  try { await pipeDone; } catch {}
+  try { writer?.releaseLock(); } catch {}
+  try { await port?.close(); } catch {}
+  port = writer = reader = pipeDone = null;
+}
+
+async function sendPacket(bytes) {
+  if (!writer) throw new Error("not connected");
+  await writer.write(slipEncode(bytes));
+}
+
+/* ============================================================
+   4. UI
+   ============================================================ */
+
+const $ = id => document.getElementById(id);
+
+function parseArgs(text) {
+  return text.trim().split(/\s+/).filter(Boolean).map(tok => {
+    const m = /^([ifs]):([\s\S]*)$/.exec(tok);
+    if (m) {
+      if (m[1] === "i") return { type: "i", value: parseInt(m[2], 10) || 0 };
+      if (m[1] === "f") return { type: "f", value: parseFloat(m[2]) || 0 };
+      return { type: "s", value: m[2] };
+    }
+    if (tok === "T") return { type: "T" };
+    if (tok === "F") return { type: "F" };
+    if (tok === "N") return { type: "N" };
+    if (/^-?\d+$/.test(tok)) return { type: "i", value: parseInt(tok, 10) };
+    if (/^-?(\d+\.\d*|\.\d+)([eE][-+]?\d+)?$/.test(tok)) return { type: "f", value: parseFloat(tok) };
+    return { type: "s", value: tok };
+  });
+}
+
+function fmtArg(a) {
+  if (a.type === "f") return "f:" + (+a.value).toFixed(4).replace(/0+$/, "").replace(/\.$/, ".0");
+  if (a.type === "b") return "b:[" + a.value.length + " bytes]";
+  if (a.type === "T" || a.type === "F" || a.type === "N" || a.type === "I") return a.type;
+  return a.type + ":" + a.value;
+}
+
+function hex(bytes) {
+  return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join(" ");
+}
+
+function stamp() {
+  const d = new Date();
+  return d.toTimeString().slice(0, 8) + "." + String(d.getMilliseconds()).padStart(3, "0");
+}
+
+function append(node) {
+  const log = $("log");
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  log.appendChild(node);
+  if (atBottom) log.scrollTop = log.scrollHeight;
+  while (log.childElementCount > 500) log.removeChild(log.firstChild);
+}
+
+function logLine(cls, text) {
+  const el = document.createElement("div");
+  el.className = "e " + cls;
+  el.innerHTML = `<span class="t">${stamp()}</span> `;
+  el.appendChild(document.createTextNode(text));
+  append(el);
+}
+
+function describe(pkt, indent = "") {
+  if (pkt.bundle) {
+    const inner = pkt.packets.map(p => describe(p, indent + "  ")).join("\n");
+    return `${indent}#bundle\n${inner}`;
+  }
+  const args = pkt.args.map(fmtArg).join(" ");
+  return `${indent}${pkt.address}${args ? " " + args : ""}`;
+}
+
+function logPacket(dir, pkt, raw) {
+  const el = document.createElement("div");
+  el.className = "e " + dir;
+  const arrow = dir === "tx" ? "→" : "←";
+  el.innerHTML = `<span class="t">${stamp()} ${arrow}</span> <span class="a"></span>`;
+  el.querySelector(".a").textContent = describe(pkt);
+  if ($("showHex").checked) {
+    const h = document.createElement("div");
+    h.className = "hex";
+    h.textContent = "   " + hex(raw);
+    el.appendChild(h);
+  }
+  append(el);
+}
+
+function setConnected(on) {
+  $("dot").classList.toggle("on", on);
+  $("status").textContent = on ? "Connected to " + BOARD_NAME : "Not connected";
+  $("connect").disabled = on;
+  $("disconnect").disabled = !on;
+  $("send").disabled = !on;
+  $("baud").disabled = on;
+  $("allPorts").disabled = on;
+}
+
+async function doSend(address, argText) {
+  if (!address.startsWith("/")) { logLine("err", "address must start with /"); return; }
+  try {
+    const args = parseArgs(argText);
+    const msg = encodeMessage(address, args);
+    const packet = $("bundle").checked ? encodeBundle([msg]) : msg;
+    await sendPacket(packet);
+    logPacket("tx", decodePacket(packet), packet);
+  } catch (e) {
+    logLine("err", "send failed: " + e.message);
+  }
+}
+
+// --- wiring ---------------------------------------------------
+
+if (!("serial" in navigator)) {
+  $("connPanel").classList.add("unsupported");
+  $("support").innerHTML =
+    '<span class="err">Web Serial is not available in this browser.</span> ' +
+    "Use Chrome/Edge 89+, Firefox 151+, or Chrome for Android 149+. " +
+    "The page must also be served over <code>https://</code> or <code>http://localhost</code> " +
+    "&mdash; opening the file directly with <code>file://</code> will not work.";
+  $("connect").disabled = true;
+} else {
+  $("support").innerHTML = NATIVE_USB
+    ? "<b>" + BOARD_NAME + "</b> has native USB, so the baud rate above is ignored by the hardware " +
+      "&mdash; Web Serial still requires one. Build for <code>" + BOARD_FQBN + "</code>."
+    : "<b>" + BOARD_NAME + "</b> talks through a USB-serial bridge, so the baud rate must match " +
+      "<code>SLIPSerial.begin()</code> in the sketch exactly. Build for <code>" + BOARD_FQBN + "</code>.";
+}
+
+$("connect").onclick = async () => {
+  try {
+    await connect(parseInt($("baud").value, 10), $("allPorts").checked);
+    setConnected(true);
+    logLine("sys", "port opened at " + $("baud").value + " baud");
+  } catch (e) {
+    if (e.name === "NotFoundError") {
+      logLine("sys", USB_FILTERS.length && !$("allPorts").checked
+        ? "no matching port picked — if the board is plugged in but absent from the list, tick “show all ports”"
+        : "no port picked");
+    } else {
+      logLine("err", "connect failed: " + e.message);
+    }
+  }
+};
+
+$("disconnect").onclick = async () => {
+  await disconnect();
+  setConnected(false);
+  logLine("sys", "port closed");
+};
+
+$("send").onclick = () => doSend($("addr").value, $("args").value);
+
+$("args").addEventListener("keydown", e => { if (e.key === "Enter") $("send").click(); });
+$("addr").addEventListener("keydown", e => { if (e.key === "Enter") $("send").click(); });
+
+for (const b of document.querySelectorAll(".chips button")) {
+  b.onclick = () => {
+    $("addr").value = b.dataset.a;
+    $("args").value = b.dataset.g;
+    if (!$("send").disabled) $("send").click();
+  };
+}
+
+$("clear").onclick = () => { $("log").textContent = ""; };
+
+navigator.serial?.addEventListener("disconnect", async () => {
+  if (port) { await disconnect(); setConnected(false); logLine("err", "device unplugged"); }
+});
+
+setConnected(false);
+logLine("sys", "ready for " + BOARD_NAME + " — click Connect and pick your board");
+</script>
+</body>
+</html>
