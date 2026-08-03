@@ -261,14 +261,40 @@ drives only the SLIP layer.
 | ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | — |
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | cliff at ~300 B |
 | LilyPad USB | — | — | — | cliff at ~378 B, then wedged |
+| UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | 0 frames lost up to 50 |
 | M5Stack NanoC6 | not run — board stopped responding | | | |
 
-The 2026-08-03 rows (LilyPad stress, Teensy widths, Beetle RP2040, ESP32-C3)
-were run against the 4.0.0 tree after the SLIP-over-TCP collapse, so they
-also stand as the regression evidence for it on real USB stacks. The Teensy
-`widths` and RP2040 rows close gaps that were dashes before: integer
-dispatch had never been checked on an ARM M7, and no RP2040 had ever run
-this library on hardware at all.
+The 2026-08-03 rows (LilyPad stress, Teensy widths, Beetle RP2040, ESP32-C3,
+UNO R4 WiFi) were run against the 4.0.0 tree after the SLIP-over-TCP
+collapse, so they also stand as the regression evidence for it on real USB
+stacks. The Teensy `widths` and RP2040 rows close gaps that were dashes
+before: integer dispatch had never been checked on an ARM M7, and no RP2040
+had ever run this library on hardware at all.
+
+## The UNO R4 WiFi is the first board here that is not native USB
+
+Every other board in the table above presents a native USB CDC endpoint,
+where the line rate is a formality the device ignores. The **UNO R4 WiFi**
+is not: it builds with `-DNO_USB`, so the core does `#define Serial _UART1_`
+and its `Serial` is a real UART that the on-board ESP32-S3 bridges to the
+host. Host and board must therefore agree on a baud rate.
+
+`Port` in `oscprobe.py` set raw mode but never set one, which no board had
+ever cared about. On the R4 WiFi that mismatch does not look like a
+mismatch — the board replies, and the reply arrives as framing noise
+(`EF ED EF ED EC ...`), which reads exactly like a board that is not running
+your sketch. `Port.BAUD` now matches the sketches' `begin(115200)`.
+
+Two things follow for anyone testing this board. The hardware sketches had
+hardcoded `SLIPEncodedUSBSerial`, which does not exist where
+`BOARD_HAS_USB_SERIAL` is undefined, so all five now carry the same
+`#ifdef` the examples use. And uploads to this board **intermittently do not
+take**: three separate flashes here reported success, wrote no
+`Write NNNN bytes to flash` line, and left the previous sketch running.
+Re-flashing fixed it every time. Check that the sketch you think is running
+actually is before believing a failure — the diagnostic that settled this
+one printed `av=8 n=8`, proving the SLIP layer had decoded the frame
+correctly all along.
 
 ## Boards this library cannot serve
 

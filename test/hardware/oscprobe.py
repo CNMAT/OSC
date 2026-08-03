@@ -115,11 +115,21 @@ def decode(p):
 
 
 class Port:
-    def __init__(self, path):
+    # Must match the sketches' SLIPSerial.begin(). A native USB CDC port
+    # ignores the line rate entirely, which is why this went years without
+    # being set at all -- every board tested was native USB. The UNO R4 WiFi
+    # is not: it builds with -DNO_USB, so its Serial is a real UART that the
+    # on-board ESP32-S3 bridges to the host, and the two ends must agree.
+    # Leaving it unset there gets the macOS default, and the reply arrives as
+    # framing noise (0xEF 0xED 0xEC...) rather than as no reply at all.
+    BAUD = 115200
+
+    def __init__(self, path, baud=BAUD):
         self.fd = os.open(path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         a = termios.tcgetattr(self.fd)
         a[0] = a[1] = a[3] = 0                       # iflag oflag lflag: raw
         a[2] = termios.CS8 | termios.CREAD | termios.CLOCAL
+        a[4] = a[5] = getattr(termios, 'B%d' % baud) # ispeed ospeed
         a[6][termios.VMIN] = 0
         a[6][termios.VTIME] = 0
         termios.tcsetattr(self.fd, termios.TCSANOW, a)

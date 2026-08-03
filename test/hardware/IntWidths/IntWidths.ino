@@ -3,7 +3,16 @@
 // bug-1 fix that only runs where long is 32 bits and int is 16 (classic AVR).
 #include <OSCMessage.h>
 #include <SLIPEncodedSerial.h>
+#ifdef BOARD_HAS_USB_SERIAL
 SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
+#else
+// Boards with no SLIPEncodedUSBSerial land here and bind to Serial through
+// HardwareSerial. That is the right port either way on the UNO R4: the
+// Minima does #define Serial SerialUSB (native USB, derives from
+// HardwareSerial), and the WiFi builds with -DNO_USB so its Serial is a real
+// UART that the on-board ESP32-S3 bridges to the host.
+SLIPEncodedSerial SLIPSerial(Serial);
+#endif
 
 void setup(){ SLIPSerial.begin(115200); }
 
