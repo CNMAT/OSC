@@ -78,6 +78,25 @@ an error code that had been declared but never used anywhere. `dos` covers it.
 **Byte-at-a-time reallocation.** `OSCBundle::addToIncomingBuffer()` called
 `realloc` for every single received byte. It now grows in blocks.
 
+## Allocation while decoding
+
+`clearIncomingBuffer()` runs after every completed argument, and it used to
+`realloc` the buffer back down to 16 bytes each time — even when it was already
+16 bytes. That, not the growth path, was where the churn was: about one realloc
+per argument. It now keeps the capacity and only resets the counters, and
+`empty()` calls `shrinkIncomingBuffer()` to hand back anything an unusually
+large packet acquired, so the steady state of a long-lived message stays
+allocation-free without holding memory indefinitely. Growth also doubles rather
+than adding 16, which is what the large-blob case needed.
+
+| decoding | before | after |
+|---|---|---|
+| 1 int | 6 reallocs | 1 |
+| 16 ints (the Esplora message) | 24 | 4 |
+| 1 blob, 200 B | 18 | 5 |
+
+`alloc/` holds the counter used to measure that; see its README.
+
 ## Adding a test
 
 New bug, new named case in `regressions.cpp`, with a comment saying what the

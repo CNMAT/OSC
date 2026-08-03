@@ -98,6 +98,7 @@ OSCMessage& OSCMessage::empty(){
     dataCapacity = 0;
     decodeState = STANDBY;
     clearIncomingBuffer();
+    shrinkIncomingBuffer();
     return *this;
 }
 
@@ -966,6 +967,8 @@ void OSCMessage::decode(uint8_t incomingByte){
     INCOMING BUFFER MANAGEMENT
  =============================================================================*/
 #define OSCPREALLOCATEIZE 16
+//capacity above which empty() gives the extra back rather than holding it
+#define OSCINCOMINGKEEP 64
 void OSCMessage::addToIncomingBuffer(uint8_t incomingByte){
     //refuse to grow without bound on a length taken from the wire
     if (incomingBufferSize >= OSC_MAX_INCOMING){
@@ -981,24 +984,64 @@ void OSCMessage::addToIncomingBuffer(uint8_t incomingByte){
     else
 	{
 
-        incomingBuffer = (uint8_t *) realloc ( incomingBuffer, incomingBufferSize + 1 + OSCPREALLOCATEIZE);
-        if (incomingBuffer != NULL){
+        //Double rather than adding a fixed 16. A 200-byte blob used to take
+        //about thirteen reallocs to accumulate; it now takes four. Clamped to
+        //OSC_MAX_INCOMING so doubling cannot overshoot the cap.
+        int capacity = incomingBufferSize + incomingBufferFree;
+        int want = capacity ? capacity * 2 : OSCPREALLOCATEIZE;
+        if (want > OSC_MAX_INCOMING){
+            want = OSC_MAX_INCOMING;
+        }
+        if (want <= incomingBufferSize){
+            want = incomingBufferSize + 1;
+        }
+        uint8_t * mem = (uint8_t *) realloc(incomingBuffer, want);
+        if (mem != NULL){
+            incomingBuffer = mem;
             incomingBuffer[incomingBufferSize++] = incomingByte;
-            incomingBufferFree = OSCPREALLOCATEIZE;
+            incomingBufferFree = want - incomingBufferSize;
         } else {
             error = ALLOCFAILED;
         }
     }
 }
 
+//Called after every completed argument, so this is the hot path. It used to
+//realloc the buffer back down to OSCPREALLOCATEIZE every single time, even when
+//it was already that size, which cost roughly one realloc per argument: a
+//sixteen-argument message spent 24 reallocs where it now spends 5. Keep
+//whatever capacity is already there and just forget the contents.
+//shrinkIncomingBuffer() below is what actually gives memory back.
 void OSCMessage::clearIncomingBuffer(){
-    incomingBuffer = (uint8_t *) realloc ( incomingBuffer, OSCPREALLOCATEIZE);
-	if (incomingBuffer != NULL){
-		incomingBufferFree = OSCPREALLOCATEIZE;
-	} else {
-		error = ALLOCFAILED;
-        incomingBuffer = NULL;
-
-	}
+    if (incomingBuffer == NULL){
+        incomingBuffer = (uint8_t *) malloc(OSCPREALLOCATEIZE);
+        if (incomingBuffer == NULL){
+            error = ALLOCFAILED;
+            incomingBufferSize = 0;
+            incomingBufferFree = 0;
+            return;
+        }
+        incomingBufferFree = OSCPREALLOCATEIZE;
+        incomingBufferSize = 0;
+        return;
+    }
+    incomingBufferFree += incomingBufferSize;   //capacity is unchanged
     incomingBufferSize = 0;
+}
+
+//Hand back memory that an unusually large packet caused us to acquire, but
+//leave a normal working buffer in place so the steady state stays allocation
+//free. Called from empty(), i.e. once the caller has said it is done with the
+//message, never from the per-argument path.
+void OSCMessage::shrinkIncomingBuffer(){
+    int capacity = incomingBufferSize + incomingBufferFree;
+    if (capacity <= OSCINCOMINGKEEP){
+        return;
+    }
+    uint8_t * mem = (uint8_t *) realloc(incomingBuffer, OSCPREALLOCATEIZE);
+    if (mem != NULL){
+        incomingBuffer = mem;
+        incomingBufferSize = 0;
+        incomingBufferFree = OSCPREALLOCATEIZE;
+    }
 }

@@ -61,7 +61,7 @@ OSCBundle& OSCBundle::empty(){
     }
     free(messages);
     messages = NULL;
-    clearIncomingBuffer();
+    shrinkIncomingBuffer();
     numMessages = 0;
     //Reset the decoder too.  Without this a bundle left in any state other
     //than STANDBY stayed there forever, so the usual pattern of one long-lived
@@ -367,20 +367,37 @@ void OSCBundle::addToIncomingBuffer(uint8_t incomingByte){
     //Grow in blocks. This used to realloc for every single byte, which on a
     //part with no heap compaction is both slow and fragmenting.
     if (incomingBufferFree == 0){
-        uint8_t * mem = (uint8_t *) realloc(incomingBuffer,
-                                            incomingBufferSize + OSCBUNDLE_PREALLOCATE);
+        //double, clamped to the cap
+        int capacity = incomingBufferSize + incomingBufferFree;
+        int want = capacity ? capacity * 2 : OSCBUNDLE_PREALLOCATE;
+        if (want > OSC_MAX_INCOMING){
+            want = OSC_MAX_INCOMING;
+        }
+        if (want <= incomingBufferSize){
+            want = incomingBufferSize + 1;
+        }
+        uint8_t * mem = (uint8_t *) realloc(incomingBuffer, want);
         if (mem == NULL){
             error = ALLOCFAILED;
             return;
         }
         incomingBuffer = mem;
-        incomingBufferFree = OSCBUNDLE_PREALLOCATE;
+        incomingBufferFree = want - incomingBufferSize;
     }
     incomingBuffer[incomingBufferSize++] = incomingByte;
     incomingBufferFree--;
 }
 
+//Called at every message boundary inside a bundle, so like OSCMessage's this
+//is a hot path. It used to free the buffer outright and force the next message
+//to build it again from nothing. Keep the capacity; empty() gives it back.
 void OSCBundle::clearIncomingBuffer(){
+    incomingBufferFree += incomingBufferSize;
+    incomingBufferSize = 0;
+}
+
+//Release capacity acquired by an unusually large bundle. Only from empty().
+void OSCBundle::shrinkIncomingBuffer(){
     incomingBufferSize = 0;
     incomingBufferFree = 0;
     free(incomingBuffer);

@@ -84,8 +84,10 @@ private:
 
     //adds a byte to the buffer
     void addToIncomingBuffer(uint8_t);
-    //clears the incoming buffer
+    //clears the incoming buffer, keeping its capacity
     void clearIncomingBuffer();
+    //releases capacity acquired by an unusually large packet
+    void shrinkIncomingBuffer();
 
     //decoding function
     void decode(uint8_t);
