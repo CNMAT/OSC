@@ -8,7 +8,7 @@ Features:
 * Supports the optional 64-bit timetag data type, Booleans, RGBA colours and MIDI messages
 * Address pattern matching
 * Dynamic memory allocation
-* Sends and receives OSC packets over transport layers that implements the Arduino Stream Class such as Serial and  Ethernet UDP
+* Sends and receives OSC packets over any transport layer that implements the Arduino Print and Stream classes: USB and hardware serial, Ethernet UDP, WiFi UDP and TCP
 
 # Wire format change in 4.0.0
 
@@ -53,6 +53,62 @@ We recommend Arduino 1.8.5 and a compatible Teensyduino overlay if you use the T
 Additional information about installing libraries on [Arduino's website](https://www.arduino.cc/en/Guide/Libraries).
 
 # Examples
+
+The `examples` folder is grouped by transport. Every sketch meets the library at
+the same two calls — `send()` writes to anything deriving from Arduino's `Print`,
+`fill()` takes bytes from wherever they arrived — so the transport is the only
+thing that changes between them. Nothing in the library itself includes a
+networking header.
+
+### Serial
+
+The `Serial*` sketches and the various `*Oscuino` sketches carry OSC over USB or
+hardware serial, framed with SLIP (below). Several of the `*Oscuino` ones ship
+with a Web Serial page next to them that talks to the board from a browser.
+
+### Wired Ethernet
+
+`UDPSendMessage`, `UDPSendBundle`, `UDPSendBundlewithTimeTag`, `UDPReceive`,
+`UDPEcho`, `UDPCallResponse` and `UDPOscuino` use the `Ethernet` library — a
+Wiznet shield or equivalent. `ETC_EOS_TCP` is OSC over TCP rather than UDP,
+SLIP-framed over an `EthernetClient`, talking to an ETC Eos console.
+
+### WiFi
+
+`WiFiSendMessage`, `WiFiReceiveMessage`, `WiFiSendBundle` and `WiFiEcho` are one
+sketch each across all of the current Arduino WiFi libraries. Every one of those
+libraries presents the same `WiFiUDP` object, so only the header to include
+differs, and a short `#if` block at the top of each sketch picks it from the
+board's own macros:
+
+| board | WiFi library | where it comes from |
+|---|---|---|
+| UNO R4 WiFi | WiFiS3 | bundled with the core |
+| Portenta C33 | WiFiC3 | bundled with the core |
+| Nano 33 IoT, MKR WiFi 1010, Nano RP2040 Connect | WiFiNINA | Library Manager |
+| ESP32 and the S2/S3/C3/C6 parts | WiFi | esp32 core |
+| ESP8266 | ESP8266WiFi | esp8266 core |
+
+All four were compiled with arduino-cli 1.5.1 for `arduino:renesas_uno:unor4wifi`,
+`arduino:samd:nano_33_iot`, `arduino:renesas_portenta:portenta_c33` and
+`esp32:esp32:esp32`. The ESP8266 branch is the one that has not been compiled —
+that core is not installed here — and none of the four has been run on hardware
+yet.
+
+The three sketches that send wrap the UDP object in an `OSCBufferedPrint`, which
+collects the packet and passes it to the transport in one write instead of the
+dozen small ones `send()` would otherwise make. That costs nothing on an ESP32
+and matters a great deal on the UNO R4 WiFi, where each write is a command to a
+separate radio chip — see [Performance](#performance) and
+[API.md](./API.md#oscbufferedprint). Sending straight to the UDP object still
+works; `WiFiReceiveMessage` only receives, so it does not use the buffer at all.
+
+MKR1000 and the old WiFi shield want WiFi101; an ESP-AT co-processor wants
+WiFiEspAT, plus a `WiFi.init(Serial1)` before connecting. Both expose the same
+`WiFiUDP`, so each is one more branch in that `#if` block rather than a separate
+sketch. Neither is in there now, because neither was compiled here.
+
+The three `ESP8266*` sketches predate these four and are ESP-only.
 
 The `Applications` folder contains examples for Max/MSP and PD and Processing that work with the example sketches. This will be expanded to include other applications like TouchOSC and Processing. For the Max/MSP examples you will need to download the CNMAT max externals package that includes the "o." objects available [here](http://cnmat.berkeley.edu/downloads).
 
@@ -247,11 +303,26 @@ References:
 * http://forum.pjrc.com/threads/17951-WIZ820io-Ethernet-and-2nd-power-supply-with-teensy-3-0
 * http://arduino.cc/forum/index.php?topic=139147.0
 
+### Write granularity
+
+`OSCMessage::send()` and `OSCBundle::send()` write in small pieces — the
+address, then each pad byte on its own, the comma, each type character, then the
+data. On a buffered transport that is free. On one where a write costs a round
+trip it dominates: on the UNO R4 WiFi and its clones the radio is a separate
+ESP32-S3 and every `WiFiUDP::write()` becomes an `AT+UDPWRITE` command over a
+115200 baud UART that blocks until the answer returns, so `/analog/0` with one
+integer costs eight round trips to move twenty bytes. A Wiznet shield pays the
+same tax in SPI transactions.
+
+`OSCBufferedPrint` (in `OSCBufferedPrint.h`) is a `Print` that collects the
+packet in a buffer you supply and hands it over in a single write. The WiFi
+sending examples use it; it applies to any transport with the same
+characteristic. See [API.md](./API.md#oscbufferedprint).
+
 The serial examples use a 9600 baud rate which is reliable on most of the FTDI based Arduinos. The slow rate is required for Arduino's without clock chips such as the TinyLili. Once you have established that things work at 9600 baud you will find it very beneficial to increase the rate. e.g. `Serial.begin(345600);   // !! 115200, 230400, 345600,   460800 X`
 
 # Future development ideas
 
-* WIFI examples
 * STM32 support
 * Intel Galileo support
 * HiFive Support
@@ -264,7 +335,6 @@ The serial examples use a 9600 baud rate which is reliable on most of the FTDI b
 * Better Time Tags that avoid the overflow limitation of Arduino timer code
 * Time Tag synchronization
 * Bluetooth LE 
-* TCP/IP Examples
 * examples for more applications (i.e. TouchOSC, Processing with SLIP)
 * deadline scheduling of OSC 64-bit timetags
 * ADK support
