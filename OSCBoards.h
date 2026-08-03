@@ -53,6 +53,25 @@
 
 #endif
 
+// The Zephyr core (Arduino UNO Q and the zephyr_main boards) spells the pin
+// count NUM_OF_DIGITAL_PINS and gives the analog pins an enum with no count
+// sentinel at all, so the Oscuino-style examples that iterate pins do not
+// compile there. Both counts come from the board's own devicetree rather than
+// from a table here, so they follow the variant instead of needing one entry
+// per board.
+#if defined(ARDUINO_ARCH_ZEPHYR)
+#ifndef NUM_DIGITAL_PINS
+#define NUM_DIGITAL_PINS NUM_OF_DIGITAL_PINS
+#endif
+#ifndef NUM_ANALOG_INPUTS
+#ifdef CONFIG_ADC
+#define NUM_ANALOG_INPUTS DT_PROP_LEN(DT_PATH(zephyr_user), adc_pin_gpios)
+#else
+#define NUM_ANALOG_INPUTS 0
+#endif
+#endif
+#endif
+
 
 #ifndef analogInputToDigitalPin
 int analogInputToDigitalPin(int i);

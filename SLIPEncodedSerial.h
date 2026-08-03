@@ -15,7 +15,7 @@ Extends the Serial class to encode SLIP over serial
 
 
 
-#if (defined(TEENSYDUINO) && (defined(USB_SERIAL) || defined(USB_DUAL_SERIAL) || defined(USB_TRIPLE_SERIAL) || defined(USB_SERIAL_HID) || defined(USB_MIDI_SERIAL) || defined(USB_MIDI_AUDIO_DUAL_SERIAL) || defined(USB_MIDI4_SERIAL) || defined(USB_MIDI16_SERIAL) || defined(USB_MIDI_AUDIO_SERIAL) || defined(USB_MIDI16_AUDIO_SERIAL))) || (!defined(TEENSYDUINO) && defined(__AVR_ATmega32U4__)) || defined(ARDUINO_SAMD_ADAFRUIT)|| defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_))  || defined(_SAMD21_) || defined(__PIC32MX__) || defined(__PIC32MZ__) || defined(ARDUINO_USB_CDC_ON_BOOT) || defined(ARDUINO_ARCH_RP2040) || (defined(ARDUINO_NRF52_ADAFRUIT) && defined(SERIAL_PORT_USBVIRTUAL))
+#if (defined(TEENSYDUINO) && (defined(USB_SERIAL) || defined(USB_DUAL_SERIAL) || defined(USB_TRIPLE_SERIAL) || defined(USB_SERIAL_HID) || defined(USB_MIDI_SERIAL) || defined(USB_MIDI_AUDIO_DUAL_SERIAL) || defined(USB_MIDI4_SERIAL) || defined(USB_MIDI16_SERIAL) || defined(USB_MIDI_AUDIO_SERIAL) || defined(USB_MIDI16_AUDIO_SERIAL))) || (!defined(TEENSYDUINO) && defined(__AVR_ATmega32U4__)) || defined(ARDUINO_SAMD_ADAFRUIT)|| defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_))  || defined(_SAMD21_) || defined(__PIC32MX__) || defined(__PIC32MZ__) || defined(ARDUINO_USB_CDC_ON_BOOT) || defined(ARDUINO_ARCH_RP2040) || (defined(ARDUINO_NRF52_ADAFRUIT) && defined(SERIAL_PORT_USBVIRTUAL)) || defined(ARDUINO_UNO_Q)
 #define BOARD_HAS_USB_SERIAL
 
 
@@ -42,6 +42,9 @@ Extends the Serial class to encode SLIP over serial
 // Adafruit_TinyUSB_Arduino library, which only links if a header of it is
 // included -- Adafruit's own CDC examples include it for the same reason
 #include <Adafruit_TinyUSB.h>
+#elif defined(ARDUINO_UNO_Q)
+// Serial is a BridgeMonitor proxied to the board's Linux side; the core's
+// own Arduino.h declares it, nothing further to include
 #else
 #error Unknown USB port
 #endif
@@ -378,7 +381,7 @@ typedef decltype(SerialUSB) actualUSBtype;
 typedef decltype(SerialUSB) actualUSBtype;
 
 // defined(__SAM3X8E__)
-#elif  defined(ARDUINO_ARCH_RP2040) || defined(ARDUINO_SAMD_ADAFRUIT) || defined(ARDUINO_USB_CDC_ON_BOOT) || defined(CORE_TEENSY)  || defined(__AVR_ATmega32U4__) || (defined(__PIC32MX__) || defined(__PIC32MZ__))
+#elif  defined(ARDUINO_ARCH_RP2040) || defined(ARDUINO_SAMD_ADAFRUIT) || defined(ARDUINO_USB_CDC_ON_BOOT) || defined(CORE_TEENSY)  || defined(__AVR_ATmega32U4__) || (defined(__PIC32MX__) || defined(__PIC32MZ__)) || defined(ARDUINO_UNO_Q)
 #define thisBoardsSerialUSB Serial
 typedef decltype(Serial) actualUSBtype;
 #endif
