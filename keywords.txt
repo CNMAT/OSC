@@ -50,6 +50,9 @@ endofPacket	KEYWORD2
 SLIPEncodedSerial	KEYWORD3
 SLIPEncodedUSBSerial	KEYWORD3
 SLIPEncodedTCP	KEYWORD3
+OSCBufferedPrint	KEYWORD3
+flush	KEYWORD2
+pending	KEYWORD2
 oscTime	KEYWORD1
 adcRead	KEYWORD1
 capacitanceRead	KEYWORD1

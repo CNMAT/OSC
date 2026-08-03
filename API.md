@@ -385,6 +385,49 @@ Add and decode the array of bytes as an OSCBundle.
 
 
 
+# OSCBufferedPrint
+
+`send()` writes a packet in small pieces: the address, then each pad byte on its
+own, the comma, each type character, more padding, then the data. That is free
+on a buffered transport and expensive on one where a write costs a round trip.
+On the UNO R4 WiFi and its clones every `WiFiUDP::write()` is an `AT+UDPWRITE`
+command to the ESP32-S3 radio over a 115200 baud UART, and it blocks until the
+answer comes back, so `/analog/0` with one integer costs eight round trips to
+move twenty bytes. Wiznet Ethernet shields pay the same tax in SPI transactions.
+
+`OSCBufferedPrint` is a `Print` that collects the packet in a buffer you supply
+and passes it on in a single write. It is in `OSCBufferedPrint.h`, which nothing
+else in the library includes.
+
+### `OSCBufferedPrint(Print &sink, uint8_t *buffer, size_t capacity)`
+
+Wraps `sink`. Nothing is allocated: the buffer is yours, and its size is a
+performance knob rather than a limit — a packet larger than the buffer is not
+truncated, the buffer is passed on as soon as it fills and filling carries on.
+
+```C++
+uint8_t packetbuf[128];
+
+Udp.beginPacket(outIp, outPort);
+  OSCBufferedPrint out(Udp, packetbuf, sizeof(packetbuf));
+  msg.send(out);
+  out.flush();
+Udp.endPacket();
+```
+
+### `void flush()`
+
+Hand what has accumulated to the sink. Not optional: bytes still in the buffer
+when the packet is closed never reach the transport. A short write from the sink
+leaves the remainder in the buffer for the next `flush()` rather than dropping
+it out of the middle of the packet.
+
+### `size_t pending()`
+
+Bytes waiting for a `flush()`.
+
+
+
 # Chaining
 
 Many methods return `this` which enables you to string together multiple commands. 
