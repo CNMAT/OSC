@@ -45,6 +45,31 @@ integer-dispatch fix on a platform where `int` is 16 bits and `long` is 32.
 `stress.py` — up to 50 SLIP frames back to back in a single write, each carrying
 its own index, to look for lost packet boundaries.
 
+## Probe F takes an analog address
+
+Not every variant defines `A0` — the M5Stack NanoC6 starts at `A1` — so the
+analog read is a parameter, not a constant:
+
+```sh
+python3 oscprobe.py /dev/cu.usbmodemXXXX        # defaults to /a/0
+python3 oscprobe.py /dev/cu.usbmodemXXXX /a/1   # boards with no A0
+```
+
+## Inbound bursts are truncated, and AVR does not recover
+
+`stress.py` found a hard limit on how much can arrive in one burst. The cutoff
+tracks bytes, not frames — on an ESP32-S3, delivered frames fell 16 → 11 → 8 → 4
+as frame size grew 18 → 26 → 42 → 74 bytes, with bytes-through pinned near 300.
+AVR cuts off around 378 bytes. That is the USB CDC receive buffer overflowing
+with no flow control; traffic at normal rates is unaffected, and Teensy's
+buffers are large enough that 50 frames never reach it.
+
+Worse, on AVR the sketch does not recover: after one overflowing burst every
+subsequent well-formed frame is lost until the board is reset. Not yet isolated
+— `OscEcho.ino` caps its own buffer at 600 bytes, so this may be the sketch
+rather than the library's SLIP state machine. Isolating it needs a sketch that
+drives only the SLIP layer.
+
 ## Measured
 
 | board | echo | widths | probe | stress |
@@ -52,3 +77,7 @@ its own index, to look for lost packet boundaries.
 | LilyPad USB (ATmega32U4) | 22/22 | 11/11, int=2 long=4 ll=8 double=4 | 7/7 | — |
 | Teensy 4.0 | 22/22 | — | 7/7 | 0 frames lost up to 50 |
 | Gemma M0 (SAMD21) | — | — | 7/7 | — |
+| ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | — |
+| M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | cliff at ~300 B |
+| LilyPad USB | — | — | — | cliff at ~378 B, then wedged |
+| M5Stack NanoC6 | not run — board stopped responding | | | |

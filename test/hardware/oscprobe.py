@@ -7,6 +7,12 @@ import os, sys, time, termios, struct, select
 
 PORT = sys.argv[1] if len(sys.argv) > 1 else '/dev/cu.usbmodem14501'
 
+# Which analog channel to read in probe F. Not every variant defines A0 --
+# the M5Stack NanoC6, for one, starts at A1 -- so /a/0 does not resolve
+# everywhere and cannot be hardcoded.
+#     python3 oscprobe.py /dev/cu.usbmodemXXXX /a/1
+ANALOG = sys.argv[2] if len(sys.argv) > 2 else '/a/0'
+
 END, ESC, ESC_END, ESC_ESC = 0xC0, 0xDB, 0xDC, 0xDD
 
 
@@ -191,8 +197,8 @@ def main():
     show("/s/a analog pin count", p.drain(0.6))
 
     print("\nF. analog read")
-    p.write(slip_encode(msg('/a/0')))
-    if not show("/a/0", p.drain(0.6)):
+    p.write(slip_encode(msg(ANALOG)))
+    if not show(ANALOG, p.drain(0.6)):
         fails += 1
 
     p.close()

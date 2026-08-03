@@ -8,7 +8,7 @@
  * Board : M5Stack NanoC6 (ESP32-C6FH4)
  * FQBN  : esp32:esp32:m5stack_nanoc6
  *
- * RISC-V. Use the espressif core's esp32:esp32:m5stack_nanoc6, which sets USB CDC On Boot by default; the M5Stack core's m5stack:esp32:m5stack_nano_c6 defaults it OFF, which leaves Serial on UART0 and the page seeing nothing. Only G1 and G2 are brought out, on the HY2.0-4P Grove header; G7 is the blue LED, G9 the button (also the download-mode strap, so hold it while plugging in if auto-reset fails), G3 the IR LED. G19/G20 drive the RGB LED and its power enable -- do not repurpose them. No pinClamp: the pins above sit past any small clamp, and routeDigital only touches a pin when it is addressed.
+ * NOT YET VERIFIED ON HARDWARE - compiles only. The board used for testing stopped running any sketch part way through bringup (ROM bootloader still responds to esptool, applications produce no output, under every FQBN tried including ones that had worked on it earlier), so this example has never been seen to answer. RISC-V. Use the espressif core's esp32:esp32:m5stack_nanoc6, which sets USB CDC On Boot by default; the M5Stack core's m5stack:esp32:m5stack_nano_c6 defaults it OFF, which leaves Serial on UART0 and the page seeing nothing. Only G1 and G2 are brought out, on the HY2.0-4P Grove header; G7 is the blue LED, G9 the button (also the download-mode strap, so hold it while plugging in if auto-reset fails), G3 the IR LED. G19/G20 drive the RGB LED and its power enable -- do not repurpose them. No pinClamp: the pins above sit past any small clamp, and routeDigital only touches a pin when it is addressed.
  *
  * Pair this with M5NanoC6Oscuino.html, sitting next to this file. Serve that page
  * over http://localhost or https:// (Web Serial refuses a file:// origin), click
