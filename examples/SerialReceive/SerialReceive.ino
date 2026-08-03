@@ -4,6 +4,10 @@
 #include <OSCBundle.h>
 #include <OSCBoards.h>
 
+#ifndef LED_BUILTIN
+#define LED_BUILTIN 2   // generic ESP32 dev modules leave it undefined; GPIO2 drives the usual on-board LED
+#endif
+
 #include <SLIPEncodedSerial.h>
 
 #ifdef BOARD_HAS_USB_SERIAL

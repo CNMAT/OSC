@@ -55,6 +55,7 @@ char * numToOSCAddress( int pin){
  * 
  **/
 
+#ifdef BOARD_HAS_TONE
 void routeTone(OSCMessage &msg, int addrOffset ){
   //iterate through all the analog pins
   for(byte pin = 0; pin < NUM_DIGITAL_PINS; pin++){
@@ -81,6 +82,7 @@ void routeTone(OSCMessage &msg, int addrOffset ){
     }
   }
 }
+#endif
 
 void setup() {
   //setup ethernet part
@@ -103,8 +105,11 @@ void loop(){
 
       //a single bundle element larger than OSC_MAX_INCOMING raises
       //BUFFER_FULL; an errored bundle is not dispatched
-      if(!bundleIN.hasError())
+      if(!bundleIN.hasError()) {
+#ifdef BOARD_HAS_TONE    //the Due core has no tone()/noTone()
         bundleIN.route("/tone", routeTone);
+#endif
+      }
    }
 }
 
