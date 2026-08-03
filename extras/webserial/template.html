@@ -379,9 +379,32 @@ async function disconnect() {
   port = writer = reader = pipeDone = null;
 }
 
+const USB_ENDPOINT = 64;
+
+// Never hand the device a write whose length is an exact multiple of the USB
+// endpoint size. The host terminates such a transfer with a zero-length packet,
+// and Arduino's ATmega32U4 CDC never releases the endpoint bank a ZLP lands in:
+// USB_Recv() only calls ReleaseRX() `if (len && ...)`, which is false when the
+// bank arrived empty, and USB_Available() never releases at all. The receive
+// endpoint then stalls permanently - transmit keeps working, only a reset
+// clears it. Measured on a LilyPad USB: 63, 100, 127 and 191 byte writes are
+// fine indefinitely; a single 64 or 128 byte write kills reception for good.
+//
+// One extra END byte is a no-op in SLIP - it just closes an empty frame, which
+// every decoder skips - so this costs nothing and is applied on all platforms.
+// Cores with a proper software RX ring buffer (Teensy, and ATUSB_Core, which
+// releases the stuck bank in both available() and read()) do not need it.
+function padAwayZLP(frame) {
+  if (frame.length % USB_ENDPOINT !== 0) return frame;
+  const out = new Uint8Array(frame.length + 1);
+  out.set(frame);
+  out[frame.length] = END;
+  return out;
+}
+
 async function sendPacket(bytes) {
   if (!writer) throw new Error("not connected");
-  await writer.write(slipEncode(bytes));
+  await writer.write(padAwayZLP(slipEncode(bytes)));
 }
 
 /* ============================================================

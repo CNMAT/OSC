@@ -55,56 +55,74 @@ python3 oscprobe.py /dev/cu.usbmodemXXXX        # defaults to /a/0
 python3 oscprobe.py /dev/cu.usbmodemXXXX /a/1   # boards with no A0
 ```
 
-## Inbound bursts: an ATmega32U4 platform limit, not a library one
+## The ATmega32U4 receive stall: a zero-length packet the core never releases
 
-`stress.py` found that inbound bursts are silently truncated and that on a
-32U4 the receive direction then stays dead until reset. That looked like an
-OSC or SLIP bug. It is not. Measured on a LilyPad USB (ATmega32U4):
+`stress.py` found inbound bursts truncated and a 32U4 refusing to receive until
+reset. It is not this library, and it is not memory. It has a single, exact
+cause.
 
-**It is not memory.** An instrumented echo reporting `freeRam()` on every
-packet shows free RAM flat at **2231 bytes** across the cliff — `minFree`
-never dips, `getError()` stays 0, no `ALLOCFAILED`. The board simply stops
-receiving while memory is untouched.
+**Not memory.** `MemDiag/` reports `freeRam()` on every packet: free RAM sits
+flat at **2231 bytes** right across the cliff, `minFree` never dips,
+`getError()` stays 0, no `ALLOCFAILED`.
 
-**It is not this library.** The same failure reproduces with a sketch that
-contains no OSC and no SLIP at all — just `Serial.available()` / `Serial.read()`
-in a tight loop, counting bytes:
+**Not this library.** `RawCount/` contains no OSC and no SLIP — just
+`Serial.available()`/`Serial.read()` counting bytes — and fails identically.
 
-| written | cumulative received |
+**The cause.** A USB host terminates any transfer that is an exact multiple of
+the endpoint size with a **zero-length packet**. The 32U4 CDC endpoint is 64
+bytes, so a 64, 128 or 256 byte write is followed by a ZLP. In
+`USBCore.cpp`:
+
+```c
+u8 USB_Available(u8 ep) { LockEP lock(ep); return FifoByteCount(); }   // never releases
+
+int USB_Recv(u8 ep, void* d, int len) {
+    ...
+    if (len && !FifoByteCount())   // len == 0 for a ZLP, so this never fires
+        ReleaseRX();
+}
+```
+
+The bank a ZLP lands in is never released, so the endpoint stalls forever.
+Transmit is unaffected — the board goes on reporting while accepting nothing.
+
+Measured on a LilyPad USB, one write at a time from a freshly reset board:
+
+| write | result |
 |---|---|
-| 100 | 100 |
-| +300 | 400 |
-| +378 | 778 |
-| +500 | 1162 — only 384 of 500 arrived |
-| +1000 | report truncated mid-line |
-| +4000 | 1162 — nothing further, ever |
+| 63 B, 63 B, 63 B, 100 B, 127 B, 191 B | all received in full, repeatedly |
+| **64 B** | received — then **every later read returns 0, permanently** |
+| **128 B** | same |
 
-**The stall is permanent and one-directional.** 2 s and 5 s of idle do not
-clear it; the host's own `write()` eventually returns EAGAIN because the device
-has stopped draining the endpoint. Transmit keeps working throughout — the
-board went on reporting its byte count while accepting none. Only a reset
-recovers it.
+### The fix, and the workaround
 
-**Why.** Arduino's 32U4 CDC has no software receive ring buffer. `Serial_::available()`
-and `Serial_::read()` in `CDC.cpp` call `USB_Available(CDC_RX)` and
-`USB_Recv(CDC_RX)` directly, so the only receive buffer is the hardware USB
-endpoint FIFO. Once the host outruns the sketch, that endpoint can be left in a
-state it never comes out of. Draining harder does not help: the byte-counting
-sketch above does nothing else and still loses data.
+[ATUSB_Core](https://github.com/adammhaile/ATUSB_Core) fixes it properly. Its
+core is Teensy-derived, and both `available()` and `read()` detect the stuck
+bank and release it:
 
-### What this means for using the library
+```c
+n = UEBCLX;
+if (!n) { i = UEINTX;
+  if (i & (1<<RXOUTI) && !(i & (1<<RWAL))) UEINTX = 0x6B; }   // release it
+```
 
-Keep inbound bursts small and paced by replies rather than by a timer. The
-request/response pattern the Oscuino examples use is naturally safe: 25 frames
-(350 bytes) written in one go were received intact, and 20 frames as separate
-writes were too. Blasting 50 frames (700 bytes) was not. Treat roughly 350
-bytes in flight as the practical ceiling on a 32U4, and wait for the reply
-before sending more.
+`read()` does the same and retries. That is exactly the case stock Arduino
+misses. It needs an ICSP programmer, though — it ships no bootloader.
 
-Boards with a real software RX buffer do not show this. Teensy 4.0 took 50
-frames back to back with nothing lost. ESP32 truncates at its buffer size —
-about 300 bytes, measured by varying frame size until only the byte count
-stayed constant — but recovers on the next quiet moment rather than stalling.
+Without changing cores, the host can simply never send a multiple of 64. The
+web pages here do that in `padAwayZLP()`: if a SLIP frame's length is a
+multiple of 64, append one extra `END` byte. An extra `END` closes an empty
+frame, which every SLIP decoder skips, so it costs nothing. Verified by A/B on
+one board:
+
+| | |
+|---|---|
+| 64, 128, 256, 64 B **padded** | all received, board stays healthy |
+| 64 B **unpadded**, same board | received — and the next 63 B write returns 0 |
+
+Boards with a real software RX buffer never show this. Teensy 4.0 took 50
+frames back to back with nothing lost. ESP32 truncates around 300 bytes but
+recovers on the next quiet moment rather than stalling.
 
 ## Allocation on small parts — worth knowing, not the cause of the above
 
