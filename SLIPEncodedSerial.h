@@ -43,6 +43,43 @@ Extends the Serial class to encode SLIP over serial
 
 #endif
  
+/*
+	Workaround for a permanent stall in Arduino's ATmega32U4 CDC receive path.
+
+	A USB host ends any transfer that is an exact multiple of the endpoint size
+	with a zero-length packet, and the 32U4 CDC endpoint is 64 bytes. Stock
+	USBCore.cpp never releases the endpoint bank such a packet lands in:
+	USB_Available() only reports FifoByteCount() and releases nothing, and
+	USB_Recv() releases only `if (len && !FifoByteCount())`, which is false when
+	the bank arrived empty. Reception then stops for good while transmit carries
+	on, and only a reset clears it. Measured on a LilyPad USB: 63, 100, 127 and
+	191 byte writes are fine indefinitely; one 64 or 128 byte write kills it.
+
+	Teensy's core, and ATUSB_Core which is derived from it, handle this in their
+	own available()/read(). Rather than depend on a replacement core, release the
+	bank here, using the same UEINTX value as the core's own ReleaseRX().
+
+	Only ever fires when a packet has been received (RXOUTI) and there is nothing
+	to read (RWAL clear) -- an empty bank. It can therefore never discard data.
+*/
+#if defined(__AVR_ATmega32U4__) && !defined(TEENSYDUINO) && defined(CDC_RX)
+static inline void oscReleaseStuckCdcRxBank()
+{
+	uint8_t sreg = SREG;
+	cli();
+	uint8_t ep = UENUM;               // the core leaves this pointing anywhere
+	UENUM = CDC_RX;
+	uint8_t i = UEINTX;
+	if ((i & (1 << RXOUTI)) && !(i & (1 << RWAL))) {
+		UEINTX = 0x6B;                // == ReleaseRX() in USBCore.cpp
+	}
+	UENUM = ep;
+	SREG = sreg;
+}
+#else
+static inline void oscReleaseStuckCdcRxBank() {}
+#endif
+
 template <class T>
 class _SLIPSerial: public Stream{
 	
@@ -69,6 +106,7 @@ public:
 	*/
 	bool endofPacket()
 	{
+		oscReleaseStuckCdcRxBank();
 		if(rstate == SECONDEOT)
 		{
 			rstate = CHAR; 
@@ -90,6 +128,7 @@ public:
 		return false;
 	}
 	int available(){
+		oscReleaseStuckCdcRxBank();
 	back:
 		uint8_t cnt = serial->available();
 		

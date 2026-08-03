@@ -94,7 +94,25 @@ Measured on a LilyPad USB, one write at a time from a freshly reset board:
 | **64 B** | received — then **every later read returns 0, permanently** |
 | **128 B** | same |
 
-### The fix, and the workaround
+### Fixed in the library
+
+`SLIPEncodedSerial.h` now releases the stuck bank itself, so no replacement core
+and no cooperating host is required. `oscReleaseStuckCdcRxBank()` is called from
+`_SLIPSerial::available()` and `endofPacket()`, compiles to nothing off the
+32U4, and only ever fires when a packet has been received (`RXOUTI`) with
+nothing to read (`RWAL` clear) — an empty bank — so it cannot discard data.
+
+Measured on a LilyPad USB with `ZlpTest/`, using **unpadded** writes, the ones
+that used to be fatal:
+
+| write | before | after |
+|---|---|---|
+| 64, 128, 256, 64, 64 B | first one kills reception for good | all received, board stays healthy |
+
+and `stress.py`, which does not pad either, goes from `27/50` and wedged to
+**50/50 with nothing lost**, matching Teensy.
+
+### Other ways to avoid it
 
 [ATUSB_Core](https://github.com/adammhaile/ATUSB_Core) fixes it properly. Its
 core is Teensy-derived, and both `available()` and `read()` detect the stuck
