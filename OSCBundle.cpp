@@ -149,8 +149,16 @@ OSCMessage * OSCBundle::getOSCMessage(int pos){
 bool OSCBundle::dispatch(const char * pattern, void (*callback)(OSCMessage&), int initial_offset){
 	bool called = false;
 	for (int i = 0; i < numMessages; i++){
-        OSCMessage msg = getOSCMessage(i);
-		called = msg.dispatch(pattern, callback, initial_offset) || called ;
+        //Use the message in place. This used to be `OSCMessage msg = getOSCMessage(i)`,
+        //which - because getOSCMessage returns a pointer and OSCMessage(OSCMessage*)
+        //is a converting constructor - deep-copied every message in the bundle on
+        //every dispatch, allocating a fresh address string and a fresh OSCData per
+        //argument and then freeing the lot. A sketch calling route() four times per
+        //packet paid that four times over. It also meant callbacks were handed a
+        //temporary, so anything they wrote to the message was discarded.
+        OSCMessage * msg = getOSCMessage(i);
+        if (msg == NULL) continue;
+		called = msg->dispatch(pattern, callback, initial_offset) || called ;
 	}
 	return called;
 }
@@ -159,8 +167,9 @@ bool OSCBundle::dispatch(const char * pattern, void (*callback)(OSCMessage&), in
 bool OSCBundle::route(const char * pattern, void (*callback)(OSCMessage&, int), int initial_offset){
 	bool called = false;
 	for (int i = 0; i < numMessages; i++){
-        OSCMessage msg = getOSCMessage(i);
-		called =  msg.route(pattern, callback, initial_offset) || called;
+        OSCMessage * msg = getOSCMessage(i);       //in place; see dispatch() above
+        if (msg == NULL) continue;
+		called =  msg->route(pattern, callback, initial_offset) || called;
 	}
 	return called;
 }

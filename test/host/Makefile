@@ -26,7 +26,7 @@ LIB      := ../..
 CXX      ?= c++
 CXXFLAGS := -std=c++11 -I shim -I $(LIB) -Wall -Wno-unused-parameter
 SRC      := $(LIB)/OSCData.cpp $(LIB)/OSCMessage.cpp $(LIB)/OSCBundle.cpp $(LIB)/OSCMatch.c
-TESTS    := vectors roundtrip regressions types harden
+TESTS    := vectors roundtrip regressions types harden copygrowth
 SAN      := -fsanitize=address,undefined -fno-omit-frame-pointer
 
 .PHONY: all asan clean
@@ -44,6 +44,7 @@ run: $(TESTS)
 	@echo "== regressions"; ./regressions | tail -2
 	@echo "== types";       ./types       > /dev/null && echo "  type/pattern matrix ok"
 	@echo "== harden";      ./harden      | tail -2
+	@echo "== copygrowth"; ./copygrowth | tail -2
 
 clean:
 	rm -rf $(TESTS) *.dSYM

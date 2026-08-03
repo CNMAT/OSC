@@ -61,6 +61,7 @@ void OSCMessage::setupMessage(){
 	error = OSC_OK;
 	//setup the space for data
 	data = NULL;
+	dataCapacity = 0;
     //setup for filling the message
     incomingBuffer = NULL;
     incomingBufferSize = 0;
@@ -94,6 +95,7 @@ OSCMessage& OSCMessage::empty(){
     free(data);
     data = NULL;
     dataCount = 0;
+    dataCapacity = 0;
     decodeState = STANDBY;
     clearIncomingBuffer();
     return *this;
@@ -108,6 +110,59 @@ OSCMessage::OSCMessage(OSCMessage * msg){
 	for (int i = 0; i < msg->dataCount; i++){
         add(msg->data[i]);
 	}
+}
+
+//Deep copy. The implicit copy constructor copied address, data and
+//incomingBuffer as raw pointers, so the copy and the original both freed the
+//same memory. `OSCMessage m = bundle.add("/a")` was a double free, and any
+//data added afterwards went to the copy rather than to the bundle.
+OSCMessage::OSCMessage(const OSCMessage & other){
+	setupMessage();
+	if (other.address != NULL){
+		setAddress(other.address);
+	}
+	for (int i = 0; i < other.dataCount; i++){
+		add(other.data[i]);
+	}
+	if (error == OSC_OK){
+		error = other.error;
+	}
+}
+
+OSCMessage& OSCMessage::operator=(const OSCMessage & other){
+	if (this == &other){
+		return *this;
+	}
+	empty();
+	free(address);
+	address = NULL;
+	if (other.address != NULL){
+		setAddress(other.address);
+	}
+	for (int i = 0; i < other.dataCount; i++){
+		add(other.data[i]);
+	}
+	if (error == OSC_OK){
+		error = other.error;
+	}
+	return *this;
+}
+
+//Doubles the data array when it is full. Starting at four keeps the common
+//short message to a single allocation, and an N-argument message now costs
+//log2(N) reallocs instead of N.
+bool OSCMessage::reserveOneMore(){
+	if (dataCount < dataCapacity){
+		return true;
+	}
+	int want = dataCapacity ? dataCapacity * 2 : 4;
+	OSCData ** mem = (OSCData **) realloc(data, sizeof(OSCData *) * want);
+	if (mem == NULL){
+		return false;
+	}
+	data = mem;
+	dataCapacity = want;
+	return true;
 }
 
 /*=============================================================================

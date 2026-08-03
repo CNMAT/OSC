@@ -52,6 +52,12 @@ private:
 	//the number of OSCData in the data array
 	int dataCount;
 
+	//how many slots the data array actually holds. It used to be realloc'd to
+	//exactly dataCount+1 on every add(), i.e. one realloc per argument growing
+	//by a single pointer. On a part with no heap compaction that is both slow
+	//and fragmenting; it now doubles.
+	int dataCapacity;
+
 	//error codes for potential runtime problems
 	OSCErrorCode error;
 
@@ -93,6 +99,9 @@ private:
 
 	void setupMessage();
 
+	//makes room for one more entry in the data array, doubling when full
+	bool reserveOneMore();
+
 	//compares the OSCData's type char to a test char
 	bool testType(int position, char type);
 
@@ -122,6 +131,13 @@ public:
 	//DESTRUCTOR
 	~OSCMessage();
 
+	//Deep copy. Without these the implicit versions copied the address, data
+	//and incomingBuffer pointers, so the copy and the original both freed the
+	//same memory -- `OSCMessage m = bundle.add("/a")` was an outright double
+	//free, and the data went to the copy rather than to the bundle.
+	OSCMessage (const OSCMessage &);
+	OSCMessage& operator= (const OSCMessage &);
+
 	//empties all of the data
 	OSCMessage& empty();
 
@@ -138,15 +154,12 @@ public:
 		if (d->error == ALLOCFAILED){
 			error = ALLOCFAILED;
 		} else {
-			//resize the data array
-			OSCData ** dataMem = (OSCData **) realloc(data, sizeof(OSCData *) * (dataCount + 1));
-			if (dataMem == NULL){
+			//room for one more, doubling rather than growing by one pointer
+			if (!reserveOneMore()){
 				error = ALLOCFAILED;
+				delete d;
 			} else {
-				data = dataMem;
-				//add data to the end of the array
 				data[dataCount] = d;
-				//increment the data size
 				dataCount++;
 			}
 		}
@@ -161,15 +174,12 @@ public:
 		if (d->error == ALLOCFAILED){
 			error = ALLOCFAILED;
 		} else {
-			//resize the data array
-			OSCData ** dataMem = (OSCData **) realloc(data, sizeof(OSCData *) * (dataCount + 1));
-			if (dataMem == NULL){
+			//room for one more, doubling rather than growing by one pointer
+			if (!reserveOneMore()){
 				error = ALLOCFAILED;
+				delete d;
 			} else {
-				data = dataMem;
-				//add data to the end of the array
 				data[dataCount] = d;
-				//increment the data size
 				dataCount++;
 			}
 		}
