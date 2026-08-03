@@ -308,7 +308,14 @@ template <> void _SLIPSerial<actualUSBtype>::endPacket(){
 // BluetoothSerial bluetoothserialinstance;
 // SLIPEncodedBluetoothSerial SLIPSerial(bluetoothserialinstance);
 
-#if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED) && !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32S3) && !defined(CONFIG_IDF_TARGET_ESP32S2)
+// BluetoothSerial is Bluetooth Classic, which only the original ESP32 has.
+// CONFIG_IDF_TARGET_ESP32C3 was listed twice here and C6/C2/H2 not at all;
+// harmless so far only because those parts do not enable Bluedroid, so the
+// second term short-circuits first. Named properly rather than relying on that.
+#if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED) \
+    && !defined(CONFIG_IDF_TARGET_ESP32C2) && !defined(CONFIG_IDF_TARGET_ESP32C3) \
+    && !defined(CONFIG_IDF_TARGET_ESP32C6) && !defined(CONFIG_IDF_TARGET_ESP32H2) \
+    && !defined(CONFIG_IDF_TARGET_ESP32S2) && !defined(CONFIG_IDF_TARGET_ESP32S3)
 #include "BluetoothSerial.h"
 using  SLIPEncodedBluetoothSerial =  _SLIPSerial<BluetoothSerial>;
 #define BOARD_HAS_BLUETOOTH_SERIAL
