@@ -235,13 +235,18 @@ AVR cuts off around 378 bytes. That is the USB CDC receive buffer overflowing
 with no flow control; traffic at normal rates is unaffected, and Teensy's
 buffers are large enough that 50 frames never reach it.
 
-On an ESP32-C3 (USB-Serial-JTAG, HWCDC) the ceiling is exact: 18 of the
-14-byte stress frames arrive (252 bytes) and the 19th is cut — the core's
-default 256-byte HWCDC ring. `thisBoardsSerialUSB.setRxBufferSize(1024)`
-before `begin()` takes the same board to 50/50 back-to-back frames clean,
-which pins the mechanism to the ring, not this library. Both measured
-2026-08-03 on the same board and build back to back. Unlike AVR, the C3
-recovers by itself: frames after the dropped tail decode normally.
+On HWCDC (the ESP32 USB-Serial-JTAG peripheral) the ceiling is exact and
+reproduces across chips. Nineteen of the 14-byte stress frames arrive — 266
+bytes — and the 20th is cut. **Measured identically on an ESP32-C3 and an
+Adafruit QT Py ESP32-S3**, same boundary, same missing indices `[19..]`,
+which is what rules out a per-part quirk: it is the core's shared HWCDC
+driver and its default 256-byte rx ring, the small overshoot being what the
+sketch drains while the burst is still arriving.
+`Serial.setRxBufferSize(1024)` before `begin()` takes **both** boards to
+50/50 back-to-back frames clean, on the same build otherwise, which pins the
+mechanism to the ring rather than to this library. All four runs measured
+2026-08-03. Unlike AVR, both recover by themselves: frames after the dropped
+tail decode normally.
 
 Worse, on AVR the sketch does not recover: after one overflowing burst every
 subsequent well-formed frame is lost until the board is reset. Not yet isolated
@@ -256,7 +261,8 @@ drives only the SLIP layer.
 | LilyPad USB (ATmega32U4) | 22/22 | 11/11, int=2 long=4 ll=8 double=4 | 7/7 | 0 frames lost up to 50 |
 | Teensy 4.0 (ARM M7) | 22/22 | 11/11 | 7/7 | 0 frames lost up to 50 |
 | DFRobot Beetle RP2040 | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | 0 frames lost up to 50 |
-| ESP32-C3 (RISC-V) | 22/22 | 11/11 | — | cliff at 252 B; 50/50 with a 1 KB ring |
+| ESP32-C3 (RISC-V) | 22/22 | 11/11 | — | cliff at 266 B; 50/50 with a 1 KB ring |
+| QT Py ESP32-S3 (Xtensa, HWCDC) | 22/22 | 11/11 | — | cliff at 266 B; 50/50 with a 1 KB ring |
 | Gemma M0 (SAMD21) | — | — | 7/7 | — |
 | ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | — |
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | cliff at ~300 B |
@@ -265,7 +271,7 @@ drives only the SLIP layer.
 | M5Stack NanoC6 | not run — board stopped responding | | | |
 
 The 2026-08-03 rows (LilyPad stress, Teensy widths, Beetle RP2040, ESP32-C3,
-UNO R4 WiFi) were run against the 4.0.0 tree after the SLIP-over-TCP
+UNO R4 WiFi, QT Py ESP32-S3) were run against the 4.0.0 tree after the SLIP-over-TCP
 collapse, so they also stand as the regression evidence for it on real USB
 stacks. The Teensy `widths` and RP2040 rows close gaps that were dashes
 before: integer dispatch had never been checked on an ARM M7, and no RP2040
@@ -295,6 +301,43 @@ Re-flashing fixed it every time. Check that the sketch you think is running
 actually is before believing a failure — the diagnostic that settled this
 one printed `av=8 n=8`, proving the SLIP layer had decoded the frame
 correctly all along.
+
+## The QT Py ESP32-S3 needs `USBMode=hwcdc`, and two button presses
+
+This board defaults to `USBMode=default` — USB-OTG via TinyUSB — and at that
+setting **nothing reaches the host at all**, not even a bare
+`Serial.println()` in a sketch with no OSC in it. Built with
+`USBMode=hwcdc,CDCOnBoot=cdc` the same sketch prints immediately. Use:
+
+```sh
+arduino-cli compile -b esp32:esp32:adafruit_qtpy_esp32s3_n4r2:USBMode=hwcdc,CDCOnBoot=cdc \
+    --upload --port /dev/cu.usbmodemXXXX test/hardware/OscEcho
+```
+
+Flashing it the first time needs the manual ROM sequence — hold BOOT, tap
+RESET, release BOOT — because the board has no USB-serial chip and so no
+DTR/RTS auto-reset circuit for esptool to drive. Neither esptool's reset nor
+the 1200-baud touch does anything; verified by watching the port list for 48
+seconds across an upload attempt, during which no new port ever appeared.
+**After flashing it also needs a plain RESET press** to leave download mode
+and run the app; `esptool ... run` was not sufficient. Once it is running an
+application, subsequent uploads reset cleanly on their own and need no
+buttons.
+
+Both quirks look exactly like a broken library from the host side — silence,
+then a board that flashes successfully and still says nothing.
+
+## The Esplora is the largest packet this library produces
+
+`examples/EsploraOscuino` puts the whole board state in one bundle: 38
+messages, floats, booleans, strings and ints together. Listening to a board
+already running it, **199 of 199 SLIP frames decoded, 0 failures**, against
+`oscprobe.decode`, which is written from the OSC 1.0 spec and shares no code
+with the library. Frames ran 400 to **1316 bytes** — several times anything
+else exercised here, and well past the 512-byte `OSC_MAX_INCOMING` an AVR
+would apply on the *inbound* path, which is worth remembering before that cap
+is tuned. Measured 2026-08-03 over its custom USB descriptor (`OSC Esplora`,
+`0x6666/0x1099`).
 
 ## Boards this library cannot serve
 
