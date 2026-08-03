@@ -141,9 +141,14 @@ void loop(){
    {
 //         unsigned int outPort = Udp.remotePort();
 
-         while(size--)
-           bundleIN.fill(Udp.read());
+         //Udp.read() returns int, -1 on underrun; fed straight into fill()
+         //that narrows to an 0xFF data byte instead of stopping
+         int c;
+         while(size-- && (c = Udp.read()) >= 0)
+           bundleIN.fill((uint8_t)c);
 
+        //a datagram too large for OSC_MAX_INCOMING raises BUFFER_FULL and is
+        //dropped here rather than dispatched half-decoded
         if(!bundleIN.hasError())
               bundleIN.route("/analog", routeAnalog);
 
