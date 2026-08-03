@@ -115,7 +115,10 @@ private:
 	T * serial;
 
 	uint8_t obuf[OSC_SLIP_TX_BUFFER];
-	uint8_t olen;
+	// wide enough for any sane OSC_SLIP_TX_BUFFER: as a uint8_t this wrapped
+	// 255->0 when the buffer was overridden to 256+, so the flush condition
+	// never fired and packets went out truncated to (length mod 256)
+	uint16_t olen;
 
 	//hand the collected bytes to the port in one call
 	void flushOut()
@@ -381,7 +384,11 @@ typedef decltype(Serial) actualUSBtype;
 #endif
 using  SLIPEncodedUSBSerial =  _SLIPSerial<actualUSBtype>;
 #if defined(CORE_TEENSY)
-template <> void _SLIPSerial<actualUSBtype>::endPacket(){
+// inline is load-bearing: an explicit specialization is an ordinary
+// external-linkage function, so without it every translation unit that
+// includes this header emits a strong definition and multi-file sketches
+// fail to link
+template <> inline void _SLIPSerial<actualUSBtype>::endPacket(){
 		//must drain the transmit buffer like the generic endPacket() does,
 		//or everything collected since beginPacket() is discarded here
 		put(eot);
