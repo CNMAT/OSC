@@ -66,8 +66,8 @@ void loop(){
     while(size-- && (c = Udp.read()) >= 0)
            bndl.fill((uint8_t)c);
 
-        //a datagram too large for OSC_MAX_INCOMING raises BUFFER_FULL and is
-        //dropped here rather than dispatched half-decoded
+        //a single bundle element larger than OSC_MAX_INCOMING raises
+        //BUFFER_FULL; an errored bundle is not dispatched
         if(!bndl.hasError())
         {
               //and echo it back

@@ -32,7 +32,10 @@ void loop() {
 	if (slip.available()) {
     while (!slip.endofPacket()) {
       while (slip.available()) {
-        msg.fill(slip.read());
+        //read() returns int, -1 when the stream dries up mid-packet; fed
+        //straight into fill() that narrows to an 0xFF data byte
+        int c = slip.read();
+        if (c >= 0) msg.fill((uint8_t)c);
 			}
 		}
 		if (msg.fullMatch("/eos/out/ping")) {

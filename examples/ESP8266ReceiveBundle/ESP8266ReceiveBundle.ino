@@ -86,8 +86,11 @@ void loop() {
   int size = Udp.parsePacket();
 
   if (size > 0) {
-    while (size--) {
-      bundle.fill(Udp.read());
+    //Udp.read() returns int, -1 on underrun; fed straight into fill() that
+    //narrows to an 0xFF data byte instead of stopping
+    int c;
+    while (size-- && (c = Udp.read()) >= 0) {
+      bundle.fill((uint8_t)c);
     }
     if (!bundle.hasError()) {
       bundle.dispatch("/led", led);
