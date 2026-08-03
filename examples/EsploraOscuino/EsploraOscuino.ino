@@ -60,6 +60,11 @@
  *    /heartbeat  <ms>          report at least this often, 0 disables
  *    /deadband   <counts>      analog change needed to trigger, 0..64
  *
+ * The page draws its indicators over a photograph of the board (esplora.jpg,
+ * Arduino SA, CC BY-SA 3.0 — see CREDITS.md), so the joystick, switches,
+ * slider, RGB LED and the four TinkerKit connectors light up where they
+ * actually are rather than on a diagram of them.
+ *
  * Written by Adrian Freed, CNMAT. Part of the CNMAT OSC library.
  */
 
