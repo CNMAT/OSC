@@ -80,6 +80,25 @@ static inline void oscReleaseStuckCdcRxBank()
 static inline void oscReleaseStuckCdcRxBank() {}
 #endif
 
+/*
+	Outbound bytes are collected here and handed to the port in blocks.
+
+	Every byte used to go out through its own serial->write(b). On a USB CDC
+	port that is a function call with interrupts disabled, an endpoint select
+	and a FIFO check each time, and it dominates: measured on an ATmega32U4, a
+	60-byte OSC packet took 2773 us to send, about 46 us per byte, which is
+	nowhere near what the link can carry. Escaping into a buffer and calling
+	serial->write(buf, n) once per block removes almost all of that, and it
+	helps on every platform rather than needing a replacement core.
+
+	Nothing is held past the end of a packet: endPacket() and flush() both
+	drain the buffer. Raw writes that never call either will sit until the
+	buffer fills, which is why flush() exists.
+*/
+#ifndef OSC_SLIP_TX_BUFFER
+#define OSC_SLIP_TX_BUFFER 64
+#endif
+
 template <class T>
 class _SLIPSerial: public Stream{
 	
@@ -89,12 +108,32 @@ private:
 	
 	//the serial port used
 	T * serial;
+
+	uint8_t obuf[OSC_SLIP_TX_BUFFER];
+	uint8_t olen;
+
+	//hand the collected bytes to the port in one call
+	void flushOut()
+	{
+		if (olen) {
+			serial->write(obuf, olen);
+			olen = 0;
+		}
+	}
+
+	//buffer one already-escaped byte
+	void put(uint8_t b)
+	{
+		obuf[olen++] = b;
+		if (olen >= OSC_SLIP_TX_BUFFER) flushOut();
+	}
 	
 public:
 	_SLIPSerial(T &s)
 	{
 		serial = &s;
 		rstate = CHAR;
+		olen = 0;
 	}
 
 	static const uint8_t eot = 0300;
@@ -245,24 +284,27 @@ public:
 
 	//encode SLIP
 	size_t write(uint8_t b){
-		if(b == eot){ 
-			serial->write(slipesc);
-			return serial->write(slipescend); 
-		} else if(b==slipesc) {  
-			serial->write(slipesc);
-			return serial->write(slipescesc); 
+		if(b == eot){
+			put(slipesc);
+			put(slipescend);
+		} else if(b==slipesc) {
+			put(slipesc);
+			put(slipescesc);
 		} else {
-			return serial->write(b);
-		}	
+			put(b);
+		}
+		return 1;   // bytes of caller payload consumed, not bytes emitted
 	}
 	size_t write(const uint8_t *buffer, size_t size)
-	{ 
-		size_t result=0;
+	{
+		//the old loop returned the result of the LAST write rather than the
+		//total, so callers checking the count saw 1 for any length
+		size_t count = size;
 		while(size--)
 		{
-			result = write(*buffer++);
+			write(*buffer++);
 		}
-		return result;
+		return count;
 	}
 
 
@@ -274,14 +316,16 @@ public:
 		serial->begin(name);
 	}
 	//SLIP specific method which begins a transmitted packet
-	void beginPacket() { 	serial->write(eot); }
+	void beginPacket() { put(eot); }
 
 	//signify the end of the packet with an EOT
 	void endPacket(){
-		serial->write(eot);
+		put(eot);
+		flushOut();
 	}
 
 	void flush(){
+		flushOut();
 		serial->flush();
 	}
 
@@ -333,8 +377,11 @@ typedef decltype(Serial) actualUSBtype;
 using  SLIPEncodedUSBSerial =  _SLIPSerial<actualUSBtype>;
 #if defined(CORE_TEENSY)
 template <> void _SLIPSerial<actualUSBtype>::endPacket(){
-		serial->write(eot);
-  		serial->send_now();
+		//must drain the transmit buffer like the generic endPacket() does,
+		//or everything collected since beginPacket() is discarded here
+		put(eot);
+		flushOut();
+		serial->send_now();
 }
 #endif
 

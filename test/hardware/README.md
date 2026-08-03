@@ -153,6 +153,40 @@ Boards with a real software RX buffer never show this. Teensy 4.0 took 50
 frames back to back with nothing lost. ESP32 truncates around 300 bytes but
 recovers on the next quiet moment rather than stalling.
 
+## Transmit throughput
+
+`_SLIPSerial` used to hand the port one byte at a time: `write(buffer, size)`
+looped over the single-byte `write()`, which called `serial->write(b)` per byte.
+On a USB CDC port each of those is a function call with interrupts disabled, an
+endpoint select and a FIFO check, and that overhead dominated everything else.
+It also returned the result of the *last* write rather than the total, so a
+caller checking the count saw 1 for any length.
+
+Escaped bytes are now collected in a small buffer (`OSC_SLIP_TX_BUFFER`, 64 by
+default) and handed over with one `serial->write(buf, n)` per block.
+`endPacket()` and `flush()` drain it, so nothing is ever held past a packet
+boundary. Measured with `TxBench/`, a 60-byte OSC message sent 200 times:
+
+| board | before | after | |
+|---|---|---|---|
+| ATmega32U4 (LilyPad USB) | 2773 us/packet | **1348 us/packet** | 2.06x |
+| Teensy 4.0 | 17 us/packet | 16 us/packet | unchanged |
+
+The 32U4 gain is the whole point; Teensy shows nothing because its core already
+buffers writes behind a flush timer, so the per-byte path was never its
+bottleneck. At 60 bytes the 32U4 is now near the 1 ms USB full-speed frame, so
+it has gone from CPU-bound to frame-bound and there is little left to win
+without batching packets, which would cost latency.
+
+Cost: 64 bytes of RAM and about 50 bytes of flash. Set `OSC_SLIP_TX_BUFFER`
+before including the header to change it.
+
+Verified byte-exact after the change: `echotest.py` 22/22 and `stress.py`
+clean on both an ATmega32U4 and a Teensy 4.0. The Teensy matters
+particularly, because its `endPacket()` template specialisation calls
+`send_now()` and had to be taught to drain the buffer too — without that it
+would have discarded every packet.
+
 ## Allocation on small parts — worth knowing, not the cause of the above
 
 Since the cliff turned out not to be memory, this is recorded as a separate
