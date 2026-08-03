@@ -272,7 +272,12 @@ void loop(){
         if ((size =SLIPSerial.available()) > 0)
         {
            while(size--)
-              bundleIN.fill(SLIPSerial.read());
+              {
+                // read() returns int and -1 on underrun; passing that straight
+                // to fill() narrowed it to an ordinary 0xFF data byte
+                int c = SLIPSerial.read();
+                if (c >= 0) bundleIN.fill((uint8_t)c);
+              }
         }
 
     if(!bundleIN.hasError())
