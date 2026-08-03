@@ -52,8 +52,8 @@
   <h1>EsploraOscuino</h1>
   <div class="sub">
     The entire Esplora state arrives as a single OSC message —
-    <code>/esplora</code> with 16 integers, sampled in one pass — rather than a
-    bundle of twenty. Chrome or Edge, over Web Serial.
+    <code>/esplora</code> with 18 integers, sampled in one pass — rather than a
+    bundle of twenty. Sent on change, plus a heartbeat so silence still means something. Chrome or Edge, over Web Serial.
   </div>
 
   <div class="panel">
@@ -77,14 +77,32 @@
       <button id="beep">beep 200ms</button>
       <button id="quiet">stop</button>
       <span style="width:14px"></span>
-      <label>rate</label>
+      <label>min gap</label>
       <select id="rate">
-        <option value="0">max</option>
-        <option value="10">100 Hz</option>
-        <option value="20" selected>50 Hz</option>
-        <option value="50">20 Hz</option>
-        <option value="200">5 Hz</option>
+        <option value="0">none</option>
+        <option value="10">10 ms</option>
+        <option value="20" selected>20 ms</option>
+        <option value="50">50 ms</option>
+        <option value="200">200 ms</option>
       </select>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label>out D3</label>
+      <input type="range" id="d3" min="0" max="255" value="0" style="width:110px">
+      <span id="d3v" style="font-family:var(--mono); color:var(--dim); width:30px">0</span>
+      <label>out D11</label>
+      <input type="range" id="d11" min="0" max="255" value="0" style="width:110px">
+      <span id="d11v" style="font-family:var(--mono); color:var(--dim); width:30px">0</span>
+      <span style="width:14px"></span>
+      <label>heartbeat</label>
+      <select id="heartbeat">
+        <option value="0">off</option>
+        <option value="500">0.5 s</option>
+        <option value="2000" selected>2 s</option>
+        <option value="5000">5 s</option>
+      </select>
+      <label>deadband</label>
+      <input type="number" id="deadband" value="4" min="0" max="64" style="width:66px">
     </div>
   </div>
 
@@ -136,6 +154,8 @@
         <div class="mrow"><span>light</span><div class="meter"><i id="mLight"></i></div><span id="vLight">–</span></div>
         <div class="mrow"><span>mic</span><div class="meter"><i id="mMic"></i></div><span id="vMic">–</span></div>
         <div class="mrow"><span>accel Z</span><div class="meter"><i id="mAccZ"></i></div><span id="vAccZ">–</span></div>
+        <div class="mrow"><span>tinker A</span><div class="meter"><i id="mTkA"></i></div><span id="vTkA">–</span></div>
+        <div class="mrow"><span>tinker B</span><div class="meter"><i id="mTkB"></i></div><span id="vTkB">–</span></div>
         <div class="row" style="margin-top:10px; justify-content:space-between">
           <span style="color:var(--dim); font-size:12px">temperature</span>
           <span id="vTemp" style="font-family:var(--mono)">–</span>
@@ -297,6 +317,7 @@ const FIELDS = [
   "seq", "slider", "light", "mic", "tempC", "tempF",
   "joyX", "joyY", "joySw", "sw1", "sw2", "sw3", "sw4",
   "accelX", "accelY", "accelZ",
+  "tinkerA", "tinkerB",          // multiplexer channels 8 and 9
 ];
 
 let lastSeq = null, dropped = 0, frames = 0, lastRateAt = performance.now();
@@ -346,6 +367,8 @@ function render(s) {
   meter("Light",  s.light  / 1023, s.light);
   meter("Mic",    s.mic    / 1023, s.mic);
   meter("AccZ",   (s.accelZ + 512) / 1023, s.accelZ);
+  meter("TkA",    s.tinkerA / 1023, s.tinkerA);
+  meter("TkB",    s.tinkerB / 1023, s.tinkerB);
   $("vTemp").textContent = `${s.tempC} °C / ${s.tempF} °F`;
 
   const tb = $("raw").tBodies[0];
@@ -414,6 +437,10 @@ $("rgbOff").onclick = () => { $("rgb").value = "#000000";
 $("beep").onclick  = () => send("/tone", [parseInt($("freq").value, 10) || 440, 200]);
 $("quiet").onclick = () => send("/tone", [0]);
 $("rate").onchange = e => send("/rate", [parseInt(e.target.value, 10)]);
+$("heartbeat").onchange = e => send("/heartbeat", [parseInt(e.target.value, 10)]);
+$("deadband").onchange  = e => send("/deadband", [parseInt(e.target.value, 10) || 0]);
+$("d3").oninput  = e => { $("d3v").textContent  = e.target.value; send("/d/3",  [+e.target.value]); };
+$("d11").oninput = e => { $("d11v").textContent = e.target.value; send("/d/11", [+e.target.value]); };
 
 markStale();
 </script>

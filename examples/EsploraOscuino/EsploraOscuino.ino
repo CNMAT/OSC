@@ -8,7 +8,7 @@
  * The older OSCEsplora example sends a bundle of ~20 separate messages, one per
  * sensor. This sends ONE message instead:
  *
- *     /esplora ,iiiiiiiiiiiiiiii  <16 ints>
+ *     /esplora ,iiiiiiiiiiiiiiiiii  <18 ints>
  *
  * Everything the board knows about itself in a single packet, sampled in one
  * pass so the values belong to the same instant. That matters for sensor
@@ -35,6 +35,16 @@
  *   13  accelX   roughly -512..511, zeroed at rest
  *   14  accelY
  *   15  accelZ
+ *   16  tinkerA  0..1023  TinkerKit INPUT A, multiplexer channel 8
+ *   17  tinkerB  0..1023  TinkerKit INPUT B, multiplexer channel 9
+ *
+ * Reporting is change-driven, not timer-driven. A packet goes out when
+ * something actually moved, and otherwise once every heartbeat interval so a
+ * page that connects mid-session still gets a full picture and so silence is
+ * distinguishable from a dead link. Analog channels are compared with a
+ * deadband because the microphone, light sensor and accelerometer never read
+ * the same value twice - without one, "on change" degenerates into "always".
+ * Buttons bypass the deadband: a press is never noise.
  *
  * The Esplora's switches are pulled up and read LOW when pressed. That is an
  * electrical detail, not something a receiver should have to know, so the
@@ -42,9 +52,13 @@
  *
  * Inbound, so the page can drive the board:
  *
- *    /rgb   <r> <g> <b>     0..255 each
- *    /tone  <freq> [<ms>]   0 or no argument stops it
- *    /rate  <ms>            minimum interval between reports, 0..1000
+ *    /rgb        <r> <g> <b>   0..255 each
+ *    /tone       <freq> [<ms>]  0 or no argument stops it
+ *    /d/3        <0..255>      TinkerKit OUTPUT A, analogWrite
+ *    /d/11       <0..255>      TinkerKit OUTPUT B, analogWrite
+ *    /rate       <ms>          floor on the gap between reports, 0..1000
+ *    /heartbeat  <ms>          report at least this often, 0 disables
+ *    /deadband   <counts>      analog change needed to trigger, 0..64
  *
  * Written by Adrian Freed, CNMAT. Part of the CNMAT OSC library.
  */
@@ -56,7 +70,9 @@
 SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 
 static const long BAUD = 115200;      // ignored by native USB, kept for clarity
-static const int  ARG_COUNT = 16;
+static const byte TK_OUT_A = 3;       // TinkerKit OUTPUT A
+static const byte TK_OUT_B = 11;      // TinkerKit OUTPUT B
+static const int  ARG_COUNT = 18;
 
 // Both of these must outlive a single pass through loop(). pollOSC() returns as
 // soon as the serial buffer runs dry, which for anything but a very short frame
@@ -66,8 +82,20 @@ static OSCMessage msgIn;
 static OSCMessage msgOut("/esplora");
 
 static int32_t  seq = 0;
-static uint16_t reportInterval = 20;  // ms; 50 Hz by default
+static uint16_t reportInterval = 20;    // floor on the gap between reports, ms
+static uint16_t heartbeatMs = 2000;     // report even when nothing moves
+static uint16_t deadband = 4;           // analog counts needed to count as change
 static uint32_t lastReport = 0;
+
+// One sample of everything, in the order it goes on the wire (after seq).
+struct Sample {
+  int32_t slider, light, mic, tempC, tempF, joyX, joyY;
+  int32_t joySw, sw1, sw2, sw3, sw4;
+  int32_t accX, accY, accZ;
+  int32_t tkA, tkB;
+};
+static Sample prev;
+static bool havePrev = false;
 
 /* ---------------------------------------------------------------- inbound */
 
@@ -92,6 +120,26 @@ static void routeRate(OSCMessage &m) {
   reportInterval = (uint16_t) constrain(m.getInt(0), 0, 1000);
 }
 
+static void routeHeartbeat(OSCMessage &m) {
+  if (m.size() < 1) return;
+  heartbeatMs = (uint16_t) constrain(m.getInt(0), 0, 60000);
+}
+
+static void routeDeadband(OSCMessage &m) {
+  if (m.size() < 1) return;
+  deadband = (uint16_t) constrain(m.getInt(0), 0, 64);
+  havePrev = false;                     // force one full report at the new setting
+}
+
+// TinkerKit OUTPUT A and B are plain PWM pins. Accept an int 0..255, or a
+// float 0..1 for callers that think in normalised terms.
+static int pwmArg(OSCMessage &m) {
+  if (m.isFloat(0)) return (int) constrain(m.getFloat(0) * 255.0f, 0.0f, 255.0f);
+  return (int) constrain(m.getInt(0), 0, 255);
+}
+static void routeOutA(OSCMessage &m) { if (m.size()) analogWrite(TK_OUT_A, pwmArg(m)); }
+static void routeOutB(OSCMessage &m) { if (m.size()) analogWrite(TK_OUT_B, pwmArg(m)); }
+
 // Returns true once a whole packet has been accumulated in msgIn.
 static bool pollOSC() {
   while (!SLIPSerial.endofPacket()) {
@@ -107,37 +155,60 @@ static bool pollOSC() {
 
 /* --------------------------------------------------------------- outbound */
 
-static void report() {
-  // Sample everything in one pass. readChannel() walks an analog multiplexer,
-  // so these are not simultaneous to the microsecond, but they are as close
-  // together as the hardware allows and no host round-trip separates them.
-  int32_t slider = (int32_t) Esplora.readSlider();
-  int32_t light  = (int32_t) Esplora.readLightSensor();
-  int32_t mic    = (int32_t) Esplora.readMicrophone();
-  int32_t tempC  = (int32_t) Esplora.readTemperature(DEGREES_C);
-  int32_t tempF  = (int32_t) Esplora.readTemperature(DEGREES_F);
-  int32_t joyX   = (int32_t) Esplora.readJoystickX();
-  int32_t joyY   = (int32_t) Esplora.readJoystickY();
+// Sample everything in one pass. readChannel() walks an analog multiplexer, so
+// these are not simultaneous to the microsecond, but they are as close together
+// as the hardware allows and no host round-trip separates them.
+static void sample(Sample &s) {
+  s.slider = (int32_t) Esplora.readSlider();
+  s.light  = (int32_t) Esplora.readLightSensor();
+  s.mic    = (int32_t) Esplora.readMicrophone();
+  s.tempC  = (int32_t) Esplora.readTemperature(DEGREES_C);
+  s.tempF  = (int32_t) Esplora.readTemperature(DEGREES_F);
+  s.joyX   = (int32_t) Esplora.readJoystickX();
+  s.joyY   = (int32_t) Esplora.readJoystickY();
   // readJoystickSwitch() gives 1023 released / 0 pressed; readJoystickButton()
   // has no return value on the path between those, so it is avoided here.
-  int32_t joySw  = (Esplora.readJoystickSwitch() == 0) ? 1 : 0;
-  int32_t sw1    = (Esplora.readButton(SWITCH_1) == LOW) ? 1 : 0;
-  int32_t sw2    = (Esplora.readButton(SWITCH_2) == LOW) ? 1 : 0;
-  int32_t sw3    = (Esplora.readButton(SWITCH_3) == LOW) ? 1 : 0;
-  int32_t sw4    = (Esplora.readButton(SWITCH_4) == LOW) ? 1 : 0;
-  int32_t accX   = (int32_t) Esplora.readAccelerometer(X_AXIS);
-  int32_t accY   = (int32_t) Esplora.readAccelerometer(Y_AXIS);
-  int32_t accZ   = (int32_t) Esplora.readAccelerometer(Z_AXIS);
+  s.joySw  = (Esplora.readJoystickSwitch() == 0) ? 1 : 0;
+  s.sw1    = (Esplora.readButton(SWITCH_1) == LOW) ? 1 : 0;
+  s.sw2    = (Esplora.readButton(SWITCH_2) == LOW) ? 1 : 0;
+  s.sw3    = (Esplora.readButton(SWITCH_3) == LOW) ? 1 : 0;
+  s.sw4    = (Esplora.readButton(SWITCH_4) == LOW) ? 1 : 0;
+  s.accX   = (int32_t) Esplora.readAccelerometer(X_AXIS);
+  s.accY   = (int32_t) Esplora.readAccelerometer(Y_AXIS);
+  s.accZ   = (int32_t) Esplora.readAccelerometer(Z_AXIS);
+  s.tkA    = (int32_t) Esplora.readTinkerkitInputA();   // multiplexer channel 8
+  s.tkB    = (int32_t) Esplora.readTinkerkitInputB();   // multiplexer channel 9
+}
 
+static bool moved(int32_t a, int32_t b) {
+  int32_t d = a > b ? a - b : b - a;
+  return d > (int32_t) deadband;
+}
+
+// Any button transition, or any analog channel that moved further than the
+// deadband. Temperature is included but rarely trips it, which is the point.
+static bool changed(const Sample &a, const Sample &b) {
+  if (a.joySw != b.joySw || a.sw1 != b.sw1 || a.sw2 != b.sw2 ||
+      a.sw3   != b.sw3   || a.sw4 != b.sw4) return true;
+  return moved(a.slider, b.slider) || moved(a.light, b.light) ||
+         moved(a.mic,    b.mic)    || moved(a.tempC, b.tempC) ||
+         moved(a.tempF,  b.tempF)  || moved(a.joyX,  b.joyX)  ||
+         moved(a.joyY,   b.joyY)   || moved(a.accX,  b.accX)  ||
+         moved(a.accY,   b.accY)   || moved(a.accZ,  b.accZ)  ||
+         moved(a.tkA,    b.tkA)    || moved(a.tkB,   b.tkB);
+}
+
+static void send(const Sample &s) {
   // empty() keeps the address and reuses the allocation, so the steady state
   // does not churn the heap. On a 2.5 KB part that is worth caring about.
   msgOut.empty();
   msgOut.add(seq++)
-        .add(slider).add(light).add(mic)
-        .add(tempC).add(tempF)
-        .add(joyX).add(joyY).add(joySw)
-        .add(sw1).add(sw2).add(sw3).add(sw4)
-        .add(accX).add(accY).add(accZ);
+        .add(s.slider).add(s.light).add(s.mic)
+        .add(s.tempC).add(s.tempF)
+        .add(s.joyX).add(s.joyY).add(s.joySw)
+        .add(s.sw1).add(s.sw2).add(s.sw3).add(s.sw4)
+        .add(s.accX).add(s.accY).add(s.accZ)
+        .add(s.tkA).add(s.tkB);
 
   SLIPSerial.beginPacket();
   msgOut.send(SLIPSerial);
@@ -149,6 +220,8 @@ static void report() {
 void setup() {
   SLIPSerial.begin(BAUD);
   Esplora.writeRGB(0, 0, 0);
+  pinMode(TK_OUT_A, OUTPUT); analogWrite(TK_OUT_A, 0);
+  pinMode(TK_OUT_B, OUTPUT); analogWrite(TK_OUT_B, 0);
 
   delay(300);                       // let the host finish enumerating
   OSCMessage hello("/hello");
@@ -161,16 +234,30 @@ void setup() {
 void loop() {
   if (pollOSC()) {
     if (!msgIn.hasError()) {
-      msgIn.dispatch("/rgb",  routeRgb);
-      msgIn.dispatch("/tone", routeTone);
-      msgIn.dispatch("/rate", routeRate);
+      msgIn.dispatch("/rgb",       routeRgb);
+      msgIn.dispatch("/tone",      routeTone);
+      msgIn.dispatch("/d/3",       routeOutA);
+      msgIn.dispatch("/d/11",      routeOutB);
+      msgIn.dispatch("/rate",      routeRate);
+      msgIn.dispatch("/heartbeat", routeHeartbeat);
+      msgIn.dispatch("/deadband",  routeDeadband);
     }
     msgIn.empty();
   }
 
   uint32_t now = millis();
-  if ((uint32_t)(now - lastReport) >= reportInterval) {
+  // reportInterval is a floor, not a period: it caps how fast change can push
+  // packets out, so a noisy microphone cannot saturate the link.
+  if ((uint32_t)(now - lastReport) < reportInterval) return;
+
+  Sample s;
+  sample(s);
+
+  bool due = heartbeatMs && (uint32_t)(now - lastReport) >= heartbeatMs;
+  if (!havePrev || due || changed(s, prev)) {
     lastReport = now;
-    report();
+    prev = s;
+    havePrev = true;
+    send(s);
   }
 }
