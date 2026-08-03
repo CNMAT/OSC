@@ -1,11 +1,13 @@
 // SLIP over TCP against a stub Client: no shield, no network, no hardware.
 //
 // SLIPEncodedTCP began as a hand-maintained copy of the _SLIPSerial state
-// machine and missed that template's fixes. Run against the copy, the first
-// three checks here fail (read() narrowing -1 to 0xFF, write(buf,n) returning
-// the last byte's count, one client write per byte); run against
-// _SLIPSerial<Client> they pass. The rest pin the framing protocol itself:
-// exact escaping, round-trips, back-to-back packets, underrun-and-resume.
+// machine and missed that template's fixes: read() and peek() narrowing -1
+// to 0xFF, write(buf,n) returning the last byte's count, one client write
+// per byte. Run against that copy, five checks here fail (both narrowing
+// checks, the write count, the block check, and the underrun check, which
+// is the narrowing again mid-packet); run against _SLIPSerial<Client> all
+// pass. The rest pin the framing protocol itself: exact escaping,
+// round-trips, back-to-back packets, underrun-and-resume.
 #include "OSCMessage.h"
 #include "SLIPEncodedTCP.h"
 #include <stdio.h>
@@ -94,12 +96,70 @@ int main(){
         ok1 && ok2 && got1.fullMatch("/a") && got2.fullMatch("/b")
         && got1.getInt(0)==1 && got2.getInt(0)==2); }
 
-  // the stream dries up mid-packet, then the rest arrives
+  // a packet several times OSC_SLIP_TX_BUFFER, all of it escape pairs, so
+  // pairs straddle the block-flush boundary; the wire bytes are compared
+  // against a SLIP encoding computed here, not by the class under test
+  { struct Cap : public Print { std::vector<uint8_t> b;
+      size_t write(uint8_t c) override { b.push_back(c); return 1; } } plain;
+    uint8_t blob[120];
+    for (int i=0;i<120;i++) blob[i] = (i&1) ? 0xDB : 0xC0;
+    OSCMessage m("/blk"); m.add(blob, (int)sizeof blob);
+    m.send(plain);
+    std::vector<uint8_t> expect;
+    expect.push_back(0xC0);
+    for (size_t i=0;i<plain.b.size();i++) {
+      uint8_t c = plain.b[i];
+      if (c==0xC0) { expect.push_back(0xDB); expect.push_back(0xDC); }
+      else if (c==0xDB) { expect.push_back(0xDB); expect.push_back(0xDD); }
+      else expect.push_back(c);
+    }
+    expect.push_back(0xC0);
+    FakeClient sender; SLIPEncodedTCP out(sender);
+    out.beginPacket(); m.send(out); out.endPacket();
+    chk("escape pairs straddling block flushes encode exactly",
+        sender.tx == expect && sender.writeCalls > 1);
+    FakeClient rcv; rcv.rx = sender.tx; SLIPEncodedTCP in(rcv);
+    OSCMessage got;
+    bool ok = receiveOne(in, got);
+    uint8_t back[120] = {0};
+    bool blobOk = ok && !got.hasError() && got.getBlobLength(0)==sizeof blob
+                  && got.getBlob(0, back, (int)sizeof back)>0
+                  && !memcmp(back, blob, sizeof blob);
+    chk("multi-block packet round-trips", blobOk); }
+
+  // more than 255 bytes pending at once: available()'s narrowed count is
+  // compensated by its peek()==-1 guard, and this pins that it stays so
   { FakeClient sender; SLIPEncodedTCP out(sender);
-    OSCMessage m("/resume"); m.add((int32_t)0x11223344);
+    uint8_t big[300];
+    for (int i=0;i<300;i++) big[i] = (uint8_t)(i*7);
+    OSCMessage m("/big"); m.add(big, (int)sizeof big);
+    out.beginPacket(); m.send(out); out.endPacket();
+    FakeClient rcv; rcv.rx = sender.tx; SLIPEncodedTCP in(rcv);
+    OSCMessage got;
+    bool ok = receiveOne(in, got);
+    uint8_t back[300] = {0};
+    chk("a packet with >255 bytes pending decodes completely",
+        ok && !got.hasError() && got.getBlobLength(0)==sizeof big
+        && got.getBlob(0, back, (int)sizeof back)>0
+        && !memcmp(back, big, sizeof big)); }
+
+  // peek() must translate an escape it is already inside, not show DC/DD raw
+  { FakeClient c; SLIPEncodedTCP slip(c);
+    c.rx.push_back(0xDB); c.rx.push_back(0xDC);
+    slip.available();               // consumes the DB, enters the escape state
+    chk("peek() inside an escape returns the decoded byte", slip.peek() == 0xC0);
+    chk("read() then completes the escape",                 slip.read() == 0xC0); }
+
+  // the stream dries up mid-packet -- cut BETWEEN an escape marker and its
+  // second byte, the exact state a TCP segment boundary creates -- then the
+  // rest arrives
+  { FakeClient sender; SLIPEncodedTCP out(sender);
+    OSCMessage m("/resume"); m.add((int32_t)0x11223344); m.add((int32_t)0xC0DBC0DB);
     out.beginPacket(); m.send(out); out.endPacket();
     std::vector<uint8_t> wire = sender.tx;
-    size_t half = wire.size()/2;
+    size_t half = 0;
+    while (half < wire.size() && wire[half] != 0xDB) ++half;
+    ++half;                         // stream now ends just after the 0xDB
     FakeClient rcv; SLIPEncodedTCP in(rcv);
     rcv.rx.assign(wire.begin(), wire.begin()+half);
     OSCMessage got;
@@ -112,9 +172,9 @@ int main(){
       while (in.available()) { int c=in.read(); if(c>=0) got.fill((uint8_t)c); }
       if (in.endofPacket()) done = true;
     }
-    chk("reception resumes after the gap",
+    chk("reception resumes across a split escape pair",
         done && !got.hasError() && got.fullMatch("/resume")
-        && got.getInt(0)==0x11223344); }
+        && got.getInt(0)==0x11223344 && got.getInt(1)==(int32_t)0xC0DBC0DB); }
 
   printf("\n%s\n", fails?"FAILURES":"all slip-tcp tests passed");
   return fails?1:0;

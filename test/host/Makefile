@@ -1,8 +1,8 @@
 # Host-compiled test suite for the OSC library.
 #
 # Needs only a C++11 compiler and python3. No Arduino toolchain, no board, no
-# extra libraries -- shim/ provides the ~40 lines of Arduino.h/Print.h/Stream.h
-# that the library actually uses.
+# extra libraries -- shim/ provides the ~55 lines of Arduino.h, Print.h,
+# Stream.h, Client.h and HardwareSerial.h that the library actually uses.
 #
 #   make           build and run everything
 #   make asan      the same, under AddressSanitizer + UBSan (slower, worth it)
@@ -45,7 +45,7 @@ all: run
 asan: CXXFLAGS += $(SAN)
 asan: run
 
-$(TESTS): %: %.cpp $(SRC) shim/Arduino.h shim/Print.h shim/Stream.h
+$(TESTS): %: %.cpp $(SRC) $(wildcard shim/*.h)
 	$(CXX) $(CXXFLAGS) -w $< $(SRC) -o $@
 
 run: $(TESTS)
