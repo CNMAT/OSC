@@ -1,9 +1,10 @@
 # Host test suite
 
 Runs the library on a development machine, with no Arduino toolchain and no
-board attached. `shim/` supplies the ~40 lines of `Arduino.h`, `Print.h` and
-`Stream.h` that `OSCData.cpp`, `OSCMessage.cpp`, `OSCBundle.cpp` and
-`OSCMatch.c` actually use.
+board attached. `shim/` supplies the ~50 lines of `Arduino.h`, `Print.h`,
+`Stream.h`, `Client.h` and `HardwareSerial.h` that `OSCData.cpp`,
+`OSCMessage.cpp`, `OSCBundle.cpp`, `OSCMatch.c` and the SLIP transport
+actually use.
 
 ```sh
 make        # build and run
@@ -34,6 +35,7 @@ agree, that is evidence. When the library agrees with itself, that is not.
 | `regressions` | One named test per bug that shipped in a release. Each failed before its fix. |
 | `types` | Prints and asserts which type tags can be encoded and which can be decoded — they are not the same set — plus the address-pattern behaviour. Documentation-as-test: it fails loudly if support changes by accident. |
 | `harden` | Malformed input: unbalanced `[` and `{` in patterns, stray closers, negative argument indices, negative bundle element sizes. Only meaningful under `make asan`, where an out-of-bounds read aborts instead of passing silently. |
+| `sliptcp` | SLIP over TCP (`SLIPEncodedTCP`, now `_SLIPSerial<Client>`) against a stub `Client`: exact escaping, round-trips, back-to-back packets, and a stream that goes empty mid-packet then resumes. Run against the old hand-copied class it fails on every count that class had drifted from the template — the `read()` -1 narrowing, the `write(buffer, size)` return value, and byte-at-a-time transmit — which is how those were confirmed without any Ethernet hardware. |
 
 ## Decoding untrusted bytes
 

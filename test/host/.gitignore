@@ -3,4 +3,9 @@ roundtrip
 regressions
 types
 harden
+copygrowth
+patterns
+dos
+fuzzbad
+sliptcp
 *.dSYM/

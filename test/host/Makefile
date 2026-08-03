@@ -26,6 +26,9 @@
 #                not to have changed what matches.
 #   dos          attacker-controlled length fields must not grow the buffer
 #                without bound.
+#   sliptcp      SLIP over TCP against a stub Client: framing, escaping,
+#                underrun-and-resume. Caught SLIPEncodedTCP's drift from
+#                _SLIPSerial without any Ethernet hardware.
 #   fuzzbad      150000 rounds of hostile input into both decoders, then every
 #                accessor on whatever came out. The point of the whole suite.
 
@@ -33,7 +36,7 @@ LIB      := ../..
 CXX      ?= c++
 CXXFLAGS := -std=c++11 -I shim -I $(LIB) -Wall -Wno-unused-parameter
 SRC      := $(LIB)/OSCData.cpp $(LIB)/OSCMessage.cpp $(LIB)/OSCBundle.cpp $(LIB)/OSCMatch.c
-TESTS    := vectors roundtrip regressions types harden copygrowth fuzzbad patterns dos
+TESTS    := vectors roundtrip regressions types harden copygrowth fuzzbad patterns dos sliptcp
 SAN      := -fsanitize=address,undefined -fno-omit-frame-pointer
 
 .PHONY: all asan clean
@@ -54,6 +57,7 @@ run: $(TESTS)
 	@echo "== copygrowth"; ./copygrowth | tail -2
 	@echo "== patterns";   ./patterns   | tail -1
 	@echo "== dos";        ./dos        | tail -1
+	@echo "== sliptcp";    ./sliptcp    | tail -1
 	@echo "== fuzzbad";    ASAN_OPTIONS=allocator_may_return_null=1 ./fuzzbad | tail -1
 
 clean:
