@@ -235,6 +235,14 @@ AVR cuts off around 378 bytes. That is the USB CDC receive buffer overflowing
 with no flow control; traffic at normal rates is unaffected, and Teensy's
 buffers are large enough that 50 frames never reach it.
 
+On an ESP32-C3 (USB-Serial-JTAG, HWCDC) the ceiling is exact: 18 of the
+14-byte stress frames arrive (252 bytes) and the 19th is cut — the core's
+default 256-byte HWCDC ring. `thisBoardsSerialUSB.setRxBufferSize(1024)`
+before `begin()` takes the same board to 50/50 back-to-back frames clean,
+which pins the mechanism to the ring, not this library. Both measured
+2026-08-03 on the same board and build back to back. Unlike AVR, the C3
+recovers by itself: frames after the dropped tail decode normally.
+
 Worse, on AVR the sketch does not recover: after one overflowing burst every
 subsequent well-formed frame is lost until the board is reset. Not yet isolated
 — `OscEcho.ino` caps its own buffer at 600 bytes, so this may be the sketch
