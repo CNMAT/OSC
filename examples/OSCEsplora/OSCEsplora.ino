@@ -221,11 +221,24 @@ void loop() {
     OSCBundle bundleIN;
     int size;
 
-    while (!SLIPSerial.endofPacket())
+    // Bounded, because this loop had no way out: a packet that stops
+    // arriving part way leaves available() at 0 and endofPacket() false for
+    // good, and the sketch spins there and stops sending. Reachable from
+    // whatever is on the other end of the cable.
+    unsigned long lastByte = millis();
+    while (!SLIPSerial.endofPacket()) {
       if ((size = SLIPSerial.available()) > 0) {
-        while (size--)
-          bundleIN.fill(SLIPSerial.read());
+        while (size--) {
+          // read() returns int and -1 on underrun; passing that straight to
+          // fill() narrowed it to an ordinary 0xFF data byte
+          int c = SLIPSerial.read();
+          if (c >= 0) bundleIN.fill((uint8_t)c);
+        }
+        lastByte = millis();
+      } else if (millis() - lastByte > 200) {
+        break;                  // stalled mid-packet; drop it and move on
       }
+    }
     {
       if (!bundleIN.hasError()) {
         bundleIN.route("/led", routeLed);
