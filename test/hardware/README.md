@@ -102,6 +102,17 @@ and no cooperating host is required. `oscReleaseStuckCdcRxBank()` is called from
 32U4, and only ever fires when a packet has been received (`RXOUTI`) with
 nothing to read (`RWAL` clear) — an empty bank — so it cannot discard data.
 
+Every ATmega32U4 board is affected, the **Arduino Esplora included** — which
+matters here, because `examples/EsploraOscuino` takes `/rgb`, `/tone`, `/d/3`
+and `/d/11` from a web page and would stall on any inbound write that landed on
+a multiple of 64. Confirmed active by compiling a guard probe: Esplora, LilyPad
+USB, Leonardo and Circuit Playground 32U4 all report the workaround compiled
+in; Uno, Teensy 4.0 and Gemma M0 report it compiled out.
+
+The `__AVR_ATmega32U4__` term in that guard is load-bearing, not decoration:
+SAMD cores also define `CDC_RX`, so guarding on `CDC_RX` alone would have
+compiled AVR register access into SAMD builds.
+
 Measured on a LilyPad USB with `ZlpTest/`, using **unpadded** writes, the ones
 that used to be fatal:
 
