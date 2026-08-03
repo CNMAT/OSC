@@ -253,13 +253,34 @@ drives only the SLIP layer.
 
 | board | echo | widths | probe | stress |
 |---|---|---|---|---|
-| LilyPad USB (ATmega32U4) | 22/22 | 11/11, int=2 long=4 ll=8 double=4 | 7/7 | — |
-| Teensy 4.0 | 22/22 | — | 7/7 | 0 frames lost up to 50 |
+| LilyPad USB (ATmega32U4) | 22/22 | 11/11, int=2 long=4 ll=8 double=4 | 7/7 | 0 frames lost up to 50 |
+| Teensy 4.0 (ARM M7) | 22/22 | 11/11 | 7/7 | 0 frames lost up to 50 |
+| DFRobot Beetle RP2040 | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | 0 frames lost up to 50 |
+| ESP32-C3 (RISC-V) | 22/22 | 11/11 | — | cliff at 252 B; 50/50 with a 1 KB ring |
 | Gemma M0 (SAMD21) | — | — | 7/7 | — |
 | ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | — |
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | cliff at ~300 B |
 | LilyPad USB | — | — | — | cliff at ~378 B, then wedged |
 | M5Stack NanoC6 | not run — board stopped responding | | | |
+
+The 2026-08-03 rows (LilyPad stress, Teensy widths, Beetle RP2040, ESP32-C3)
+were run against the 4.0.0 tree after the SLIP-over-TCP collapse, so they
+also stand as the regression evidence for it on real USB stacks. The Teensy
+`widths` and RP2040 rows close gaps that were dashes before: integer
+dispatch had never been checked on an ARM M7, and no RP2040 had ever run
+this library on hardware at all.
+
+## Boards this library cannot serve
+
+The classic **Adafruit Trinket (ATtiny85)** has no hardware UART and its
+`tiny8` variant declares no `Serial` object, so `SLIPEncodedSerial` has
+nothing to bind to: `adafruit:avr:trinket5` fails to compile with `'Serial'
+was not declared in this scope`. Its V-USB bootloader is programming-only,
+not CDC, so there is no USB serial route either. The **Pro Trinket**
+(ATmega328P) is fine over its UART — `SerialSendMessage` builds at 4766
+bytes, 16% of its 28672. Both share the USBtiny bootloader identity
+(`0x1781/0x0c9f`), so a plugged-in board cannot be told apart by its USB
+descriptor alone.
 
 The stress column records where inbound bursts start being dropped; see the
 section above for why that is a property of the board's USB stack.
