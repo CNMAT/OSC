@@ -423,6 +423,7 @@ bool OSCMessage::isBoolean(int position){
 int OSCMessage::match(const  char * pattern, int addr_offset){
 	int pattern_offset;
 	int address_offset;
+	if (address == NULL){ return 0; }
 	int ret = osc_match(address + addr_offset, pattern, &pattern_offset, &address_offset);
 	char * next = (char *) (address + addr_offset + pattern_offset);
 	if (ret==3){
@@ -437,6 +438,7 @@ int OSCMessage::match(const  char * pattern, int addr_offset){
 bool OSCMessage::fullMatch( const char * pattern, int addr_offset){
 	int pattern_offset;
 	int address_offset;
+	if (address == NULL){ return false; }
 	int ret = osc_match(address + addr_offset, pattern, &pattern_offset, &address_offset );
 	return (ret==3);
 }
@@ -465,6 +467,7 @@ bool OSCMessage::route(const char * pattern, void (*callback)(OSCMessage &, int)
  =============================================================================*/
 
 int OSCMessage::getAddress(char * buffer, int offset){
+	if (address == NULL){ *buffer = 0; return 0; }
 	int result = strlen(address);
 	if (result > offset)
 		strcpy(buffer, address+offset);
@@ -474,6 +477,7 @@ int OSCMessage::getAddress(char * buffer, int offset){
 }
 
 int OSCMessage::getAddress(char * buffer, int offset, int len){
+	if (address == NULL || len <= 0){ if (len > 0) *buffer = 0; return 0; }
 	int result = strlen(address);
 	
 	if (result > offset)
@@ -492,6 +496,7 @@ const char* OSCMessage::getAddress(){
 
 int OSCMessage::getAddressLength(int offset)
 {
+	if (address == NULL){ return 0; }
 	int result = (int) strlen(address) - offset;
 	if (result < 0) // offset past end!
 		result = 0; // do the best we can
@@ -532,6 +537,12 @@ int OSCMessage::size(){
 }
 
 int OSCMessage::bytes(){
+    //A message whose address never decoded - random bytes in, or a
+    //default-constructed placeholder - has a NULL address. Every accessor
+    //below has to survive that; this one used to strlen(NULL).
+    if (address == NULL){
+        return 0;
+    }
     int messageSize = 0;
     //send the address
     int addrLen = strlen(address) + 1;
@@ -582,6 +593,9 @@ OSCErrorCode OSCMessage::getError(){
 OSCMessage& OSCMessage::send(Print &p){
     //don't send a message with errors
     if (hasError()){
+        return *this;
+    }
+    if (address == NULL){
         return *this;
     }
     uint8_t nullChar = '\0';
@@ -953,6 +967,11 @@ void OSCMessage::decode(uint8_t incomingByte){
  =============================================================================*/
 #define OSCPREALLOCATEIZE 16
 void OSCMessage::addToIncomingBuffer(uint8_t incomingByte){
+    //refuse to grow without bound on a length taken from the wire
+    if (incomingBufferSize >= OSC_MAX_INCOMING){
+        error = BUFFER_FULL;
+        return;
+    }
     //realloc some space for the new byte and stick it on the end
     if(incomingBufferFree>0)
     {

@@ -66,6 +66,7 @@ private:
     //stores incoming bytes until they can be decoded
     uint8_t * incomingBuffer;
     int incomingBufferSize;
+    int incomingBufferFree;   //allocated but unused, so growth can be chunked
     
     //the size of the incoming message
     int incomingMessageSize;

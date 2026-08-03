@@ -134,18 +134,31 @@ static int osc_match_star(const char *pattern, const char *address)
 	switch(num_stars){
 		case 1:
 		{
+			/* These walks run BACKWARDS and originally had no lower bound. The
+			   address arriving off the wire is what gets passed to osc_match()
+			   as the pattern, so a malformed one walked off the front of the
+			   heap block. Every step is now fenced by pattern_start/address_start. */
 			const char *pp = pattern, *aa = address;
-			while(*pp != '*'){
+			while(pp >= pattern_start && *pp != '*'){
+				if(aa < address_start){
+					return 0;
+				}
 				if(!(osc_match_single_char(pp, aa))){
 					return 0;
 				}
 				if(*pp == ']' || *pp == '}'){
-					while(*pp != '[' && *pp != '{'){
+					while(pp > pattern_start && *pp != '[' && *pp != '{'){
 						pp--;
+					}
+					if(*pp != '[' && *pp != '{'){
+						return 0;      /* no opener: malformed */
 					}
 				}
 				pp--;
 				aa--;
+			}
+			if(pp < pattern_start){
+				return 0;
 			}
 		}
 			break;
@@ -153,17 +166,26 @@ static int osc_match_star(const char *pattern, const char *address)
 #if (OSC_MATCH_ENABLE_2STARS == 1)
 		{
 			const char *pp = pattern, *aa = address;
-			while(*pp != '*'){
+			while(pp >= pattern_start && *pp != '*'){
+				if(aa < address_start){
+					return 0;
+				}
 				if(!(osc_match_single_char(pp, aa))){
 					return 0;
 				}
 				if(*pp == ']' || *pp == '}'){
-					while(*pp != '[' && *pp != '{'){
+					while(pp > pattern_start && *pp != '[' && *pp != '{'){
 						pp--;
+					}
+					if(*pp != '[' && *pp != '{'){
+						return 0;
 					}
 				}
 				pp--;
 				aa--;
+			}
+			if(pp < pattern_start){
+				return 0;
 			}
 			aa++; // we want to start one character forward to allow the star to match nothing
 			const char *star2 = pp;
@@ -173,13 +195,19 @@ static int osc_match_star(const char *pattern, const char *address)
 				pp = star2 - 1;
 				aa = test - 1;
 				i++;
-				while(*pp != '*'){
+				while(pp >= pattern_start && *pp != '*'){
+					if(aa < address_start){
+						break;
+					}
 					if(!osc_match_single_char(pp, aa)){
 						break;
 					}
 					if(*pp == ']' || *pp == '}'){
-						while(*pp != '[' && *pp != '{'){
+						while(pp > pattern_start && *pp != '[' && *pp != '{'){
 							pp--;
+						}
+						if(*pp != '[' && *pp != '{'){
+							break;
 						}
 					}
 					pp--;
@@ -228,8 +256,12 @@ static int osc_match_star_r(const char *pattern, const char *address)
 			return 0;
 		}
 		if(*pattern == '[' || *pattern == '{'){
-			while(*pattern != ']' && *pattern != '}'){
+			/* unbounded before: an unterminated '[' or '{' ran past the end */
+			while(*pattern != ']' && *pattern != '}' && *pattern != '\0'){
 				pattern++;
+			}
+			if(*pattern == '\0'){
+				return 0;
 			}
 		}
 		return osc_match_star_r(pattern + 1, address + 1);
@@ -276,8 +308,13 @@ static int osc_match_bracket(const char *pattern, const char *address)
 	}
 	int matched = !val;
 	while(*pattern != ']' && *pattern != '\0'){
-		// the character we're on now is the beginning of a range
-		if(*(pattern + 1) == '-'){
+		// the character we're on now is the beginning of a range.
+		// *(pattern+1) is safe to read whenever *pattern is not the terminator,
+		// and once it is known to be '-' then *(pattern+2) is in bounds too --
+		// but it may BE the terminator, and stepping pattern += 3 over that
+		// would walk off the end of the string. An incoming address is passed
+		// to osc_match() as the pattern, so "/x[a-" is attacker-supplied.
+		if(*(pattern + 1) == '-' && *(pattern + 2) != '\0' && *(pattern + 2) != ']'){
 			if(*address >= *pattern && *address <= *(pattern + 2)){
 				matched = val;
 				break;
@@ -307,10 +344,15 @@ static int osc_match_curly_brace(const char *pattern, const char *address)
 		int n = ptr - pattern;
 		if(!strncmp(pattern, address, n)){
 			return n;
-		}else{
-			ptr++;
-			pattern = ptr;
 		}
+		//Only a ',' introduces another alternative. The inner loop also stops
+		//on '}', '/' and '\0', and advancing past the terminator here walked
+		//off the end of the string.
+		if(*ptr != ','){
+			break;
+		}
+		ptr++;
+		pattern = ptr;
 	}
 	return 0;
 }

@@ -21,12 +21,19 @@
 #                Documentation-as-test: it fails if support silently changes.
 #   harden       malformed patterns, negative indices, bad bundle element sizes.
 #                Only meaningful under `make asan`.
+#   copygrowth   copy/assignment semantics and the geometric data-array growth.
+#   patterns     address-pattern semantics, so hardening OSCMatch.c can be shown
+#                not to have changed what matches.
+#   dos          attacker-controlled length fields must not grow the buffer
+#                without bound.
+#   fuzzbad      150000 rounds of hostile input into both decoders, then every
+#                accessor on whatever came out. The point of the whole suite.
 
 LIB      := ../..
 CXX      ?= c++
 CXXFLAGS := -std=c++11 -I shim -I $(LIB) -Wall -Wno-unused-parameter
 SRC      := $(LIB)/OSCData.cpp $(LIB)/OSCMessage.cpp $(LIB)/OSCBundle.cpp $(LIB)/OSCMatch.c
-TESTS    := vectors roundtrip regressions types harden copygrowth
+TESTS    := vectors roundtrip regressions types harden copygrowth fuzzbad patterns dos
 SAN      := -fsanitize=address,undefined -fno-omit-frame-pointer
 
 .PHONY: all asan clean
@@ -45,6 +52,9 @@ run: $(TESTS)
 	@echo "== types";       ./types       > /dev/null && echo "  type/pattern matrix ok"
 	@echo "== harden";      ./harden      | tail -2
 	@echo "== copygrowth"; ./copygrowth | tail -2
+	@echo "== patterns";   ./patterns   | tail -1
+	@echo "== dos";        ./dos        | tail -1
+	@echo "== fuzzbad";    ASAN_OPTIONS=allocator_may_return_null=1 ./fuzzbad | tail -1
 
 clean:
 	rm -rf $(TESTS) *.dSYM

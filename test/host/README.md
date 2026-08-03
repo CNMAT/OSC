@@ -35,6 +35,49 @@ agree, that is evidence. When the library agrees with itself, that is not.
 | `types` | Prints and asserts which type tags can be encoded and which can be decoded — they are not the same set — plus the address-pattern behaviour. Documentation-as-test: it fails loudly if support changes by accident. |
 | `harden` | Malformed input: unbalanced `[` and `{` in patterns, stray closers, negative argument indices, negative bundle element sizes. Only meaningful under `make asan`, where an out-of-bounds read aborts instead of passing silently. |
 
+## Decoding untrusted bytes
+
+The decoder is the only code that touches bytes from the wire, so it gets its
+own treatment. `fuzzbad` throws 150000 rounds of hostile input at both decoders
+— pure random bytes, random bytes with a `#bundle` header, and valid packets
+mutated by bit flips, byte splats and truncation — then calls every accessor on
+whatever came out, including out-of-range and negative indices. Only meaningful
+under `make asan`.
+
+It found four classes of problem, all remotely reachable:
+
+**A NULL address dereference.** A message whose address never decoded has
+`address == NULL`, and `bytes()`, both `getAddress()` overloads,
+`getAddressLength()`, `match()`, `fullMatch()` and `send()` all used it
+unguarded. `strlen(NULL)`.
+
+**Unbounded scans in `OSCMatch.c`.** `osc_match_curly_brace()` advanced past the
+terminator when an alternative list was unterminated. `osc_match_bracket()` read
+`*(pattern+2)` for a range and stepped `pattern += 3` over the end.
+`osc_match_star()` walked *backwards* with no lower bound in three places, and
+`osc_match_star_r()` scanned forward for a closer that need not exist. Every one
+is now fenced by the string's own start and terminator.
+
+This matters more than it first appears. `osc_match()` takes
+`(pattern, address)`, but `OSCMessage::match()` and `fullMatch()` call it as
+`osc_match(address + offset, pattern, ...)` — **the address received off the
+wire is what gets passed as the pattern**. So a malformed inbound address, not
+merely a malformed local pattern, reaches all of this.
+
+`patterns` exists to show the fences changed nothing: it runs the same
+semantics cases against the hardened `OSCMatch.c` and against the version
+before it, and both agree.
+
+**Unbounded growth on attacker-controlled lengths.** Blob lengths and bundle
+element sizes are read straight off the wire and the decoders grew their buffer
+until the declared length arrived, so a peer claiming a 4 GB blob grew it until
+malloc failed — a one-packet denial of service on a 2.5 KB part. `OSC_MAX_INCOMING`
+now caps it (512 on AVR, 4096 elsewhere, overridable) and raises `BUFFER_FULL`,
+an error code that had been declared but never used anywhere. `dos` covers it.
+
+**Byte-at-a-time reallocation.** `OSCBundle::addToIncomingBuffer()` called
+`realloc` for every single received byte. It now grows in blocks.
+
 ## Adding a test
 
 New bug, new named case in `regressions.cpp`, with a comment saying what the

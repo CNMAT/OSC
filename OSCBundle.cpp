@@ -26,6 +26,8 @@
 #include "OSCBundle.h"
 #include <stdlib.h>
 
+#define OSCBUNDLE_PREALLOCATE 16
+
  /*=============================================================================
 	CONSTRUCTORS / DESTRUCTOR
 =============================================================================*/
@@ -37,6 +39,7 @@ OSCBundle::OSCBundle(osctime_t _timetag){
     messages = NULL;
     incomingBuffer = NULL;
     incomingBufferSize = 0;
+    incomingBufferFree = 0;
     decodeState = STANDBY;
 }
 
@@ -356,17 +359,30 @@ void OSCBundle::decode(uint8_t incomingByte){
  =============================================================================*/
 
 void OSCBundle::addToIncomingBuffer(uint8_t incomingByte){
-    //realloc some space for the new byte and stick it on the end
-	incomingBuffer = (uint8_t *) realloc ( incomingBuffer, incomingBufferSize + 1);
-	if (incomingBuffer != NULL){
-		incomingBuffer[incomingBufferSize++] = incomingByte;
-	} else {
-		error = ALLOCFAILED;
-	}
+    //refuse to grow without bound on a length taken from the wire
+    if (incomingBufferSize >= OSC_MAX_INCOMING){
+        error = BUFFER_FULL;
+        return;
+    }
+    //Grow in blocks. This used to realloc for every single byte, which on a
+    //part with no heap compaction is both slow and fragmenting.
+    if (incomingBufferFree == 0){
+        uint8_t * mem = (uint8_t *) realloc(incomingBuffer,
+                                            incomingBufferSize + OSCBUNDLE_PREALLOCATE);
+        if (mem == NULL){
+            error = ALLOCFAILED;
+            return;
+        }
+        incomingBuffer = mem;
+        incomingBufferFree = OSCBUNDLE_PREALLOCATE;
+    }
+    incomingBuffer[incomingBufferSize++] = incomingByte;
+    incomingBufferFree--;
 }
 
 void OSCBundle::clearIncomingBuffer(){
     incomingBufferSize = 0;
+    incomingBufferFree = 0;
     free(incomingBuffer);
     incomingBuffer = NULL;
 }

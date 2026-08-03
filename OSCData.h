@@ -65,6 +65,21 @@
 // integer type, so this typedef no longer has to steer overload resolution.
 typedef int32_t intOSC_t;
 
+//An upper bound on how large an inbound packet may grow while being decoded.
+//Blob lengths and bundle element sizes are read straight off the wire, and the
+//decoders grew their buffer until the declared length was reached -- so a peer
+//claiming a 4 GB blob made the buffer grow until malloc failed. On a 2.5 KB
+//part that is a one-packet denial of service. Hitting the cap now raises
+//BUFFER_FULL, an error code that was declared but never used.
+//Override before including the library if a target needs larger packets.
+#ifndef OSC_MAX_INCOMING
+#if defined(__AVR__)
+#define OSC_MAX_INCOMING 512
+#else
+#define OSC_MAX_INCOMING 4096
+#endif
+#endif
+
 //ERRORS/////////////////////////////////////////////////
 typedef enum { OSC_OK = 0,
 	BUFFER_FULL, INVALID_OSC, ALLOCFAILED, INDEX_OUT_OF_BOUNDS
