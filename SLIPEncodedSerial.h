@@ -20,7 +20,9 @@ Extends the Serial class to encode SLIP over serial
 
 
 //import the serial USB object
-#if defined(TEENSYDUINO) && defined (__arm__)
+#if defined(USE_TINYUSB)
+#include <Adafruit_USBD_CDC.h>
+#elif defined(TEENSYDUINO) && defined (__arm__)
 #if !defined(USB_HOST_TEENSY36_)
 #include <usb_serial.h>
 #endif
