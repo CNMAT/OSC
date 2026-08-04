@@ -20,7 +20,24 @@ Extends the Serial class to encode SLIP over serial
 
 
 //import the serial USB object
-#if defined(TEENSYDUINO) && defined (__arm__)
+//
+// USE_TINYUSB comes first deliberately. Several cores offer a "USB Stack:
+// TinyUSB" menu option (Adafruit SAMD, Adafruit nRF52 -- which defines it
+// unconditionally -- and rp2040), and when it is selected Serial is an
+// Adafruit_USBD_CDC rather than the core's own class. Including the core's
+// USB header in that configuration redeclares Serial and fails to compile:
+//   USBAPI.h:189: error: conflicting declaration 'Serial_ Serial'
+//   SerialUSB.h:87: error: conflicting declaration 'SerialUSB Serial'
+// Include Adafruit_TinyUSB.h and nothing else. It has to be that header
+// rather than Adafruit_USBD_CDC.h, even though the latter is what declares
+// the class: the cores put .../Adafruit_TinyUSB_Arduino/src/arduino on the
+// include path with a raw -I, so the inner header compiles but arduino-cli's
+// library resolver never sees it, the TinyUSB library is never linked, and
+// the build dies at "undefined reference to Adafruit_USBD_CDC::begin".
+// Reported as PR #162 by twhiston.
+#if defined(USE_TINYUSB)
+#include <Adafruit_TinyUSB.h>
+#elif defined(TEENSYDUINO) && defined (__arm__)
 #if !defined(USB_HOST_TEENSY36_)
 #include <usb_serial.h>
 #endif
