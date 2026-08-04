@@ -30,15 +30,25 @@ void loop() {
 
 	// look if there is a new meassage, if yes print ping data
 	if (slip.available()) {
-    while (!slip.endofPacket()) {
-      while (slip.available()) {
-        //read() returns int, -1 when the stream dries up mid-packet; fed
-        //straight into fill() that narrows to an 0xFF data byte
-        int c = slip.read();
-        if (c >= 0) msg.fill((uint8_t)c);
+		// Bounded. A TCP segment can end part way through a packet, and an
+		// unbounded wait here never returns: available() stays 0, endofPacket()
+		// stays false, and the ping below stops being sent for good, which on a
+		// console that expects a keepalive drops the connection.
+		unsigned long lastByte = millis();
+		while (!slip.endofPacket()) {
+			if (slip.available()) {
+				//read() returns int, -1 when the stream dries up mid-packet; fed
+				//straight into fill() that narrows to an 0xFF data byte
+				int c = slip.read();
+				if (c >= 0) msg.fill((uint8_t)c);
+				lastByte = millis();
+			} else if (millis() - lastByte > 200) {
+				break;              // stalled mid-packet; drop it and keep pinging
 			}
 		}
-		if (msg.fullMatch("/eos/out/ping")) {
+		// isInt() as well as hasError(): an argument-less /eos/out/ping frame
+		// leaves hasError() false and getInt(0) returning a fake 0.
+		if (!msg.hasError() && msg.fullMatch("/eos/out/ping") && msg.isInt(0)) {
 			Serial.print("Ping Number ");
 			Serial.print(msg.getInt(0));
 			Serial.println(" received");

@@ -6,6 +6,11 @@
 
 #include <SLIPEncodedSerial.h>
 
+#ifndef LED_BUILTIN
+#define LED_BUILTIN 2   // generic ESP32 dev modules leave it undefined; GPIO2 drives the usual on-board LED
+#endif
+
+
 #ifdef BOARD_HAS_USB_SERIAL
 SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
 #else

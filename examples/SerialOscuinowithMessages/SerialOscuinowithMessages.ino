@@ -59,7 +59,10 @@ void routeDigital(OSCMessage &msg, int addrOffset ){
         digitalWrite(pin, (msg.getInt(0)>0) ? HIGH:LOW);
       }      //otherwise it's an analog read
       else if(msg.isFloat(0)){
-        analogWrite(analogInputToDigitalPin(pin), (int)(msg.getFloat(0)*255.0f));
+        pinMode(pin, OUTPUT);
+        //pin here is already a digital pin; analogInputToDigitalPin()
+        //maps ANALOG indices and returned the wrong pin, or -1
+        analogWrite(pin, (int)(msg.getFloat(0)*255.0f));
       }
 
      

@@ -51,22 +51,6 @@ void read_mac() {}
 
 OSCBundle bundleOUT;
 
-//converts the pin to an osc address
-char * numToOSCAddress( int pin){
-    static char s[10];
-    int i = 9;
-	
-    s[i--]= '\0';
-	do
-    {
-		s[i] = "0123456789"[pin % 10];
-                --i;
-                pin /= 10;
-    }
-    while(pin && i);
-    s[i] = '/';
-    return &s[i];
-}
 
 /**
  * ANALOG
