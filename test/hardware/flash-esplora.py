@@ -116,18 +116,31 @@ def main():
             sys.exit(f"pass the port explicitly; candidates: {sorted(ports)}")
         port = ports[0]
 
+    others = set(glob.glob('/dev/cu.*')) - {port}
     print(f"touching {port} at 1200 baud")
     touch_1200(port)
 
+    # The bootloader may come back under EITHER name, and which one depends on
+    # the board. A stock Esplora is named from its USB location, so the
+    # bootloader reuses the sketch's name. A board whose firmware sets its own
+    # USB serial gets a different name for the bootloader, and waiting only for
+    # the original name misses the whole ~8 s window -- the original then
+    # reappears late, and late is the SKETCH, not the bootloader. Take
+    # whichever shows up first.
     gone = False
     t0 = time.time()
     while time.time() - t0 < 10:
+        fresh = sorted(set(glob.glob('/dev/cu.*')) - others - {port})
         here = os.path.exists(port)
         if not here and not gone:
             gone = True
             print(f"  dropped at {time.time() - t0:.2f}s")
-        elif gone and here:
-            print(f"  back at {time.time() - t0:.2f}s -- programming")
+        if fresh:
+            port = fresh[0]
+            print(f"  bootloader appeared as {port} at {time.time() - t0:.2f}s")
+        if fresh or (gone and here):
+            if not fresh:
+                print(f"  back at {time.time() - t0:.2f}s -- programming")
             time.sleep(0.15)              # let the CDC finish coming up
             # Caterina holds for ~8 s, so there is room for a few goes. Try
             # every runnable avrdude: 8.0.0 can fail to sync on this board
@@ -137,7 +150,7 @@ def main():
                 r = subprocess.run([exe, "-C", cfg, "-c", "avr109",
                                     "-p", "atmega32u4", "-P", port, "-b", "57600",
                                     "-D", f"-U", f"flash:w:{hexfile}:i"],
-                                   capture_output=True, text=True)
+                                   capture_output=True, text=True, errors="replace")
                 if "bytes of flash written" in r.stderr:
                     print(f"*** FLASHED OK *** ({ver(exe)})")
                     return 0
