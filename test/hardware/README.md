@@ -261,6 +261,7 @@ drives only the SLIP layer.
 | LilyPad USB (ATmega32U4) | 22/22 | 11/11, int=2 long=4 ll=8 double=4 | 7/7 | 0 frames lost up to 50 |
 | Teensy 4.0 (ARM M7) | 22/22 | 11/11 | 7/7 | 0 frames lost up to 50 |
 | DFRobot Beetle RP2040 | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | 0 frames lost up to 50 |
+| Seeed XIAO RP2350 (Cortex-M33) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | 0 frames lost up to 50 |
 | ESP32-C3 (RISC-V) | 22/22 | 11/11 | — | cliff at 266 B; 50/50 with a 1 KB ring |
 | QT Py ESP32-S3 (Xtensa, HWCDC) | 22/22 | 11/11 | — | cliff at 266 B; 50/50 with a 1 KB ring |
 | Gemma M0 (SAMD21) | — | — | 7/7 | — |
@@ -271,7 +272,7 @@ drives only the SLIP layer.
 | M5Stack NanoC6 | not run — board stopped responding | | | |
 
 The 2026-08-03 rows (LilyPad stress, Teensy widths, Beetle RP2040, ESP32-C3,
-UNO R4 WiFi, QT Py ESP32-S3) were run against the 4.0.0 tree after the SLIP-over-TCP
+UNO R4 WiFi, QT Py ESP32-S3, XIAO RP2350) were run against the 4.0.0 tree after the SLIP-over-TCP
 collapse, so they also stand as the regression evidence for it on real USB
 stacks. The Teensy `widths` and RP2040 rows close gaps that were dashes
 before: integer dispatch had never been checked on an ARM M7, and no RP2040
