@@ -15,9 +15,13 @@ static void probe(char tag, const uint8_t*payload, size_t plen){
   p[n++]=','; p[n++]=(uint8_t)tag; p[n++]=0; p[n++]=0;
   memcpy(p+n,payload,plen); n+=plen;
   OSCMessage m; m.fill(p,n);
+  // A compound literal -- (char[2]){...} -- is C, not C++. clang takes it as
+  // an extension and gcc rejects it outright ("taking address of temporary
+  // array"), which kept this suite clang-only until CI built it with g++.
+  char got[2] = { (char)m.getType(0), 0 };
   printf("  decode '%c': %-9s type=%-3s argcount=%d\n", tag,
          m.hasError()?"ERROR":"ok",
-         m.hasError()?"-":(char[2]){(char)m.getType(0),0}, m.size());
+         m.hasError()?"-":got, m.size());
 }
 int main(){
   static const uint8_t z8[8]={0,0,0,0,0,0,0,0};

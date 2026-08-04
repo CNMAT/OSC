@@ -63,6 +63,7 @@ jobs:
           - name: arduino:avr:esplora
             fqbn: arduino:avr:esplora
             core: arduino:avr
+            libs: Esplora
             sketches: OSCEsplora EsploraOscuino
           - name: arduino:samd
             fqbn: arduino:samd:mkrzero
@@ -90,6 +91,9 @@ jobs:
             arduino-cli core update-index
             arduino-cli core install "${{ matrix.core }}"
           fi
+      - name: install any libraries the sketches need
+        if: matrix.libs != ''
+        run: arduino-cli lib install ${{ matrix.libs }}
       - name: make the library visible to the compiler
         run: |
           mkdir -p "$HOME/Arduino/libraries"
