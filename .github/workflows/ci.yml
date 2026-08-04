@@ -1,0 +1,110 @@
+# Continuous integration for CNMAT/OSC.
+#
+# This replaces the Travis configuration proposed in PR #86 (peternewman,
+# 2018). The intent there was right and is honoured here; the mechanism is
+# not, because travis-ci.org/.com no longer builds open-source repositories,
+# the Trusty image and the container/sudo/group keys that config uses were
+# retired, and the cpplint URL it downloads returns 404.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  host:
+    # The suite that needs no board and no Arduino toolchain: an OSC 1.0
+    # decoder written from the spec, randomised round-trips, named
+    # regressions, pattern semantics, DoS bounds and 150000 rounds of
+    # malformed input, all under AddressSanitizer and UBSan.
+    name: host suite (ASan + UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: make asan
+        run: make -C test/host asan
+
+  webserial:
+    # The Web Serial pages are generated from a template; this fails if a
+    # generated file has been hand-edited out of sync with it.
+    name: web serial generator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: check drift and run the codec tests
+        run: make -C extras/webserial all
+
+  examples:
+    # One job per core so a failure names the platform. Each core builds
+    # only the examples it can: the ESP8266, WiFi, Ethernet and
+    # board-specific sketches need libraries or hardware a given core does
+    # not have.
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: arduino:avr:uno
+            fqbn: arduino:avr:uno
+            core: arduino:avr
+            sketches: SerialSendMessage SerialSendBundle SerialReceive SerialEcho SerialCallResponse PatternMatching SerialOscuinowithBundles SerialOscuinowithMessages
+          - name: arduino:avr:leonardo
+            fqbn: arduino:avr:leonardo
+            core: arduino:avr
+            sketches: SerialSendMessage SerialReceive SerialEcho SerialSendMessageInfiniteLoop SerialReceiveInfiniteLoop
+          - name: arduino:avr:esplora
+            fqbn: arduino:avr:esplora
+            core: arduino:avr
+            sketches: OSCEsplora EsploraOscuino
+          - name: arduino:samd
+            fqbn: arduino:samd:mkrzero
+            core: arduino:samd
+            sketches: SerialSendMessage SerialReceive SerialEcho PatternMatching
+          - name: esp32:esp32
+            fqbn: esp32:esp32:esp32
+            core: esp32:esp32
+            url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+            sketches: SerialSendMessage SerialReceive SerialEcho PatternMatching SerialOscuinowithBundles
+          - name: rp2040
+            fqbn: rp2040:rp2040:rpipico
+            core: rp2040:rp2040
+            url: https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
+            sketches: SerialSendMessage SerialReceive SerialEcho PatternMatching
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v1
+      - name: install core
+        run: |
+          if [ -n "${{ matrix.url }}" ]; then
+            arduino-cli core update-index --additional-urls "${{ matrix.url }}"
+            arduino-cli core install "${{ matrix.core }}" --additional-urls "${{ matrix.url }}"
+          else
+            arduino-cli core update-index
+            arduino-cli core install "${{ matrix.core }}"
+          fi
+      - name: make the library visible to the compiler
+        run: |
+          mkdir -p "$HOME/Arduino/libraries"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/Arduino/libraries/OSC"
+      - name: compile examples
+        run: |
+          rc=0
+          for s in ${{ matrix.sketches }}; do
+            echo "::group::$s"
+            # --build-path per sketch: arduino-cli keys its default build
+            # cache on the sketch path alone, so parallel jobs sharing a
+            # runner can otherwise stomp each other's objects.
+            arduino-cli compile -b "${{ matrix.fqbn }}" \
+              --build-path "${RUNNER_TEMP}/build-$s" \
+              "examples/$s" || rc=1
+            echo "::endgroup::"
+          done
+          exit $rc
