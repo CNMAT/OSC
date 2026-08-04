@@ -46,10 +46,33 @@ import time
 TIOCMBIS, TIOCMBIC, TIOCM_DTR = 0x8004746C, 0x8004746B, 0x002
 
 
-def tool(pattern):
-    hits = glob.glob(os.path.expanduser(
-        f"~/Library/Arduino15/packages/arduino/tools/avrdude/*/{pattern}"))
-    return hits[0] if hits else None
+def ver(exe):
+    return exe.split('/avrdude/')[1].split('/')[0]
+
+
+def find_avrdudes():
+    """Every avrdude under Arduino15 this machine can actually execute.
+
+    Several versions sit side by side and the older ones can be i386-only --
+    6.3.0-arduino9 is, and running it raises OSError 86 'Bad CPU type in
+    executable', which is why picking blindly by glob order fails. Each
+    avrdude.conf comes from its own directory so the pair always matches.
+    Newest first, but the caller should try them all: 8.0.0-arduino1 failed to
+    sync with Caterina on a board that 6.3.0-arduino17 programmed fine.
+    """
+    out = []
+    for root in sorted(glob.glob(os.path.expanduser(
+            "~/Library/Arduino15/packages/arduino/tools/avrdude/*/")), reverse=True):
+        exe = os.path.join(root, "bin", "avrdude")
+        conf = os.path.join(root, "etc", "avrdude.conf")
+        if not (os.path.exists(exe) and os.path.exists(conf)):
+            continue
+        try:
+            subprocess.run([exe, "-?"], capture_output=True, timeout=10)
+        except OSError:
+            continue                      # wrong architecture; skip it
+        out.append((exe, conf))
+    return out
 
 
 def touch_1200(port):
@@ -74,9 +97,10 @@ def main():
     name = os.path.basename(sketch.rstrip("/"))
     hexfile = f"{build}/{name}.ino.hex"
 
-    avrdude, conf = tool("bin/avrdude"), tool("etc/avrdude.conf")
-    if not avrdude or not conf:
-        sys.exit("avrdude not found under Arduino15")
+    builds = find_avrdudes()
+    if not builds:
+        sys.exit("no runnable avrdude found under Arduino15")
+    print("avrdude:", ", ".join(ver(e) for e, _ in builds))
 
     if not os.path.exists(hexfile):
         print(f"building {sketch} -> {build}")
@@ -103,16 +127,23 @@ def main():
             gone = True
             print(f"  dropped at {time.time() - t0:.2f}s")
         elif gone and here:
-            print(f"  back at {time.time() - t0:.2f}s -- programming immediately")
-            r = subprocess.run([avrdude, "-C", conf, "-c", "avr109",
-                                "-p", "atmega32u4", "-P", port, "-b", "57600",
-                                "-D", f"-U", f"flash:w:{hexfile}:i"],
-                               capture_output=True, text=True)
-            if "bytes of flash written" in r.stderr:
-                print("*** FLASHED OK ***")
-                return 0
-            print("  failed:", "; ".join(l for l in r.stderr.splitlines()
-                                         if 'rror' in l)[:200])
+            print(f"  back at {time.time() - t0:.2f}s -- programming")
+            time.sleep(0.15)              # let the CDC finish coming up
+            # Caterina holds for ~8 s, so there is room for a few goes. Try
+            # every runnable avrdude: 8.0.0 can fail to sync on this board
+            # where 6.3.0-arduino17 succeeds, and the reverse is plausible.
+            for attempt in range(4):
+                exe, cfg = builds[attempt % len(builds)]
+                r = subprocess.run([exe, "-C", cfg, "-c", "avr109",
+                                    "-p", "atmega32u4", "-P", port, "-b", "57600",
+                                    "-D", f"-U", f"flash:w:{hexfile}:i"],
+                                   capture_output=True, text=True)
+                if "bytes of flash written" in r.stderr:
+                    print(f"*** FLASHED OK *** ({ver(exe)})")
+                    return 0
+                why = "; ".join(l for l in r.stderr.splitlines() if 'rror' in l)
+                print(f"  {ver(exe)} attempt {attempt + 1}: {why[:110]}")
+                time.sleep(0.2)
             return 1
         time.sleep(0.01)
 
