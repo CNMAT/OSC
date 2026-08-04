@@ -42,6 +42,7 @@ OSCData	KEYWORD1
 oscrgba_t	KEYWORD1
 oscmidi_t	KEYWORD1
 osctime_t	KEYWORD1
+intOSC_t	KEYWORD1
 zerotime	LITERAL1
 immediatetime	LITERAL1
 beginPacket	KEYWORD2

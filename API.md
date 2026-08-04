@@ -76,6 +76,35 @@ Set the data at the given position to be a blob of the given length.
 
 Append a double precision floating point value to the OSCMessage. NOTE: double is not supported on most Arduino platforms. It will fall back to float, when double is not supported. 
 
+### `OSCMessage& add(int64_t h)`
+
+Append a 64-bit integer, OSC type tag `'h'`.
+
+### `OSCMessage& add(osctime_t time)`
+
+Append an OSC timetag, type tag `'t'`. `immediatetime` is
+`0x0000000000000001`, OSC 1.0's "immediately"; `zerotime` is 1900-01-01.
+
+### `OSCMessage& add(oscrgba_t rgba)`
+
+Append an RGBA colour, type tag `'r'`. Sent in the OSC 1.0 order red, green,
+blue, alpha. **This changed in 4.0.0** — 3.5.8 and earlier reversed the four
+bytes, so a colour sent by an older version arrives inverted and vice versa.
+
+### `OSCMessage& add(oscmidi_t midi)`
+
+Append a MIDI message, type tag `'m'`. Sent as port, status, data1, data2.
+**This changed in 4.0.0**: earlier versions reversed the bytes and dropped
+`data2`. OSC's `'m'` type has no channel slot of its own, so the struct's
+`channel` field is folded into the low nibble of the status byte on encode —
+setting the channel directly in `status` and leaving `channel` at 0 gives the
+same bytes.
+
+### `OSCMessage& add(oscevent_t event)`
+
+Append a valueless argument: `OSC_IMPULSE` gives type tag `'I'`, anything else
+gives `'N'` (Null). Both occupy a type tag and no payload bytes.
+
 ## Get Data
 
 
@@ -304,15 +333,18 @@ A bundle is a group of OSCMessages with a timetag.
 
 Construct an empty OSCBundle. 
 
-### `OSCBundle(osctime_t = zerotime)`
+### `OSCBundle(osctime_t = immediatetime)`
 
-Construct the bundle with a timetag. timetag defaults to 0 (immediate). 
+Construct the bundle with a timetag. Defaults to `immediatetime`
+(`0x0000000000000001`), the value OSC 1.0 reserves for "immediately". Pass
+`zerotime` explicitly for a timetag of 0, which means 1900-01-01, not
+"immediately" -- 3.5.8 and earlier sent 0 by default. 
 
 
 
 ## Add OSCMessage
 
-### `OSCMessage & add(char * address)`
+### `OSCMessage & add(const char * address)`
 
 Create a new message with the given `address` in the bundle. Returns the newly created OSCMessage. 
 
@@ -379,7 +411,7 @@ bundle.send(SLIPSerial);
 
 Add the incoming byte to the OSCBundle where it will be decoded. 
 
-### `OSCBundle& fill(uint8_t * bytes, int length)`
+### `OSCBundle& fill(const uint8_t * bytes, int length)`
 
 Add and decode the array of bytes as an OSCBundle. 
 
@@ -455,3 +487,77 @@ bundle.add("/address").add("data").add(0);
 bundle.send(SLIPSerial);
 bundle.empty();
 ```
+
+# SLIPEncodedSerial
+
+A serial stream has no packet boundaries, so OSC over serial is framed with
+[SLIP](https://en.wikipedia.org/wiki/Serial_Line_Internet_Protocol). Every
+example that says `SLIPSerial` declares one of these; the library never
+declares it for you.
+
+`_SLIPSerial<T>` wraps any Arduino `Stream` and is aliased for the common ones:
+
+| alias | wraps | use |
+|---|---|---|
+| `SLIPEncodedSerial` | `HardwareSerial` | UART, and any board whose `Serial` is USB CDC deriving from `HardwareSerial` |
+| `SLIPEncodedUSBSerial` | the board's native USB CDC | only where `BOARD_HAS_USB_SERIAL` is defined |
+| `SLIPEncodedTCP` | `Client` | SLIP over TCP; since 4.0.0 this is `_SLIPSerial<Client>` rather than a separate class |
+| `SLIPEncodedBluetoothSerial` | `BluetoothSerial` | ESP32 classic Bluetooth only |
+
+The portable declaration, which every example uses:
+
+```C++
+#include <SLIPEncodedSerial.h>
+
+#ifdef BOARD_HAS_USB_SERIAL
+SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
+#else
+SLIPEncodedSerial SLIPSerial(Serial);
+#endif
+```
+
+### `void begin(unsigned long baudrate)`
+
+Calls `begin()` on the underlying stream. Ignored by native USB CDC ports,
+which have no line rate; a bridged UART such as the UNO R4 WiFi's needs the
+host to match it.
+
+### `void beginPacket()` / `void endPacket()`
+
+Mark the start and end of one OSC packet. **Both are required.** Since 4.0.0
+outgoing bytes are collected and handed to the port in blocks, and `endPacket()`
+is what flushes them — `send()` on its own may leave the packet sitting in the
+buffer. See `OSC_SLIP_TX_BUFFER` to change the block size.
+
+### `bool endofPacket()`
+
+True once a complete frame has been received. The receive loop waits on this,
+but must not wait on it forever: a stream that stops mid-packet leaves it false
+and `available()` at 0 indefinitely.
+
+### `int read()`
+
+Returns the next decoded byte, or **-1 for "no byte"** — at end of packet, on a
+malformed escape pair, and mid-packet whenever `available()` has overcounted,
+which it does because a SLIP escape pair is two raw bytes for one decoded byte.
+`fill()` takes `uint8_t`, so `fill(read())` narrows that -1 into an ordinary
+`0xFF` byte of message content. Always check before filling:
+
+```C++
+int c = SLIPSerial.read();
+if (c >= 0) msg.fill((uint8_t)c);
+```
+
+### `int available()` / `int peek()` / `void flush()`
+
+As `Stream`. `flush()` drains the transmit buffer as well as the port's.
+
+# Compile-time options
+
+Define before including the library, or with a `-D` build flag.
+
+| macro | default | effect |
+|---|---|---|
+| `OSC_MAX_INCOMING` | 512 on AVR, 4096 elsewhere | Cap on a single decoded bundle element or message. A peer claiming a larger size raises `BUFFER_FULL` instead of growing the buffer until `malloc` fails. Note this bounds one *element*, not a whole datagram. |
+| `OSC_SLIP_TX_BUFFER` | 64 | Bytes of outgoing SLIP collected before handing them to the port. Larger means fewer writes, which matters where a write is expensive; costs that many bytes of RAM per `SLIPSerial` instance. |
+| `OSC_NO_TONE` | undefined | Suppresses `BOARD_HAS_TONE`, for boards whose core has no `tone()`. |
