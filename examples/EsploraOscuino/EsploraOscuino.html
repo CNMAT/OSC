@@ -1,4 +1,28 @@
 <!DOCTYPE html>
+<!--
+  Running this page. Web Serial needs a real browser and a real origin, and
+  the two ways of getting that wrong both look like the page is broken:
+
+    * Opening the file from disk (file://...) does not work. Chrome refuses
+      Web Serial there because a permission cannot be persisted against an
+      opaque origin. Serve it and use the served URL:
+
+          cd examples/EsploraOscuino && python3 -m http.server 8765
+          open -a "Google Chrome" http://localhost:8765/EsploraOscuino.html
+
+    * An embedded or sandboxed webview will report navigator.serial as
+      present and then show an EMPTY port picker, because it can enumerate
+      no serial devices at all. A correct filter with nothing listed means
+      the browser, not this page. Use Chrome or Edge proper.
+
+  python3 -m http.server sends no Cache-Control, so Chrome will happily
+  re-serve a stale copy of this file and edits appear to do nothing. Hard
+  reload (Cmd-Shift-R) after changing it.
+
+  Connect lists only boards matching ESPLORA_FILTERS (0x2341/0x803C for the
+  sketch, 0x003C for the bootloader). Tick "show all ports" to drop the
+  filter -- if ports appear only then, the board's USB ids are not stock.
+-->
 <html lang="en">
 <head>
 <meta charset="utf-8">
