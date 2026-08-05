@@ -237,9 +237,9 @@ buffers are large enough that 50 frames never reach it.
 
 On HWCDC (the ESP32 USB-Serial-JTAG peripheral) the ceiling is exact and
 reproduces across chips. Nineteen of the 14-byte stress frames arrive — 266
-bytes — and the 20th is cut. **Measured identically on an ESP32-C3, an Adafruit QT Py
-ESP32-S3 and a Seeed XIAO ESP32S3 Sense**, same boundary, same missing
-indices `[19..]`,
+bytes — and the 20th is cut. **Measured identically on four parts across both instruction sets** -- an
+ESP32-C3, an ESP32-C6 (RISC-V), an Adafruit QT Py ESP32-S3 and a Seeed XIAO
+ESP32S3 Sense (Xtensa) -- same boundary, same missing indices `[19..]`,
 which is what rules out a per-part quirk: it is the core's shared HWCDC
 driver and its default 256-byte rx ring, the small overshoot being what the
 sketch drains while the burst is still arriving.
@@ -267,7 +267,7 @@ drives only the SLIP layer.
 | QT Py ESP32-S3 (Xtensa, HWCDC) | 22/22 | 11/11 | — | cliff at 266 B; 50/50 with a 1 KB ring |
 | Seeed XIAO ESP32S3 Sense (Xtensa, 8 MB PSRAM) | 22/22 | 11/11 | — | cliff at 266 B |
 | Gemma M0 (SAMD21) | — | — | 7/7 | — |
-| ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | — |
+| ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | cliff at 266 B |
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | cliff at ~300 B |
 | LilyPad USB | — | — | — | cliff at ~378 B, then wedged |
 | UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | 0 frames lost up to 50 |
@@ -304,6 +304,28 @@ Re-flashing fixed it every time. Check that the sketch you think is running
 actually is before believing a failure — the diagnostic that settled this
 one printed `av=8 n=8`, proving the SLIP layer had decoded the frame
 correctly all along.
+
+## ESP32 USB CDC defaults differ per board -- read boards.txt, do not guess
+
+Three ESP32 boards here need three different FQBN option sets, and getting it
+wrong gives a board that flashes, verifies its hash, and then says nothing at
+all -- indistinguishable from a dead sketch.
+
+| board | what works | why |
+|---|---|---|
+| `esp32:esp32:XIAO_ESP32S3` | **stock defaults, no overrides** | `build.cdc_on_boot=1` already |
+| `esp32:esp32:esp32c6` | `:CDCOnBoot=cdc` | `build.cdc_on_boot=0`, so `Serial` is UART0, not USB |
+| `esp32:esp32:esp32c3` | `:CDCOnBoot=cdc` | same |
+| `esp32:esp32:adafruit_qtpy_esp32s3_n4r2` | `:USBMode=hwcdc,CDCOnBoot=cdc` | its default USB-OTG/TinyUSB mode enumerates nothing here |
+
+Carrying one board's setting to another is what costs the time: passing the
+QT Py's `USBMode=hwcdc,CDCOnBoot=cdc` to a XIAO ESP32S3 silences it
+completely. Check `grep '^<board>.build.cdc_on_boot' boards.txt` and the menu
+order -- the first `menu.CDCOnBoot.*` entry listed is the default.
+
+The fastest way to tell "wrong USB setting" from "broken sketch" is the
+vendor's own first check: flash a Blink that also prints. If the LED blinks
+and nothing arrives, it is the USB configuration, not your code.
 
 ## The QT Py ESP32-S3 needs `USBMode=hwcdc`, and two button presses
 
