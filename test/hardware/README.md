@@ -237,8 +237,9 @@ buffers are large enough that 50 frames never reach it.
 
 On HWCDC (the ESP32 USB-Serial-JTAG peripheral) the ceiling is exact and
 reproduces across chips. Nineteen of the 14-byte stress frames arrive — 266
-bytes — and the 20th is cut. **Measured identically on an ESP32-C3 and an
-Adafruit QT Py ESP32-S3**, same boundary, same missing indices `[19..]`,
+bytes — and the 20th is cut. **Measured identically on an ESP32-C3, an Adafruit QT Py
+ESP32-S3 and a Seeed XIAO ESP32S3 Sense**, same boundary, same missing
+indices `[19..]`,
 which is what rules out a per-part quirk: it is the core's shared HWCDC
 driver and its default 256-byte rx ring, the small overshoot being what the
 sketch drains while the burst is still arriving.
@@ -264,6 +265,7 @@ drives only the SLIP layer.
 | Seeed XIAO RP2350 (Cortex-M33) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | 0 frames lost up to 50 |
 | ESP32-C3 (RISC-V) | 22/22 | 11/11 | — | cliff at 266 B; 50/50 with a 1 KB ring |
 | QT Py ESP32-S3 (Xtensa, HWCDC) | 22/22 | 11/11 | — | cliff at 266 B; 50/50 with a 1 KB ring |
+| Seeed XIAO ESP32S3 Sense (Xtensa, 8 MB PSRAM) | 22/22 | 11/11 | — | cliff at 266 B |
 | Gemma M0 (SAMD21) | — | — | 7/7 | — |
 | ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | — |
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | cliff at ~300 B |
