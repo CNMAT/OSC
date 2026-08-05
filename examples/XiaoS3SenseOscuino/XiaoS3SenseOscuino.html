@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<!--
+  Running this page. Web Serial needs a real browser and a real origin, and
+  the two ways of getting that wrong both look like the page is broken:
+
+    * Opening the file from disk (file://...) does not work. Chrome refuses
+      Web Serial there because a permission cannot be persisted against an
+      opaque origin. Serve it and use the served URL:
+
+          cd examples/XiaoS3SenseOscuino && python3 -m http.server 8765
+          open -a "Google Chrome" http://localhost:8765/XiaoS3SenseOscuino.html
+
+    * An embedded or sandboxed webview will report navigator.serial as
+      present and then show an EMPTY port picker, because it can enumerate
+      no serial devices at all. A correct filter with nothing listed means
+      the browser, not this page. Use Chrome or Edge proper.
+
+  python3 -m http.server sends no Cache-Control, so Chrome will happily
+  re-serve a stale copy of this file and edits appear to do nothing. Hard
+  reload (Cmd-Shift-R) after changing it.
+
+  The board enumerates as Espressif 0x303a. "show all ports" drops the
+  filter if yours differs.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XIAO ESP32S3 Sense &mdash; sensors and camera over OSC</title>
+<style>
+  :root {
+    --bg: #10131a; --panel: #171b24; --panel-2: #1e2430; --line: #2a3140;
+    --text: #dde3ec; --dim: #8b95a7; --accent: #5eead4; --rx: #86efac;
+    --err: #fca5a5;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.lede { color: var(--dim); margin: 0 0 20px; max-width: 70ch; }
+  code { font-family: var(--mono); font-size: .92em; color: var(--accent); }
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .row + .row { margin-top: 12px; }
+  button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+           border-radius: 8px; padding: 9px 14px; font-size: 14px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); color: #06251f; border-color: var(--accent);
+                   font-weight: 600; }
+  label { color: var(--dim); font-size: 12px; text-transform: uppercase;
+          letter-spacing: .06em; }
+  input[type=number], select { background: var(--panel-2); color: var(--text);
+           border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+           font-size: 14px; width: 92px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #444c5c;
+         display: inline-block; }
+  .dot.on { background: var(--rx); }
+  .grid { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  #view { width: 100%; background: #000; border: 1px solid var(--line);
+          border-radius: 8px; display: block; image-rendering: auto; aspect-ratio: 4/3; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 5px 0; }
+  td.k { color: var(--dim); }
+  td.v { text-align: right; font-family: var(--mono); }
+  .bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--accent); width: 0; }
+  .stale { opacity: .35; }
+  #log { font-family: var(--mono); font-size: 12px; color: var(--dim);
+         background: #0c0f15; border: 1px solid var(--line); border-radius: 8px;
+         padding: 10px; height: 120px; overflow-y: auto; white-space: pre-wrap; }
+  .warn { color: var(--err); }
+</style>
+</head>
+<body>
+
+<h1>XIAO ESP32S3 Sense</h1>
+<p class="lede">
+  Six analog inputs, the die temperature and free heap arrive as a single
+  <code>/xiao</code> message so every reading in one belongs to the same
+  instant. Camera frames arrive separately as <code>/cam</code>, the JPEG
+  carried in an OSC blob. Chrome or Edge, over Web Serial.
+</p>
+
+<div class="panel">
+  <div class="row">
+    <button id="connect" class="primary">Connect</button>
+    <button id="disconnect" disabled>Disconnect</button>
+    <span class="dot" id="dot"></span>
+    <span id="state">not connected</span>
+    <span style="flex:1"></span>
+    <label><input type="checkbox" id="allPorts" style="vertical-align:-2px"> show all ports</label>
+  </div>
+  <div class="row">
+    <label for="size">size</label>
+    <select id="size">
+      <option value="0">QQVGA 160&times;120</option>
+      <option value="1" selected>QVGA 320&times;240</option>
+      <option value="2">VGA 640&times;480</option>
+      <option value="3">SVGA 800&times;600</option>
+    </select>
+    <label for="quality">quality</label>
+    <input type="number" id="quality" value="12" min="4" max="63">
+    <label for="rate">frame gap ms</label>
+    <input type="number" id="rate" value="200" min="0" max="10000" step="50">
+    <button id="stream">pause</button>
+    <button id="led">LED</button>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <img id="view" alt="camera frame">
+    <div class="row" style="margin-top:10px; color:var(--dim); font-size:13px">
+      <span id="frameinfo">no frames yet</span>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <table id="sensors">
+        <tr><td class="k">A0</td><td class="v" id="a0">–</td></tr>
+        <tr><td colspan="2"><div class="bar"><i id="a0b"></i></div></td></tr>
+        <tr><td class="k">A1</td><td class="v" id="a1">–</td></tr>
+        <tr><td colspan="2"><div class="bar"><i id="a1b"></i></div></td></tr>
+        <tr><td class="k">A2</td><td class="v" id="a2">–</td></tr>
+        <tr><td colspan="2"><div class="bar"><i id="a2b"></i></div></td></tr>
+        <tr><td class="k">A3</td><td class="v" id="a3">–</td></tr>
+        <tr><td class="k">A4</td><td class="v" id="a4">–</td></tr>
+        <tr><td class="k">A5</td><td class="v" id="a5">–</td></tr>
+        <tr><td class="k">die temperature</td><td class="v" id="temp">–</td></tr>
+        <tr><td class="k">free heap</td><td class="v" id="heap">–</td></tr>
+        <tr><td class="k">frames sent</td><td class="v" id="seq">–</td></tr>
+        <tr><td class="k">camera</td><td class="v" id="cam">–</td></tr>
+      </table>
+    </div>
+    <div class="panel" style="padding:10px">
+      <div id="log">idle</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+function logLine(cls, msg) {
+  const t = new Date().toLocaleTimeString();
+  const el = $("log");
+  el.textContent += `\n${t}  ${msg}`;
+  el.scrollTop = el.scrollHeight;
+  if (cls === "warn") el.classList.add("warn");
+}
+
+/* ============================================================
+   1. OSC — decode what this page needs, plus int encode
+   ============================================================ */
+const dec = new TextDecoder(), enc = new TextEncoder();
+
+class Reader {
+  constructor(b) { this.b = b; this.pos = 0;
+                   this.dv = new DataView(b.buffer, b.byteOffset, b.byteLength); }
+  get left() { return this.b.length - this.pos; }
+  int32() { const v = this.dv.getInt32(this.pos); this.pos += 4; return v; }
+  float32() { const v = this.dv.getFloat32(this.pos); this.pos += 4; return v; }
+  string() {
+    let e = this.pos; while (e < this.b.length && this.b[e] !== 0) e++;
+    const s = dec.decode(this.b.subarray(this.pos, e));
+    this.pos = (e + 4) & ~3;
+    return s;
+  }
+  // OSC blob: int32 length, then that many bytes, padded to 4.
+  blob() {
+    const n = this.int32();
+    if (n < 0 || n > this.left) { this.pos = this.b.length; return new Uint8Array(0); }
+    const v = this.b.subarray(this.pos, this.pos + n);
+    this.pos += (n + 3) & ~3;
+    return v;
+  }
+}
+
+function decodeMessage(bytes) {
+  const r = new Reader(bytes);
+  const address = r.string();
+  const args = [];
+  if (r.left > 0) {
+    const tags = r.string();
+    if (tags.startsWith(",")) {
+      for (const t of tags.slice(1)) {
+        if (t === "i") args.push(r.int32());
+        else if (t === "f") args.push(r.float32());
+        else if (t === "s") args.push(r.string());
+        else if (t === "b") args.push(r.blob());
+        else if (t === "T") args.push(true);
+        else if (t === "F") args.push(false);
+        else return { address, args };     // unknown tag: payload size unknown
+      }
+    }
+  }
+  return { address, args };
+}
+
+function encodeMessage(address, ints) {
+  const parts = [];
+  const pad = s => { const b = enc.encode(s + "\0");
+                     const n = (b.length + 3) & ~3;
+                     const o = new Uint8Array(n); o.set(b); return o; };
+  parts.push(pad(address));
+  parts.push(pad("," + "i".repeat(ints.length)));
+  for (const v of ints) {
+    const b = new Uint8Array(4); new DataView(b.buffer).setInt32(0, v | 0); parts.push(b);
+  }
+  const total = parts.reduce((n, p) => n + p.length, 0);
+  const out = new Uint8Array(total);
+  let o = 0; for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+
+/* ============================================================
+   2. SLIP
+   ============================================================ */
+const END = 0xC0, ESC = 0xDB, ESC_END = 0xDC, ESC_ESC = 0xDD;
+
+function slipEncode(payload) {
+  const out = [END];
+  for (const b of payload) {
+    if (b === END) out.push(ESC, ESC_END);
+    else if (b === ESC) out.push(ESC, ESC_ESC);
+    else out.push(b);
+  }
+  out.push(END);
+  return Uint8Array.from(out);
+}
+
+// A JPEG is full of 0xC0 and 0xDB — 0xFFC0 is the SOF0 marker and 0xFFDB the
+// quantisation table — so nearly every frame arrives escaped. Accumulate into
+// a growing buffer rather than an array of numbers: a VGA frame is ~14 KB and
+// push-per-byte into a JS array is what makes this drop frames.
+class SlipDecoder {
+  constructor() { this.buf = new Uint8Array(65536); this.n = 0; this.esc = false; }
+  push(b, controller) {
+    if (this.n === this.buf.length) {              // grow rather than truncate
+      const bigger = new Uint8Array(this.buf.length * 2);
+      bigger.set(this.buf); this.buf = bigger;
+    }
+    this.buf[this.n++] = b;
+  }
+  transform(chunk, controller) {
+    for (const b of chunk) {
+      if (this.esc) { this.push(b === ESC_END ? END : b === ESC_ESC ? ESC : b); this.esc = false; }
+      else if (b === ESC) { this.esc = true; }
+      else if (b === END) {
+        if (this.n) { controller.enqueue(this.buf.slice(0, this.n)); this.n = 0; }
+      } else this.push(b);
+    }
+  }
+  flush() { this.n = 0; }
+}
+
+/* ============================================================
+   3. Web Serial transport
+   ============================================================ */
+const XIAO_FILTERS = [{ usbVendorId: 0x303a }];    // Espressif
+let port = null, writer = null, reader = null, pipeDone = null;
+
+async function connect() {
+  const opts = $("allPorts").checked ? {} : { filters: XIAO_FILTERS };
+  port = await navigator.serial.requestPort(opts);
+  await port.open({ baudRate: 115200 });
+  writer = port.writable.getWriter();
+  const stream = port.readable.pipeThrough(new TransformStream(new SlipDecoder()));
+  reader = stream.getReader();
+  pipeDone = readLoop();
+  setConnected(true);
+  logLine("", "connected");
+}
+
+async function readLoop() {
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      onFrame(value);
+    }
+  } catch (e) { logLine("warn", "read error: " + e.message); }
+}
+
+async function disconnect() {
+  try { if (reader) { await reader.cancel(); reader.releaseLock(); } } catch {}
+  try { if (pipeDone) await pipeDone; } catch {}
+  try { if (writer) writer.releaseLock(); } catch {}
+  try { if (port) await port.close(); } catch {}
+  port = writer = reader = null;
+  setConnected(false);
+  logLine("", "disconnected");
+}
+
+// Never hand the device a write whose length is an exact multiple of 64: the
+// host ends such a transfer with a zero-length packet, and some CDC stacks
+// never release the endpoint bank it lands in. One extra END closes an empty
+// frame, which every SLIP decoder skips, so it costs nothing.
+const USB_ENDPOINT = 64;
+function padAwayZLP(frame) {
+  if (frame.length % USB_ENDPOINT !== 0) return frame;
+  const out = new Uint8Array(frame.length + 1);
+  out.set(frame); out[frame.length] = END;
+  return out;
+}
+
+async function send(address, ints) {
+  if (!writer) return;
+  try { await writer.write(padAwayZLP(slipEncode(encodeMessage(address, ints)))); }
+  catch (e) { logLine("warn", "write failed: " + e.message); }
+}
+
+/* ============================================================
+   4. Inbound
+   ============================================================ */
+let lastUrl = null, frames = 0, bytes = 0, tStart = 0;
+
+function onFrame(payload) {
+  let m;
+  try { m = decodeMessage(payload); } catch { return; }
+
+  if (m.address === "/cam") {
+    const [seq, ms, w, h, jpeg] = m.args;
+    if (!(jpeg instanceof Uint8Array) || jpeg.length < 4) return;
+    // Object URLs must be revoked or this leaks a frame's worth per frame.
+    // Revoke the PREVIOUS one only after the new src is set, or Chrome can
+    // blank the image between frames.
+    const url = URL.createObjectURL(new Blob([jpeg], { type: "image/jpeg" }));
+    const prev = lastUrl;
+    $("view").src = url;
+    lastUrl = url;
+    if (prev) URL.revokeObjectURL(prev);
+
+    frames++; bytes += jpeg.length;
+    if (!tStart) tStart = performance.now();
+    const secs = (performance.now() - tStart) / 1000;
+    $("frameinfo").textContent =
+      `${w}×${h}  ${(jpeg.length / 1024).toFixed(1)} KB  ` +
+      `#${seq}  ${(frames / Math.max(secs, .001)).toFixed(1)} fps  ` +
+      `${((bytes / secs) / 1024).toFixed(0)} KB/s`;
+    return;
+  }
+
+  if (m.address === "/xiao") {
+    const a = m.args;
+    document.querySelectorAll(".stale").forEach(n => n.classList.remove("stale"));
+    for (let i = 0; i < 6; i++) {
+      const v = a[i];
+      if (typeof v !== "number") continue;
+      $("a" + i).textContent = v;
+      const bar = $("a" + i + "b");
+      if (bar) bar.style.width = Math.max(0, Math.min(100, v / 4095 * 100)) + "%";
+    }
+    if (typeof a[6] === "number") $("temp").textContent = (a[6] / 100).toFixed(1) + " °C";
+    if (typeof a[7] === "number") $("heap").textContent = a[7] + " KB";
+    if (typeof a[8] === "number") $("seq").textContent  = a[8];
+    if (typeof a[9] === "boolean") $("cam").textContent = a[9] ? "ok" : "FAILED";
+    return;
+  }
+
+  if (m.address === "/hello") {
+    logLine("", "board: " + m.args.join(" "));
+  }
+}
+
+setInterval(() => {                       // grey the readouts if the board stops
+  document.querySelectorAll("#sensors .v").forEach(n => n.classList.add("stale"));
+}, 2000);
+
+/* ============================================================
+   5. Wiring
+   ============================================================ */
+function setConnected(on) {
+  $("connect").disabled = on;
+  $("disconnect").disabled = !on;
+  $("dot").classList.toggle("on", on);
+  $("state").textContent = on ? "connected" : "not connected";
+}
+
+if (!("serial" in navigator)) {
+  logLine("warn", "This browser has no Web Serial. Use Chrome or Edge over https or localhost.");
+  $("connect").disabled = true;
+}
+
+$("connect").onclick    = () => connect().catch(e => logLine("warn", e.message));
+$("disconnect").onclick = () => disconnect();
+$("size").onchange      = e => send("/cam/size",    [parseInt(e.target.value, 10)]);
+$("quality").onchange   = e => send("/cam/quality", [parseInt(e.target.value, 10) || 12]);
+$("rate").onchange      = e => send("/cam/rate",    [parseInt(e.target.value, 10) || 0]);
+
+let streaming = true;
+$("stream").onclick = () => {
+  streaming = !streaming;
+  $("stream").textContent = streaming ? "pause" : "resume";
+  send("/stream", [streaming ? 1 : 0]);
+};
+let led = false;
+$("led").onclick = () => { led = !led; send("/led", [led ? 1 : 0]); };
+</script>
+</body>
+</html>

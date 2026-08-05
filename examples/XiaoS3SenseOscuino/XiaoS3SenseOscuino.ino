@@ -1,0 +1,211 @@
+// XIAO ESP32S3 Sense — sensors and camera frames as OSC over SLIP/USB.
+//
+//   arduino-cli compile -b esp32:esp32:XIAO_ESP32S3 \
+//       --upload --port /dev/cu.usbmodemXXXX examples/XiaoS3SenseOscuino
+//
+// Use the STOCK FQBN. Do not add USBMode or CDCOnBoot: this board already has
+// cdc_on_boot=1, and passing the options another ESP32-S3 needs (the Adafruit
+// QT Py wants USBMode=hwcdc,CDCOnBoot=cdc) produces a board that flashes,
+// verifies its hash and then says nothing at all.
+//
+// PSRAM is OFF on the stock FQBN — boards.txt lists PSRAM.disabled first, so
+// psramFound() is false and ESP.getPsramSize() is 0. The camera does not need
+// it: with the frame buffer in DRAM this runs to SXGA. Add :PSRAM=opi for the
+// 8 MB if you want a bigger buffer; it does not disturb the USB settings.
+//
+// Open XiaoS3SenseOscuino.html to see it. Chrome or Edge, served over
+// http://localhost — Web Serial does not work from a file:// URL.
+
+#define OSC_SLIP_TX_BUFFER 1024   // must precede the include; the header is #ifndef.
+                                  // A VGA frame is ~14 KB, and 64 bytes a block
+                                  // makes that hundreds of writes.
+
+#include <OSCMessage.h>
+#include <OSCBoards.h>
+#include <SLIPEncodedSerial.h>
+#include "esp_camera.h"
+
+SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
+
+// Pin map for CAMERA_MODEL_XIAO_ESP32S3, copied from the esp32 core's own
+// CameraWebServer/camera_pins.h so this sketch stands alone.
+#define PWDN_GPIO_NUM  -1
+#define RESET_GPIO_NUM -1
+#define XCLK_GPIO_NUM  10
+#define SIOD_GPIO_NUM  40
+#define SIOC_GPIO_NUM  39
+#define Y9_GPIO_NUM    48
+#define Y8_GPIO_NUM    11
+#define Y7_GPIO_NUM    12
+#define Y6_GPIO_NUM    14
+#define Y5_GPIO_NUM    16
+#define Y4_GPIO_NUM    18
+#define Y3_GPIO_NUM    17
+#define Y2_GPIO_NUM    15
+#define VSYNC_GPIO_NUM 38
+#define HREF_GPIO_NUM  47
+#define PCLK_GPIO_NUM  13
+
+static const uint8_t ANALOG_PINS[] = { A0, A1, A2, A3, A4, A5 };
+static const int     NANALOG       = sizeof ANALOG_PINS;
+
+static bool     cameraOK   = false;
+static bool     streaming  = true;
+static int32_t  frameSeq   = 0;
+static uint32_t frameEvery = 200;      // ms between frames; /cam/rate changes it
+static uint32_t sensorEvery = 100;
+static framesize_t curSize = FRAMESIZE_QVGA;
+static int      curQuality = 12;       // 0..63, lower is better and bigger
+
+/* ------------------------------------------------------------------ camera */
+
+static bool cameraBegin(framesize_t fs, int quality) {
+  camera_config_t c = {};              // zero-init also clears sccb_i2c_port
+  c.ledc_channel = LEDC_CHANNEL_0;
+  c.ledc_timer   = LEDC_TIMER_0;
+  c.pin_d0 = Y2_GPIO_NUM;  c.pin_d1 = Y3_GPIO_NUM;
+  c.pin_d2 = Y4_GPIO_NUM;  c.pin_d3 = Y5_GPIO_NUM;
+  c.pin_d4 = Y6_GPIO_NUM;  c.pin_d5 = Y7_GPIO_NUM;
+  c.pin_d6 = Y8_GPIO_NUM;  c.pin_d7 = Y9_GPIO_NUM;
+  c.pin_xclk     = XCLK_GPIO_NUM;
+  c.pin_pclk     = PCLK_GPIO_NUM;
+  c.pin_vsync    = VSYNC_GPIO_NUM;
+  c.pin_href     = HREF_GPIO_NUM;
+  c.pin_sccb_sda = SIOD_GPIO_NUM;      // SCCB is on I2C port 1; Wire stays free
+  c.pin_sccb_scl = SIOC_GPIO_NUM;
+  c.pin_pwdn     = PWDN_GPIO_NUM;
+  c.pin_reset    = RESET_GPIO_NUM;
+  c.xclk_freq_hz = 20000000;
+  c.pixel_format = PIXFORMAT_JPEG;     // the OV2640 does JPEG in hardware
+  c.frame_size   = fs;
+  c.jpeg_quality = quality;
+  c.fb_count     = 1;
+  // Asking for CAMERA_FB_IN_PSRAM without PSRAM returns ESP_FAIL, and the
+  // stock FQBN has no PSRAM, so branch rather than assume.
+  c.fb_location  = psramFound() ? CAMERA_FB_IN_PSRAM : CAMERA_FB_IN_DRAM;
+  c.grab_mode    = CAMERA_GRAB_LATEST;
+
+  if (esp_camera_deinit() != ESP_OK) { /* first call: nothing to tear down */ }
+  return esp_camera_init(&c) == ESP_OK;
+}
+
+// Write the frame straight to the wire. OSCMessage::add(uint8_t*,int) mallocs
+// len+4 and copies the whole JPEG; at 14 KB a frame that is a copy and a
+// fragmentation risk for no benefit, and the message format is four lines.
+static void writePadded(Print &p, const char *s) {
+  size_t n = strlen(s) + 1;
+  p.write((const uint8_t *)s, n);
+  while (n & 3) { p.write((uint8_t)0); n++; }
+}
+static void writeBE32(Print &p, uint32_t v) {
+  const uint8_t b[4] = { (uint8_t)(v >> 24), (uint8_t)(v >> 16), (uint8_t)(v >> 8), (uint8_t)v };
+  p.write(b, 4);
+}
+
+// /cam ,iiiib  seq, millis, width, height, jpeg
+static void sendFrame(camera_fb_t *fb) {
+  SLIPSerial.beginPacket();
+  writePadded(SLIPSerial, "/cam");
+  writePadded(SLIPSerial, ",iiiib");
+  writeBE32(SLIPSerial, (uint32_t) frameSeq++);
+  writeBE32(SLIPSerial, millis());
+  writeBE32(SLIPSerial, fb->width);
+  writeBE32(SLIPSerial, fb->height);
+  writeBE32(SLIPSerial, fb->len);          // OSC blob: length then bytes
+  SLIPSerial.write(fb->buf, fb->len);
+  for (size_t pad = (4 - (fb->len & 3)) & 3; pad; pad--) SLIPSerial.write((uint8_t)0);
+  SLIPSerial.endPacket();
+}
+
+/* ----------------------------------------------------------------- inbound */
+
+static void routeLed(OSCMessage &m) {                 // /led 0|1
+  if (m.size() < 1 || !m.isInt(0)) return;
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, m.getInt(0) ? LOW : HIGH);   // active LOW
+}
+static void routeStream(OSCMessage &m) {              // /stream 0|1
+  if (m.size() >= 1 && m.isInt(0)) streaming = m.getInt(0) != 0;
+}
+static void routeRate(OSCMessage &m) {                // /cam/rate <ms>
+  if (m.size() >= 1 && m.isInt(0)) frameEvery = constrain(m.getInt(0), 0, 10000);
+}
+static void routeQuality(OSCMessage &m) {             // /cam/quality <0..63>
+  if (m.size() < 1 || !m.isInt(0)) return;
+  curQuality = constrain(m.getInt(0), 4, 63);
+  sensor_t *s = esp_camera_sensor_get();
+  if (s) s->set_quality(s, curQuality);
+}
+static void routeSize(OSCMessage &m) {                // /cam/size 0..3
+  if (m.size() < 1 || !m.isInt(0)) return;
+  static const framesize_t sizes[] = { FRAMESIZE_QQVGA, FRAMESIZE_QVGA,
+                                       FRAMESIZE_VGA,   FRAMESIZE_SVGA };
+  curSize = sizes[constrain(m.getInt(0), 0, 3)];
+  sensor_t *s = esp_camera_sensor_get();
+  if (s) s->set_framesize(s, curSize);
+}
+
+/* -------------------------------------------------------------------- main */
+
+void setup() {
+#if defined(ARDUINO_USB_MODE) && ARDUINO_USB_MODE == 1
+  // HWCDC installs its 256-byte rings only if none is preset, so these have to
+  // come before begin(). The 256-byte rx ring is what makes inbound bursts
+  // stop at 266 bytes on every HWCDC ESP32 part measured here.
+  Serial.setRxBufferSize(1024);
+  Serial.setTxBufferSize(8192);
+#endif
+  SLIPSerial.begin(115200);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);          // off; active LOW
+  cameraOK = cameraBegin(curSize, curQuality);
+
+  OSCMessage hello("/hello");
+  hello.add("XiaoS3SenseOscuino").add((intOSC_t) NANALOG).add(cameraOK);
+  SLIPSerial.beginPacket(); hello.send(SLIPSerial); SLIPSerial.endPacket();
+}
+
+void loop() {
+  static uint32_t lastSensors = 0, lastFrame = 0;
+
+  // inbound first, so a /stream 0 takes effect before the next capture
+  if (SLIPSerial.available()) {
+    OSCMessage in;
+    unsigned long lastByte = millis();
+    while (!SLIPSerial.endofPacket()) {
+      if (SLIPSerial.available()) {
+        int c = SLIPSerial.read();          // int, -1 for "no byte"
+        if (c >= 0) in.fill((uint8_t) c);
+        lastByte = millis();
+      } else if (millis() - lastByte > 200) break;
+    }
+    if (!in.hasError()) {
+      in.dispatch("/led",         routeLed);
+      in.dispatch("/stream",      routeStream);
+      in.dispatch("/cam/rate",    routeRate);
+      in.dispatch("/cam/quality", routeQuality);
+      in.dispatch("/cam/size",    routeSize);
+    }
+  }
+
+  uint32_t now = millis();
+
+  if (now - lastSensors >= sensorEvery) {
+    lastSensors = now;
+    // One message, everything sampled in one pass, so every reading in it
+    // belongs to the same instant -- the same shape as EsploraOscuino.
+    OSCMessage m("/xiao");
+    for (int i = 0; i < NANALOG; i++) m.add((intOSC_t) analogRead(ANALOG_PINS[i]));
+    m.add((intOSC_t) (temperatureRead() * 100.0f));   // centi-degrees C
+    m.add((intOSC_t) (ESP.getFreeHeap() / 1024));
+    m.add((intOSC_t) frameSeq);
+    m.add(cameraOK);
+    SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
+  }
+
+  if (cameraOK && streaming && frameEvery && now - lastFrame >= frameEvery) {
+    lastFrame = now;
+    camera_fb_t *fb = esp_camera_fb_get();
+    if (fb) { sendFrame(fb); esp_camera_fb_return(fb); }
+  }
+}
