@@ -39,6 +39,19 @@
 //
 // Pins are the variant's own "SPI for PDM mic" block (SERCOM3): clock SCK2 = 5,
 // data MISO2 = 6.
+//
+// KNOWN LIMITATION, measured on an EdgeBadge: Adafruit_ZeroPDM does not work
+// on this board and micOK comes back false. That library drives PDM through
+// the SAMD's I2S peripheral -- its begin() returns false unless the variant
+// defines I2S pin macros such as PIN_PA10G_I2S_SCK0 -- and pybadge_m4's
+// variant.h declares I2S_INTERFACES_COUNT 0. The EdgeBadge instead clocks the
+// mic through a SERCOM in SPI mode, which is what that "SPI for PDM mic"
+// comment is telling us, and wants Adafruit_ZeroPDMSPI. That library is not in
+// the Library Manager index, so it is not used here.
+//
+// The board is unharmed by this: begin() fails, micOK stays false, no /mic is
+// sent and the page hides its panel -- the same path a plain PyBadge with no
+// microphone takes. Verified on hardware: 60 /pybadge frames in 3 s, no /mic.
 #ifndef BADGE_HAS_PDM_MIC
 #define BADGE_HAS_PDM_MIC 1
 #endif
