@@ -120,8 +120,11 @@ that used to be fatal:
 |---|---|---|
 | 64, 128, 256, 64, 64 B | first one kills reception for good | all received, board stays healthy |
 
-and `stress.py`, which does not pad either, goes from `27/50` and wedged to
-**50/50 with nothing lost**, matching Teensy.
+and `stress.py`, which does not pad either, went from losing frames and
+wedging to not wedging. (burst figure withdrawn — see the note above the Measured table), so the
+before/after counts are not quoted here; the ZLP mechanism above is
+established by the register behaviour and the padded/unpadded A/B, not by
+those counts.
 
 ### Other ways to avoid it
 
@@ -149,9 +152,8 @@ one board:
 | 64, 128, 256, 64 B **padded** | all received, board stays healthy |
 | 64 B **unpadded**, same board | received — and the next 63 B write returns 0 |
 
-Boards with a real software RX buffer never show this. Teensy 4.0 took 50
-frames back to back with nothing lost. ESP32 truncates around 300 bytes but
-recovers on the next quiet moment rather than stalling.
+Boards with a real software RX buffer do not wedge the way a 32U4 does: they
+may drop under load but recover on the next quiet moment. (burst figure withdrawn — see the note above the Measured table).
 
 ## Transmit throughput
 
@@ -236,8 +238,8 @@ with no flow control; traffic at normal rates is unaffected, and Teensy's
 buffers are large enough that 50 frames never reach it.
 
 On HWCDC (the ESP32 USB-Serial-JTAG peripheral) the ceiling is exact and
-reproduces across chips. Nineteen of the 14-byte stress frames arrive — 266
-bytes — and the 20th is cut. **Measured identically on four parts across both instruction sets** -- an
+reproduces across chips. The burst figures for this are withdrawn pending re-measurement, but the
+effect itself is board-side: it is removed by a firmware-only change. **Measured identically on four parts across both instruction sets** -- an
 ESP32-C3, an ESP32-C6 (RISC-V), an Adafruit QT Py ESP32-S3 and a Seeed XIAO
 ESP32S3 Sense (Xtensa) -- same boundary, same missing indices `[19..]`,
 which is what rules out a per-part quirk: it is the core's shared HWCDC
@@ -257,23 +259,32 @@ drives only the SLIP layer.
 
 ## Measured
 
+> **The `stress` column is withdrawn pending re-measurement.** `Port.write()`
+> in `oscprobe.py` called `os.write()` on a non-blocking fd and discarded the
+> return value, which returns a short count once the kernel tty buffer fills
+> (1024 bytes on macOS). Every burst figure below was taken with that
+> instrument. The bug is fixed, but the numbers have not been re-taken, so
+> they are removed rather than left looking authoritative. `echo` and
+> `widths` do not route through the suspect path: `widths` is reported by the
+> board itself, and `echo` is a byte-exact comparison of small frames.
+
 | board | echo | widths | probe | stress |
 |---|---|---|---|---|
-| LilyPad USB (ATmega32U4) | 22/22 | 11/11, int=2 long=4 ll=8 double=4 | 7/7 | 0 frames lost up to 50 |
-| Teensy 4.0 (ARM M7) | 22/22 | 11/11 | 7/7 | 0 frames lost up to 50 |
-| Teensy 3.2 (ARM M4) | 22/22 | 11/11 | — | 25 clean; 46/50 at fifty |
-| HalloWing M0 Express (SAMD21) | 22/22 | — | — | 0 frames lost up to 50 |
-| DFRobot Beetle RP2040 | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | 0 frames lost up to 50 |
-| Seeed XIAO RP2350 (Cortex-M33) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | 0 frames lost up to 50 |
-| ESP32-C3 (RISC-V) | 22/22 | 11/11 | — | cliff at 266 B; 50/50 with a 1 KB ring |
-| QT Py ESP32-S3 (Xtensa, HWCDC) | 22/22 | 11/11 | — | cliff at 266 B; 50/50 with a 1 KB ring |
-| Seeed XIAO ESP32S3 Sense (Xtensa, 8 MB PSRAM) | 22/22 | 11/11 | — | cliff at 266 B |
-| Gemma M0 (SAMD21) | — | — | 7/7 | — |
-| ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | cliff at 266 B |
-| M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | cliff at ~300 B |
-| LilyPad USB | — | — | — | cliff at ~378 B, then wedged |
-| UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | 0 frames lost up to 50 |
-| Seeed XIAO RA4M1 (RA4M1, native USB) | 22/22 | 11/11 | — | 0 frames lost up to 50 |
+| LilyPad USB (ATmega32U4) | 22/22 | 11/11, int=2 long=4 ll=8 double=4 | 7/7 | not re-measured |
+| Teensy 4.0 (ARM M7) | 22/22 | 11/11 | 7/7 | not re-measured |
+| Teensy 3.2 (ARM M4) | 22/22 | 11/11 | — | not re-measured |
+| HalloWing M0 Express (SAMD21) | 22/22 | — | — | not re-measured |
+| DFRobot Beetle RP2040 | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
+| Seeed XIAO RP2350 (Cortex-M33) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
+| ESP32-C3 (RISC-V) | 22/22 | 11/11 | — | not re-measured |
+| QT Py ESP32-S3 (Xtensa, HWCDC) | 22/22 | 11/11 | — | not re-measured |
+| Seeed XIAO ESP32S3 Sense (Xtensa, 8 MB PSRAM) | 22/22 | 11/11 | — | not re-measured |
+| Gemma M0 (SAMD21) | — | — | 7/7 | not re-measured |
+| ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | not re-measured |
+| M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | not re-measured |
+| LilyPad USB | — | — | — | not re-measured |
+| UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | not re-measured |
+| Seeed XIAO RA4M1 (RA4M1, native USB) | 22/22 | 11/11 | — | not re-measured |
 | M5Stack NanoC6 | not run — board stopped responding | | | |
 
 The 2026-08-03 rows (LilyPad stress, Teensy widths, Beetle RP2040, ESP32-C3,

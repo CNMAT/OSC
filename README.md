@@ -5,7 +5,8 @@ This is an Arduino and Teensy library implementation of the [OSC](http://opensou
 Features: 
 
 * Supports the four basic OSC data types (32-bit integers, 32-bit floats, strings, and blobs - arbitrary length byte sequences)
-* Supports the optional 64-bit timetag data type, Booleans, RGBA colours and MIDI messages
+* Supports the optional 64-bit timetag data type, 64-bit integers, Booleans, Null and Impulse, RGBA colours and MIDI messages
+* Supports 64-bit doubles where the target has them: `double` is 4 bytes on AVR, so there the value is encoded as a 32-bit float `'f'` instead of `'d'`
 * Address pattern matching
 * Dynamic memory allocation
 * Sends and receives OSC packets over any transport layer that implements the Arduino Print and Stream classes: USB and hardware serial, Ethernet UDP, WiFi UDP and TCP
@@ -32,8 +33,7 @@ other OSC software — with which these two types could never interoperate.
 `oscmidi_t` keeps its five fields, so existing sketches still compile. OSC's
 `'m'` type has no separate channel slot, so `channel` is now folded into the low
 nibble of the status byte when the message is encoded; setting the channel in
-`status` directly and leaving `channel` at 0 works too. See
-[API.md](./API.md#oscmessage-addoscmidi_t-midi).
+`status` directly and leaving `channel` at 0 works too. See [API.md](./API.md#oscmessage--addoscmidi_t-midi).
 
 Two bundle timetag fixes also land in 4.0.0:
 
@@ -48,7 +48,7 @@ Two bundle timetag fixes also land in 4.0.0:
 
 # Installation
 
-We recommend Arduino 1.8.5 and a compatible Teensyduino overlay if you use the Teensy. Install using the library manager.
+Install using the Library Manager. Use a current Arduino IDE (2.x) or `arduino-cli`: the boards this release is verified on -- UNO R4, ESP32, RP2040, nRF52, UNO Q -- ship as Boards Manager packages that 1.8.5 predates. Teensy support is the "Teensy (for Arduino IDE 2.0.4 or later)" Boards Manager package, not the old Teensyduino overlay.
 
 Additional information about installing libraries on [Arduino's website](https://www.arduino.cc/en/Guide/Libraries).
 
@@ -65,6 +65,24 @@ networking header.
 The `Serial*` sketches and the various `*Oscuino` sketches carry OSC over USB or
 hardware serial, framed with SLIP (below). Several of the `*Oscuino` ones ship
 with a Web Serial page next to them that talks to the board from a browser.
+
+Two examples go past the generic `/d/<pin>` and `/a/<pin>` addresses and speak
+their board's own hardware, each sending the whole board as a single message so
+that every reading in it belongs to the same instant:
+
+* `EsploraOscuino` — the Esplora's eighteen channels as `/esplora`, drawn over a
+  photograph of the board.
+* `CircuitPlaygroundSensors` — the Circuit Playground Express as `/cpx`: light,
+  thermistor, accelerometer, seven capacitive pads, both buttons and the slide
+  switch, with the ten NeoPixels painted from the page. Needs Adafruit NeoPixel
+  and Adafruit FreeTouch; the Express's PDM microphone is opt-in behind a
+  `#define` because it needs a third library. This is the sensor half of the
+  board — `PlaygroundOscuino`, generated from the template, is the pin half.
+
+Both are hand-written rather than generated from `extras/webserial`, so `make
+check` does not see them. The Circuit Playground pair has its own test instead,
+pinning the sketch and the page to the same layout of `/cpx`; `make test` in
+`extras/webserial` runs it.
 
 ### Wired Ethernet
 
@@ -159,9 +177,15 @@ OSCMessage msg;
 while(!SLIPSerial.endofPacket()){
 	int size = SLIPSerial.available();
 	if (size > 0){
-		//fill the msg with all of the available bytes
+		//fill the msg with all of the available bytes.
+		//read() returns int, and -1 for "no byte" -- at end of packet, on a
+		//malformed escape pair, and mid-packet whenever available() has
+		//overcounted, which it does because a SLIP escape pair is two raw
+		//bytes for one decoded byte. fill() takes uint8_t, so passing -1
+		//straight in narrows it to an ordinary 0xFF byte of message content.
 		while(size--){
-			msg.fill(SLIPSerial.read());
+			int c = SLIPSerial.read();
+			if (c >= 0) msg.fill((uint8_t)c);
 		}
 	}
 }
@@ -224,10 +248,11 @@ An OSCBundle is a group of OSCMessage that can be sent and received together.
 ```C++
 OSCBundle bundle;
 //add a new OSCMessage to the bundle with the address "/a"
-//NOTE the reference: bundle.add() returns OSCMessage&, and OSCMessage has no
-//deep copy constructor. Binding it to a value (OSCMessage msgA = ...) takes a
-//shallow copy, so the data is added to the copy instead of to the bundle, and
-//when the copy goes out of scope it frees memory the bundle still owns.
+//NOTE the reference: bundle.add() returns OSCMessage&. Binding it to a value
+//(OSCMessage msgA = ...) is safe since 4.0.0, which added a deep copy
+//constructor, but it is still wrong: the copy is not the message the bundle
+//will send, so everything added to it is lost and the bundle sends an empty
+//message. It also duplicates every datum, which is wasted heap on AVR.
 OSCMessage& msgA = bundle.add("/a");
 //add some data to that message
 msgA.add("some data");
@@ -262,13 +287,66 @@ As well as many small examples illustrating the API, there is a larger applicati
 
 ### IDEs
 
-Arduino 1.8.5 
+Arduino IDE 2.x, or `arduino-cli`.
 
-Best Supported Board:
-ARM boards such M0, Zero, Teensy 3.0 and 3.1 and LC have the performance and memory that afford rich OSC implementations.
-Our primary test platform for new development is the Teensy 3.x series which currently offers the best performance
-of any of the Arduinos and variants. We greatly appreciate Paul Stoffregen's ongoing work
-with "best practice" engineering of high performance micro-controllers.
+ARM, RISC-V and Xtensa boards have the performance and memory that afford rich
+OSC implementations. AVR works and is regularly tested, but a 32U4 or a 328P is
+where the buffer limits bite first. We greatly appreciate Paul Stoffregen's
+ongoing work with "best practice" engineering of high performance
+micro-controllers.
+
+### Tested in 4.0.0
+
+Two different things, kept apart deliberately.
+
+**Run on hardware.** Byte-exact echo (22 packets covering every type, encoded
+and re-encoded on the board), integer-width dispatch (11 spellings) and the
+Oscuino probe.
+
+The SLIP burst column is **withdrawn pending re-measurement**: the probe's
+`Port.write()` discarded the short count `os.write()` returns on a
+non-blocking fd, so every burst figure was taken with a faulty instrument.
+`echo` and `widths` do not route through that path — `widths` is reported by
+the board itself — so they stand.
+
+| board | architecture | echo | int widths | probe | not re-measured |
+|---|---|---|---|---|---|
+| LilyPad USB (ATmega32U4) | AVR, `int` is 16-bit | 22/22 | 11/11 | 7/7 | not re-measured |
+| Esplora (ATmega32U4) | AVR | — | — | — | not re-measured |
+| Gemma M0 | SAMD21 | — | — | 7/7 | not re-measured |
+| Teensy 4.0 | ARM Cortex-M7 | 22/22 | 11/11 | 7/7 | not re-measured |
+| Teensy 3.2 | ARM Cortex-M4 | 22/22 | 11/11 | — | not re-measured |
+| HalloWing M0 Express | SAMD21 | 22/22 | — | — | not re-measured |
+| DFRobot Beetle | RP2040 | 22/22 | 11/11 | — | not re-measured |
+| Seeed XIAO RP2350 | RP2350, Cortex-M33 | 22/22 | 11/11 | — | not re-measured |
+| UNO R4 WiFi | Renesas RA4M1 | 22/22 | 11/11 | — | not re-measured |
+| Seeed XIAO RA4M1 | Renesas RA4M1 | 22/22 | 11/11 | — | not re-measured |
+| ESP32-C3 | RISC-V | 22/22 | 11/11 | — | not re-measured |
+| QT Py ESP32-S3 | Xtensa | 22/22 | 11/11 | — | not re-measured |
+| Seeed XIAO ESP32S3 Sense | Xtensa, 8 MB PSRAM | 22/22 | 11/11 | — | not re-measured |
+| ESP32-C6 | RISC-V | 22/22 | 11/11 | — | not re-measured |
+| M5Stack StampS3 | Xtensa | 22/22 | 11/11 | 7/7 | not re-measured |
+
+The burst cliffs are a property of the board's USB stack, not of this library —
+see [test/hardware/README.md](./test/hardware/README.md), which has the method
+and the numbers.
+
+**Compiled only**, across every installed core, GCC 4.8 through 16.1:
+`arduino:avr` (uno, leonardo, esplora), `adafruit:avr:flora8`,
+`arduino:sam:arduino_due_x`, `arduino:samd`, `arduino:renesas_uno:unor4wifi`,
+`adafruit:samd:adafruit_gemma_m0`, `adafruit:nrf52:feather52840`,
+`esp32:esp32` (esp32, esp32c6), `rp2040:rp2040` (rpipico,
+seeed_xiao_rp2350),
+`teensy:avr:teensy40`, `arduino:zephyr:unoq`, and the *USB Stack: TinyUSB*
+option on Adafruit SAMD and rp2040.
+
+Compiling is not running: a sketch that builds on all of those has still only
+been proven to run on the boards in the table above.
+
+**Not verified:** Ethernet — no Wiznet hardware was connected, so the seven
+`UDP*` examples and `ETC_EOS_TCP` compile but have not moved a packet. The WiFi
+examples are likewise compile-only. The ESP8266 branch of those sketches has
+not even been compiled, as that core is not installed here.
 
 ### Unsupported boards
 
@@ -286,12 +364,18 @@ OSC for Arduino comes with a small suite of tests to validate its functionality 
 
 The tests require [ArduinoUnit](https://github.com/mmurdoch/arduinounit) to be installed in the `libraries` folder. The results of the test are printed to the Serial console. 
 
-Tested on:
+These ArduinoUnit sketches predate 4.0.0 and were last exercised on an Esplora,
+a Leonardo, a Teensy 3.x and a Mega 2560. They are not what checks this release
+— see [Tested in 4.0.0](#tested-in-400) for that, and the two suites below,
+which run on every push:
 
-* Esplora
-* Leonardo
-* Teensy 3.x
-* Mega 2560
+* `test/host` — the whole encoder and decoder on a workstation, no board and no
+  Arduino toolchain needed. `make` to run it, `make asan` for AddressSanitizer
+  and UBSan. It checks the bytes on the wire against an OSC 1.0 decoder written
+  from the spec that shares no code with the library, then fuzzes both decoders
+  with 150000 rounds of malformed input.
+* `test/hardware` — probes that talk to a board over USB and check that a real
+  one answers: byte-exact echo, integer widths, and SLIP burst framing.
 
 # Performance
 
