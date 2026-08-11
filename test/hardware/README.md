@@ -261,6 +261,8 @@ drives only the SLIP layer.
 |---|---|---|---|---|
 | LilyPad USB (ATmega32U4) | 22/22 | 11/11, int=2 long=4 ll=8 double=4 | 7/7 | 0 frames lost up to 50 |
 | Teensy 4.0 (ARM M7) | 22/22 | 11/11 | 7/7 | 0 frames lost up to 50 |
+| Teensy 3.2 (ARM M4) | 22/22 | 11/11 | — | 25 clean; 46/50 at fifty |
+| HalloWing M0 Express (SAMD21) | 22/22 | — | — | 0 frames lost up to 50 |
 | DFRobot Beetle RP2040 | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | 0 frames lost up to 50 |
 | Seeed XIAO RP2350 (Cortex-M33) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | 0 frames lost up to 50 |
 | ESP32-C3 (RISC-V) | 22/22 | 11/11 | — | cliff at 266 B; 50/50 with a 1 KB ring |
