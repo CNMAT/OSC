@@ -280,6 +280,7 @@ drives only the SLIP layer.
 | QT Py ESP32-S3 (Xtensa, HWCDC) | 22/22 | 11/11 | — | not re-measured |
 | Seeed XIAO ESP32S3 Sense (Xtensa, 8 MB PSRAM) | 22/22 | 11/11 | — | not re-measured |
 | Gemma M0 (SAMD21) | — | — | 7/7 | not re-measured |
+| moddo pinch (SAMD11) | 22/22 | 11/11 | — | not re-measured |
 | ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | not re-measured |
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | not re-measured |
 | LilyPad USB | — | — | — | not re-measured |
