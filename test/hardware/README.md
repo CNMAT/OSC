@@ -29,31 +29,57 @@ every case, including A** — the board answers nothing at all. Hoisting the
 bundle to file scope is what makes the sketch work; verified on an Adafruit
 Gemma M0 by flashing both variants against the same library.
 
-## The other probes
+## Method: how a number gets in here
 
-`echotest.py` — flash `OscEcho/`, which decodes an inbound packet with the
-library and re-encodes it with the library. A byte-identical reply means decoder
-and encoder agree on the wire format *on target*. 22 cases covering every type,
-string and blob lengths 0-5, empty strings and zero-length blobs next to other
-arguments, impulse/null mixed with real data, bundles and timetags.
+Every withdrawn figure in this directory's history was the instrument, not
+the board: a discarded short-write count, a sketch that was not the one
+running, a wrong port, a wrong USB build flag, a watcher process causing the
+TX activity it reported. The method below exists so that class of error is
+caught before a number is written down, not after it is published.
 
-`widths.py` — flash `IntWidths/`, which builds one message from all eleven
-integer spellings. Checks which OSC type tag each produced on the target and
-reports `sizeof(int/long/long long/double)`. This is the only test of the
-integer-dispatch fix on a platform where `int` is 16 bits and `long` is 32.
+**Attribute, never assert.** The pipeline has four places to count:
 
-`stress.py` — up to 50 SLIP frames back to back in a single write, each carrying
-its own index, to look for lost packet boundaries.
-
-## Probe F takes an analog address
-
-Not every variant defines `A0` — the M5Stack NanoC6 starts at `A1` — so the
-analog read is a parameter, not a constant:
-
-```sh
-python3 oscprobe.py /dev/cu.usbmodemXXXX        # defaults to /a/0
-python3 oscprobe.py /dev/cu.usbmodemXXXX /a/1   # boards with no A0
 ```
+host wrote --USB--> board received --sketch--> board sent --USB--> host received
+    A                    B                        C                    D
+```
+
+`bench.py` holds A and D; `OscBench/` on the board holds B and C, as
+sequence-numbered, CRC-carrying frames it counts but never answers, reporting
+only when asked (`/b/q`) after traffic has quiesced. A missing frame is then
+a *segment*: A→B is host→device (kernel tty, USB, device RX ring, drain
+rate); C→D is device→host; B vs C is the sketch. "Lost somewhere" is not a
+result.
+
+**The physics sets the default hypothesis.** USB bulk endpoints flow-control
+by NAK: a native-CDC device that has not freed a buffer NAKs the host, the
+host retries, and nothing is lost — only slowed. Silent host→device loss is
+therefore only possible *above* the USB layer, and every confirmed case so
+far has been exactly that: a firmware ring the hardware ACKs into regardless
+of space (ESP32 HWCDC), or an endpoint bank the core never frees (32U4 ZLP
+stall). A "cliff" claim without a nameable mechanism of that kind starts as
+an instrument bug until proven otherwise.
+
+**Rules, all learned the expensive way:**
+
+1. *Trickle gate.* `bench.py PORT verify` — 20 frames at 20/s — runs before
+   anything fast. If slow traffic is not 100%, the setup is broken and no
+   fast number means anything. `bench.py` enforces this itself.
+2. *Repeats.* Every condition runs 3×. A cliff that does not reproduce is
+   not a cliff.
+3. *Calibration.* A loss figure counts only if the same command, same host,
+   same day, ran clean on a known-good reference (Teensy 4.0, or any
+   native-CDC SAMD). If the reference fails too, the instrument is the
+   suspect.
+4. *Mechanism required.* A number enters this file only with the mechanism
+   named — a ring size, a register, a code path — and ideally an A/B that
+   flips it (`setRxBufferSize`, padding, a one-line core patch).
+5. *Direction separated.* Host→device (`bench.py in`) and device→host
+   (`bench.py out`) are different failure domains and are never summed.
+
+`bench.py PORT ring LAZY_MS` maps a receive ring empirically: bursts of
+increasing size in one kernel write against a deliberately slow application;
+where the received count stops tracking the burst size is the ring.
 
 ## The ATmega32U4 receive stall: a zero-length packet the core never releases
 
@@ -215,8 +241,13 @@ integer spellings. Checks which OSC type tag each produced on the target and
 reports `sizeof(int/long/long long/double)`. This is the only test of the
 integer-dispatch fix on a platform where `int` is 16 bits and `long` is 32.
 
-`stress.py` — up to 50 SLIP frames back to back in a single write, each carrying
-its own index, to look for lost packet boundaries.
+`bench.py` + `OscBench/` — the loss-attributing bench; see *Method* above.
+It replaces `stress.py`, whose design could not say WHERE a frame went
+missing and whose write path turned out to be dropping bytes on the host.
+
+`test_host.py` — the harness testing itself, host-only, seconds to run:
+codec round-trips, and `write_all()` against an fd that guarantees short
+writes, with a negative control proving the old broken pattern fails it.
 
 ## Probe F takes an analog address
 
@@ -228,45 +259,54 @@ python3 oscprobe.py /dev/cu.usbmodemXXXX        # defaults to /a/0
 python3 oscprobe.py /dev/cu.usbmodemXXXX /a/1   # boards with no A0
 ```
 
-## Inbound bursts are truncated, and AVR does not recover
+## The burst claims, sorted by what survives review
 
-`stress.py` found a hard limit on how much can arrive in one burst. The cutoff
-tracks bytes, not frames — on an ESP32-S3, delivered frames fell 16 → 11 → 8 → 4
-as frame size grew 18 → 26 → 42 → 74 bytes, with bytes-through pinned near 300.
-AVR cuts off around 378 bytes. That is the USB CDC receive buffer overflowing
-with no flow control; traffic at normal rates is unaffected, and Teensy's
-buffers are large enough that 50 frames never reach it.
+Three burst-loss claims were made against the old instrument. Reviewed under
+the Method rules, they sort into one confirmed, one reclassified as suspect,
+and one withdrawn outright.
 
-On HWCDC (the ESP32 USB-Serial-JTAG peripheral) the ceiling is exact and
-reproduces across chips. The burst figures for this are withdrawn pending re-measurement, but the
-effect itself is board-side: it is removed by a firmware-only change. **Measured identically on four parts across both instruction sets** -- an
-ESP32-C3, an ESP32-C6 (RISC-V), an Adafruit QT Py ESP32-S3 and a Seeed XIAO
-ESP32S3 Sense (Xtensa) -- same boundary, same missing indices `[19..]`,
-which is what rules out a per-part quirk: it is the core's shared HWCDC
-driver and its default 256-byte rx ring, the small overshoot being what the
-sketch drains while the burst is still arriving.
-`Serial.setRxBufferSize(1024)` before `begin()` takes **both** boards to
-50/50 back-to-back frames clean, on the same build otherwise, which pins the
-mechanism to the ring rather than to this library. All four runs measured
-2026-08-03. Unlike AVR, both recover by themselves: frames after the dropped
-tail decode normally.
+**Confirmed — ESP32 HWCDC needs the host to throttle bursts.** The
+USB-Serial-JTAG peripheral on the S3/C6/C3 ACKs into a fixed rx ring whether
+or not there is room, so a full ring drops silently: this is the one stack
+here where the USB layer's own flow control cannot save you. Reproduced
+identically on four parts across both instruction sets (ESP32-C3, ESP32-C6,
+QT Py ESP32-S3, XIAO ESP32S3 Sense): same boundary, same missing indices
+`[19..]` — and the arithmetic is the mechanism: 19 frames × ~14 SLIP bytes
+≈ 266 bytes ≈ the driver's default 256-byte ring plus what the sketch
+drained mid-burst. `Serial.setRxBufferSize(1024)` before `begin()` on the
+same build takes 50/50 clean, pinning it to the ring. This finding also
+survives the instrument post-mortem on its own: those 50-frame bursts were
+~700 bytes, under the 1024-byte kernel buffer where the short-write bug
+engaged, so the broken write path cannot explain it. Remedies, either of:
+enlarge the ring, or pace bursts to what the application drains.
 
-Worse, on AVR the sketch does not recover: after one overflowing burst every
-subsequent well-formed frame is lost until the board is reset. Not yet isolated
-— `OscEcho.ino` caps its own buffer at 600 bytes, so this may be the sketch
-rather than the library's SLIP state machine. Isolating it needs a sketch that
-drives only the SLIP layer.
+**Suspect — the "AVR cuts off at ~378 bytes and never recovers".** A 32U4
+has no software rx ring at all: reads come straight from the 64-byte
+endpoint banks and a full bank NAKs the host, so silent loss should be
+impossible there. The reinterpretation this review proposes: the
+"no recovery until reset" was the ZLP stall (previous section) wearing a
+throughput costume — the kernel coalesces buffered bytes into transfers, and
+the first transfer to land on an exact multiple of 64 stalls reception for
+good — and the byte figure was the echo sketch's own 600-byte buffer, not
+the USB stack. Both are now testable: the library releases the stuck bank
+itself, and `bench.py PORT in 50 -1` attributes any loss to a segment. No
+AVR burst number stands until that has been run.
+
+**Withdrawn — "Teensy loses 4 of 50 burst frames; smaller USB buffers."**
+No mechanism was ever named, and PJRC's stack NAKs like every other native
+CDC implementation. Nothing in it survives the post-mortem; it is recorded
+here only so nobody re-cites it.
 
 ## Measured
 
-> **The `stress` column is withdrawn pending re-measurement.** `Port.write()`
-> in `oscprobe.py` called `os.write()` on a non-blocking fd and discarded the
-> return value, which returns a short count once the kernel tty buffer fills
-> (1024 bytes on macOS). Every burst figure below was taken with that
-> instrument. The bug is fixed, but the numbers have not been re-taken, so
-> they are removed rather than left looking authoritative. `echo` and
-> `widths` do not route through the suspect path: `widths` is reported by the
-> board itself, and `echo` is a byte-exact comparison of small frames.
+> **The `stress` column is withdrawn and its instrument retired.**
+> `Port.write()` discarded the short count `os.write()` returns on a
+> non-blocking fd (the macOS tty queue is 1024 bytes), so bursts past that
+> never fully left the host. `stress.py` is gone; re-measurement is
+> `bench.py` under the Method rules above, which attributes any loss to a
+> segment instead of asserting it. `echo` and `widths` never routed through
+> the suspect path: `widths` is reported by the board itself, and `echo` is
+> a byte-exact comparison of small frames.
 
 | board | echo | widths | probe | stress |
 |---|---|---|---|---|
@@ -285,6 +325,9 @@ drives only the SLIP layer.
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | not re-measured |
 | Adafruit Feather M4 Express (SAMD51) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
 | Adafruit EdgeBadge (SAMD51) | — | — | — | not re-measured |
+| UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | not re-measured |
+| Seeed XIAO RA4M1 (RA4M1, native USB) | 22/22 | 11/11 | — | not re-measured |
+| M5Stack NanoC6 | not run — board stopped responding | | | |
 
 The EdgeBadge's PDM microphone is exercised by `examples/PyBadgeOscuino`, not
 by these suites. Measured there, at `MIC_GAIN` 16 over 30 s of speech and
@@ -293,10 +336,6 @@ taps: a quiet-room floor of rms 20 (-64 dBFS) holding steady to within
 of range -- with the loudest transient pinning `peak` at exactly 32767, which
 is the driver clipping. The same code on a SAMD51 with no microphone on those
 pins gives a flat zero and reports `micOK` false.
-| LilyPad USB | — | — | — | not re-measured |
-| UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | not re-measured |
-| Seeed XIAO RA4M1 (RA4M1, native USB) | 22/22 | 11/11 | — | not re-measured |
-| M5Stack NanoC6 | not run — board stopped responding | | | |
 
 The 2026-08-03 rows (LilyPad stress, Teensy widths, Beetle RP2040, ESP32-C3,
 UNO R4 WiFi, QT Py ESP32-S3, XIAO RP2350) were run against the 4.0.0 tree after the SLIP-over-TCP
@@ -401,5 +440,6 @@ bytes, 16% of its 28672. Both share the USBtiny bootloader identity
 (`0x1781/0x0c9f`), so a plugged-in board cannot be told apart by its USB
 descriptor alone.
 
-The stress column records where inbound bursts start being dropped; see the
-section above for why that is a property of the board's USB stack.
+The stress column stays empty until a board has been measured with
+`bench.py` under the Method rules — trickle gate, 3× repeats, same-day
+reference calibration, mechanism named.

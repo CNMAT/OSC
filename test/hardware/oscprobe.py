@@ -114,6 +114,29 @@ def decode(p):
     return (addr, args)
 
 
+def write_all(fd, b, timeout=5.0):
+    """Write every byte of b to a non-blocking fd, or raise.
+
+    os.write() on a non-blocking fd returns a SHORT COUNT once the kernel's
+    buffer fills -- 1024 bytes on a macOS tty -- and discarding that return
+    value silently drops the rest. That single discarded return value faked a
+    "cliff" in every burst figure this directory ever published: a 16384-byte
+    write put 1024 bytes on the wire and the board was blamed for losing the
+    other 15360. Module-level so test_host.py can regression-test it against
+    a pipe with a slow reader, where short counts are guaranteed.
+    """
+    sent = 0
+    while sent < len(b):
+        _, w, _ = select.select([], [fd], [], timeout)
+        if not w:
+            raise TimeoutError(f"write stalled at {sent}/{len(b)} bytes")
+        try:
+            sent += os.write(fd, b[sent:])
+        except BlockingIOError:
+            pass
+    return sent
+
+
 class Port:
     # Must match the sketches' SLIPSerial.begin(). A native USB CDC port
     # ignores the line rate entirely, which is why this went years without
@@ -136,21 +159,7 @@ class Port:
         self.drain(0.4)
 
     def write(self, b):
-        # os.write() on a non-blocking fd returns a SHORT COUNT when the
-        # kernel's tty output buffer is full -- 1024 bytes on macOS -- and
-        # discarding that return value silently drops the rest of the write.
-        # This faked a "cliff" in every burst test: a 16384-byte write put
-        # 1024 bytes on the wire and the board was blamed for losing 15360.
-        # USB CDC has flow control and the device does not lose data, so
-        # block until it has all gone out.
-        sent = 0
-        while sent < len(b):
-            select.select([], [self.fd], [], 5.0)
-            try:
-                sent += os.write(self.fd, b[sent:])
-            except BlockingIOError:
-                pass
-        return sent
+        return write_all(self.fd, b)
 
     def write_slowly(self, b, gap):
         for byte in b:

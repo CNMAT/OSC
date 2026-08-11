@@ -303,10 +303,14 @@ Two different things, kept apart deliberately.
 and re-encoded on the board), integer-width dispatch (11 spellings) and the
 Oscuino probe.
 
-The SLIP burst column is **withdrawn pending re-measurement**: the probe's
-`Port.write()` discarded the short count `os.write()` returns on a
-non-blocking fd, so every burst figure was taken with a faulty instrument.
-`echo` and `widths` do not route through that path — `widths` is reported by
+The SLIP burst column is **withdrawn**: the probe's `Port.write()` discarded
+the short count `os.write()` returns on a non-blocking fd, so every burst
+figure was taken with a faulty instrument. That instrument has been retired
+and replaced by a loss-attributing bench with a self-test — see
+[test/hardware/README.md](./test/hardware/README.md) for the method: counters
+at all four ends of the path, a trickle gate, repeats, and same-day
+calibration against a reference board before any number is recorded. `echo`
+and `widths` never routed through the suspect path — `widths` is reported by
 the board itself — so they stand.
 
 | board | architecture | echo | int widths | probe | not re-measured |
