@@ -136,7 +136,21 @@ class Port:
         self.drain(0.4)
 
     def write(self, b):
-        os.write(self.fd, b)
+        # os.write() on a non-blocking fd returns a SHORT COUNT when the
+        # kernel's tty output buffer is full -- 1024 bytes on macOS -- and
+        # discarding that return value silently drops the rest of the write.
+        # This faked a "cliff" in every burst test: a 16384-byte write put
+        # 1024 bytes on the wire and the board was blamed for losing 15360.
+        # USB CDC has flow control and the device does not lose data, so
+        # block until it has all gone out.
+        sent = 0
+        while sent < len(b):
+            select.select([], [self.fd], [], 5.0)
+            try:
+                sent += os.write(self.fd, b[sent:])
+            except BlockingIOError:
+                pass
+        return sent
 
     def write_slowly(self, b, gap):
         for byte in b:
