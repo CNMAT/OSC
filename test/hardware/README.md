@@ -112,6 +112,18 @@ int USB_Recv(u8 ep, void* d, int len) {
 The bank a ZLP lands in is never released, so the endpoint stalls forever.
 Transmit is unaffected — the board goes on reporting while accepting nothing.
 
+This is [arduino/ArduinoCore-avr#112](https://github.com/arduino/ArduinoCore-avr/issues/112),
+open since 2018 and unfixed upstream; the issue also records the register
+ordering a correct fix needs (clear `RXOUTI` before `FIFOCON`). Two wording
+precisions that matter in practice: the trigger is a USB *transfer* ending
+on an exact multiple of the endpoint size — the kernel coalesces
+application writes, and macOS both appends CDC ZLPs and chunks tty output
+at 512 bytes, itself a 64-multiple — so "avoid 64-multiple writes" is
+host-shaped shorthand, not the invariant. And the fatal multiple is
+`USB_EP_SIZE`: 64 on every stock build, but a core built with the
+documented 16-byte alternative moves it, which any padding remedy that
+hardcodes 64 would miss.
+
 Measured on a LilyPad USB, one write at a time from a freshly reset board:
 
 | write | result |
@@ -180,6 +192,25 @@ one board:
 
 Boards with a real software RX buffer do not wedge the way a 32U4 does: they
 may drop under load but recover on the next quiet moment. (burst figure withdrawn — see the note above the Measured table).
+
+## The transmit side has its own loss budget
+
+Host→device is where the burst claims lived, but the researchers' pass over
+the cores found the *silent* discards clustered on device→host, where
+`Print` swallows errors — every one of these loses data with no indication
+beyond `setWriteError()`, which nothing checks:
+
+* **AVR 32U4** — `USB_Send()` busy-waits 250 ms for bank space, then gives
+  up and returns -1; and `Serial_::write()` discards everything outright
+  while the host has the port closed (`lineState == 0`).
+* **Teensy 3.x** — TX gives up after a 70 ms timeout; and RX + TX share one
+  pool of twelve 64-byte packet buffers across *all* endpoints, so an
+  inbound flood can starve outbound.
+* **RP2040 core** — `SerialUSB.write()` blocks about 1 s, then gives up.
+
+An echo test conflates these with receive loss; `bench.py out` measures the
+direction alone, and its C-vs-D counters are how a device-TX give-up shows
+itself (frames missing from the tail at D with B intact).
 
 ## Transmit throughput
 
@@ -265,20 +296,29 @@ Three burst-loss claims were made against the old instrument. Reviewed under
 the Method rules, they sort into one confirmed, one reclassified as suspect,
 and one withdrawn outright.
 
-**Confirmed — ESP32 HWCDC needs the host to throttle bursts.** The
-USB-Serial-JTAG peripheral on the S3/C6/C3 ACKs into a fixed rx ring whether
-or not there is room, so a full ring drops silently: this is the one stack
-here where the USB layer's own flow control cannot save you. Reproduced
-identically on four parts across both instruction sets (ESP32-C3, ESP32-C6,
-QT Py ESP32-S3, XIAO ESP32S3 Sense): same boundary, same missing indices
-`[19..]` — and the arithmetic is the mechanism: 19 frames × ~14 SLIP bytes
-≈ 266 bytes ≈ the driver's default 256-byte ring plus what the sketch
-drained mid-burst. `Serial.setRxBufferSize(1024)` before `begin()` on the
-same build takes 50/50 clean, pinning it to the ring. This finding also
-survives the instrument post-mortem on its own: those 50-frame bursts were
-~700 bytes, under the 1024-byte kernel buffer where the short-write bug
-engaged, so the broken write path cannot explain it. Remedies, either of:
-enlarge the ring, or pace bursts to what the application drains.
+**Confirmed — ESP32 HWCDC needs the host to throttle bursts — but the drop
+site is the driver, not the peripheral.** The USB-Serial-JTAG hardware
+itself flow-controls correctly: the S3 TRM (ch. 33.3.3) says the controller
+accepts a packet only "when [it] has a free buffer" — it NAKs the host until
+firmware drains its single 64-byte OUT FIFO. The silent loss is one layer
+up, in `cores/esp32/HWCDC.cpp`: the receive ISR unconditionally drains those
+64 bytes on every packet interrupt and pushes them byte-by-byte into a
+FreeRTOS queue with the send result unchecked-on-full — bytes that do not
+fit are discarded, and because the FIFO was emptied the hardware happily
+takes the next packet. The queue defaults to 256 bytes, created at runtime
+in `begin()` (no build-time macro), so total device-side buffering is
+~256 + 64 in flight. That matches the measurement: reproduced identically on
+four parts across both instruction sets (ESP32-C3, ESP32-C6, QT Py ESP32-S3,
+XIAO ESP32S3 Sense), same missing indices `[19..]`, and 19 frames × ~14 SLIP
+bytes ≈ 266 bytes ≈ queue + what the sketch drained mid-burst.
+`Serial.setRxBufferSize(1024)` on the same build takes 50/50 clean. The
+finding also survives the instrument post-mortem on its own: those ~700-byte
+bursts sat under the 1024-byte kernel buffer where the short-write bug
+engaged. Remedies: enlarge the queue — **before** `begin()`, since resizing
+discards buffered data and a mis-ordered call silently reverts to the lossy
+default — or pace bursts to what the application drains. ESP-IDF's own
+usb_serial_jtag driver has the same unchecked-send pattern, so this is not
+Arduino-layer-only.
 
 **Suspect — the "AVR cuts off at ~378 bytes and never recovers".** A 32U4
 has no software rx ring at all: reads come straight from the 64-byte
@@ -292,21 +332,39 @@ the USB stack. Both are now testable: the library releases the stuck bank
 itself, and `bench.py PORT in 50 -1` attributes any loss to a segment. No
 AVR burst number stands until that has been run.
 
-**Withdrawn — "Teensy loses 4 of 50 burst frames; smaller USB buffers."**
-No mechanism was ever named, and PJRC's stack NAKs like every other native
-CDC implementation. Nothing in it survives the post-mortem; it is recorded
-here only so nobody re-cites it.
+**Unresolved — "Teensy 3.x loses 4 of 50 burst frames."** The original
+*attribution* ("smaller USB buffers") is withdrawn: PJRC's RX path NAKs like
+every native CDC stack, and — by the same arithmetic that defends the HWCDC
+finding — a ~700-byte burst sat under the host's 1024-byte buffer, so the
+short-write bug cannot explain this one either. But that cuts both ways,
+and same-day references on the same instrument ran 50/50 clean, which by
+this file's own calibration rule points at the board, not the tool. Two
+candidate mechanisms remain, one per side, and `bench.py`'s B-vs-D counters
+decide between them: (a) instrument — `stress.py`'s fixed drain window
+counted late echoes as lost (see the post-mortem note above); (b) device —
+Teensy 3.x serves all endpoints from one shared pool of twelve 64-byte
+packet buffers (`NUM_USB_BUFFERS`, usb_desc.h), so an echo test's inbound
+flood and outbound replies compete for the same twelve buffers, and its TX
+side gives up silently after a 70 ms timeout. If a Teensy 3.x bench run
+shows B=50, D=46 with the tail missing, the loss is real and lives in
+device TX; B=D=50 retires it as the drain window. Neither has been run.
 
 ## Measured
 
-> **The `stress` column is withdrawn and its instrument retired.**
-> `Port.write()` discarded the short count `os.write()` returns on a
-> non-blocking fd (the macOS tty queue is 1024 bytes), so bursts past that
-> never fully left the host. `stress.py` is gone; re-measurement is
-> `bench.py` under the Method rules above, which attributes any loss to a
-> segment instead of asserting it. `echo` and `widths` never routed through
-> the suspect path: `widths` is reported by the board itself, and `echo` is
-> a byte-exact comparison of small frames.
+> **The `stress` column is withdrawn and its instrument retired — for two
+> defects, not one.** First, `Port.write()` discarded the short count
+> `os.write()` returns on a non-blocking fd; the macOS tty output queue is
+> a flat 1024 bytes (`TTYCLSIZE`, xnu tty.c), and the engagement condition
+> is burst *plus current queue occupancy* over 1024 — against a device that
+> is NAKing (say, a ZLP-wedged 32U4) it engages at any write size, so the
+> contamination is wider than "bursts over 1024". Second, `stress.py`
+> counted replies inside a fixed drain window (1.2 s + 4 ms/frame), so a
+> slow echoer's late frames were scored as lost. `bench.py` retires both:
+> `write_all()` loops on the short count (regression-tested with a negative
+> control in `test_host.py`), and the board reports its own counters after
+> quiescence instead of racing a window. `echo` and `widths` never routed
+> through either defect: `widths` is reported by the board itself, and
+> `echo` is a byte-exact comparison of small frames.
 
 | board | echo | widths | probe | stress |
 |---|---|---|---|---|
@@ -443,3 +501,25 @@ descriptor alone.
 The stress column stays empty until a board has been measured with
 `bench.py` under the Method rules — trickle gate, 3× repeats, same-day
 reference calibration, mechanism named.
+
+## Primary sources for the per-stack flow-control facts
+
+Researched 2026-08-11, each verified against the source named:
+
+* AVR 32U4: `ArduinoCore-avr` `USBCore.cpp` (release-only-when-drained,
+  `EP_DOUBLE_64`), `CDC.cpp` (no software ring),
+  [issue #112](https://github.com/arduino/ArduinoCore-avr/issues/112) (ZLP wedge).
+* ESP32 HWCDC: `arduino-esp32` `cores/esp32/HWCDC.cpp` (ISR drain +
+  unchecked queue send, 256-byte runtime defaults), ESP32-S3 TRM ch. 33.3.3
+  (hardware NAKs until the FIFO is freed).
+* Teensy: `PaulStoffregen/cores` `teensy3/usb_dev.c` (NAK via BDT
+  disarm when the pool runs dry), `usb_desc.h` (`NUM_USB_BUFFERS` 12),
+  `usb_serial.c` (`TX_PACKET_LIMIT` 8, 70 ms give-up); PJRC's own serial
+  docs state delivery is reliable regardless of rate.
+* TinyUSB (Adafruit SAMD, RP2040): `cdc_device.c`
+  `_prep_out_transaction()` refuses to re-arm the OUT endpoint unless a
+  full endpoint-buffer of FIFO space is free — NAK, no drop;
+  `CFG_TUD_CDC_RX_BUFSIZE` 256 in both cores' `tusb_config`.
+* macOS host: xnu `tty.c`/`tty_subr.c` (`TTYCLSIZE` 1024 flat clist,
+  `IO_NDELAY` short-write path) — the measured 1024-byte short write is
+  that constant.
