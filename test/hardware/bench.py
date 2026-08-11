@@ -20,6 +20,12 @@ segment lost what, or that none did. "Lost somewhere" is not a result.
     python3 bench.py PORT ring [LAZY_MS]      burst-size sweep against a
                                               deliberately slow application --
                                               maps a fixed RX ring empirically
+    python3 bench.py PORT compound [N]        the discriminator: echo mode on,
+                                              N-frame one-write burst, count
+                                              BOTH ends of the same run. B<N
+                                              is receive loss; B=N with D<N is
+                                              device TX starved by its own
+                                              replies (the Teensy 3.x case)
 
 Rules, enforced or printed because the withdrawn numbers taught them:
   * the trickle gate runs before anything fast; if slow traffic is not 100%
@@ -129,6 +135,53 @@ def run_out(p, n, gap_us):
     return clean
 
 
+def run_compound(p, n):
+    """Echo mode: every /b/s is counted AND echoed, so RX and TX contend
+    for the same USB buffers while both ends stay counted. This is the run
+    that settled the Teensy 3.x claim: B=50/50 with D=26/50."""
+    query(p)
+    p.write(slip_encode(msg('/b/m', [1])))
+    time.sleep(0.3)
+    query(p)
+    p.write(b''.join(seq_frame(i) for i in range(n)))
+    got, raw = set(), b''
+    quiet_until, deadline = time.time() + 2.0, time.time() + 20.0
+    while time.time() < deadline:
+        chunk = p.drain(0.25)
+        if chunk:
+            raw += chunk
+            quiet_until = time.time() + 2.0
+            got = set()
+            for f in slip_frames(raw):
+                try:
+                    a, ar = decode(f)
+                    if a == '/b/s' and len(ar) == 2:
+                        got.add(ar[0] & 0xFFFFFFFF)
+                except Exception:
+                    pass
+            if len(got) == n:
+                break
+        elif time.time() > quiet_until:
+            break
+    r = query(p)
+    p.write(slip_encode(msg('/b/m', [0])))
+    time.sleep(0.2)
+    missing = sorted(set(range(n)) - got)
+    b = r['rxFrames'] if r else -1
+    print(f"  B board received : {b}/{n}"
+          + (f" seqErrs={r['seqErrs']}" if r else " (no reply)"))
+    print(f"  D echoes back    : {len(got)}/{n}"
+          + (f"  missing={missing[:8]}" if missing else ""))
+    if b == n and len(got) == n:
+        print("  verdict          : clean under compound load")
+        return True
+    if b == n:
+        print("  verdict          : DEVICE TX STARVED BY ITS OWN REPLIES")
+    elif b >= 0:
+        print("  verdict          : RECEIVE LOSS UNDER COMPOUND LOAD")
+    return False
+
+
 def gate(p):
     print("trickle gate: 20 frames at 20/s (any loss here = broken setup, stop)")
     r = run_in(p, 20, 50000)
@@ -189,6 +242,14 @@ def main():
                 print(f"\nminimum clean inter-frame gap: ~{hi} us"
                       f" ({1e6 / hi:.0f} f/s). A number this precise still"
                       f" needs a mechanism before the README will take it.")
+
+        elif mode == 'compound':
+            if not gate(p):
+                return 1
+            n = a3 or 50
+            for k in range(REPEATS):
+                print(f"\ncompound echo: {n} frames, one write (run {k + 1}/{REPEATS})")
+                fails += 0 if run_compound(p, n) else 1
 
         elif mode == 'ring':
             lazy = a3 if a3 is not None else 20

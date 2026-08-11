@@ -336,6 +336,34 @@ default — or pace bursts to what the application drains. ESP-IDF's own
 usb_serial_jtag driver has the same unchecked-send pattern, so this is not
 Arduino-layer-only.
 
+Re-measured 2026-08-11 on an ESP32-C6 with `OscBench` under the Method
+rules, which sharpened the picture four ways:
+
+* **The ceiling is bytes, not frames — cross-checked at two frame sizes.**
+  The bench's 22-byte frames pin at 12 received, `firstGap@11`, for every
+  burst from 330 to 1100 bytes: 12 × 22 = 264 bytes, against the original
+  19 × 14 = 266. Different frame size, same byte boundary.
+* **The cliff moves with the queue — twice.** Built with
+  `-DOSC_BENCH_RXBUF=4096` (the flag `OscBench` carries for exactly this
+  A/B), the same 50-frame burst goes 15-16/50 → 50/50 ×3 and the ring map
+  runs clean through 1100 bytes; a 4400-byte burst then loses ~5 frames at
+  the *tail* (`firstGap@194` of 200) — the ceiling scaled from ~264 to
+  ~4.3 KB with the configured size, which is the falsification test the
+  adversarial review asked for, passed in the direction that convicts the
+  queue.
+* **A tight-drain application is not safe, only a paced host is.** The
+  losses above are with `OscBench`'s drain loop running flat out — not the
+  lazy-reader mode. On this stack the burst outruns even an attentive
+  sketch.
+* **The corruption fingerprint separates it from the Teensy case.** The
+  drops come with `crcErrs`/`decodeErrs`: bytes vanish mid-frame and the
+  SLIP decoder merges adjacent frames into garbage. A byte-ring drop
+  corrupts; the Teensy pool starvation loses whole frames cleanly with
+  B intact. The instrument tells them apart on sight.
+
+Its transmit side is fine: `out` 200 ×3 and the compound echo both clean
+on the enlarged build.
+
 **Suspect — the "AVR cuts off at ~378 bytes and never recovers".** A 32U4
 has no software rx ring at all: reads come straight from the 64-byte
 endpoint banks and a full bank NAKs the host, so silent loss should be
@@ -381,8 +409,14 @@ D=30-33/50 (against the 3.2's 26-27), and the loss window opening at
 ~frame 6-9 rather than ~2-3 — the 180 MHz core queues more replies before
 the same twelve-buffer pool starves, so the window opens later and closes
 sooner. Its separate directions are likewise clean, inbound measured at
-16-25k f/s on-board. Whether Teensy 4.x shares the behaviour is untested —
-its buffer architecture differs.
+16-25k f/s on-board.
+
+The Teensy 4.0 closes the family from the other side: same protocol, same
+day, everything clean — gate, 50- and 200-frame one-write bursts ×3
+(66-100k f/s on-board), out ×3, and the compound echo 50/50 at both ends
+×3. Its USB stack does not share the teensy3 pool architecture, and it
+does not share the loss. The gradient is now bounded at both ends:
+3.2 worst, 3.6 milder, 4.0 immune.
 
 ## Measured
 
@@ -404,7 +438,7 @@ its buffer architecture differs.
 | board | echo | widths | probe | stress |
 |---|---|---|---|---|
 | LilyPad USB (ATmega32U4) | 22/22 | 11/11, int=2 long=4 ll=8 double=4 | 7/7 | not re-measured |
-| Teensy 4.0 (ARM M7) | 22/22 | 11/11 | 7/7 | not re-measured |
+| Teensy 4.0 (ARM M7) | 22/22 | 11/11 | 7/7 | bench 2026-08-11: all clean incl. compound echo ×3, 66-100k f/s in — the reference board |
 | Teensy 3.2 (ARM M4) | 22/22 | 11/11 | — | bench 2026-08-11: in/out separately clean ×3 (7142 f/s in, 200-frame out); compound echo D=26/50 — TX give-up under pool contention, see burst section |
 | Teensy 3.6 (ARM M4F) | — | — | — | bench 2026-08-11: in/out separately clean ×3 (16-25k f/s in); compound echo B=50/50, D=30-33/50 — same pool mechanism, milder at 180 MHz |
 | HalloWing M0 Express (SAMD21) | 22/22 | — | — | not re-measured |
@@ -415,7 +449,7 @@ its buffer architecture differs.
 | Seeed XIAO ESP32S3 Sense (Xtensa, 8 MB PSRAM) | 22/22 | 11/11 | — | not re-measured |
 | Gemma M0 (SAMD21) | — | — | 7/7 | not re-measured |
 | moddo pinch (SAMD11) | 22/22 | 11/11 | — | bench clean 2026-08-11: in/out 200×3, 4.4 KB one-write, 1100 B burst vs 20 ms/loop lazy reader all 0 loss, ~1830 f/s on-board — NAK stack, no drop site |
-| ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | not re-measured |
+| ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | bench 2026-08-11: byte ceiling ~264 B confirmed (12×22 B, firstGap@11); ×16 queue → ceiling ~4.3 KB; out + compound clean on enlarged build |
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | not re-measured |
 | Adafruit Feather M4 Express (SAMD51) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
 | Adafruit EdgeBadge (SAMD51) | — | — | — | not re-measured |

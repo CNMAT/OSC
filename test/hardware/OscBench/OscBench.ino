@@ -119,6 +119,12 @@ static void handle(OSCMessage &m) {
 }
 
 void setup() {
+#if defined(ARDUINO_ARCH_ESP32) && defined(OSC_BENCH_RXBUF)
+  // The A/B for the HWCDC finding: its ISR drops bytes when the default
+  // 256-byte rx queue fills. Build with -DOSC_BENCH_RXBUF=4096 to enlarge it
+  // (must precede begin()) and watch the same burst come through clean.
+  thisBoardsSerialUSB.setRxBufferSize(OSC_BENCH_RXBUF);
+#endif
   SLIPSerial.begin(115200);
 }
 
