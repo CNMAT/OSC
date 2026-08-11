@@ -32,38 +32,66 @@
 // PDM microphone. The EdgeBadge (Adafruit's TensorFlow Lite badge) is a PyBadge
 // with a PDM MEMS mic added; a plain PyBadge or PyBadge LC has none.
 //
-// Both are safe. Leave this at 1 on either board: if no mic answers, begin()
-// or configure() fails, micOK stays false, no /mic is ever sent, and the page
-// hides its microphone panel. Set it to 0 to drop the code entirely and save
-// the flash on a board you know has no mic.
+// Both are safe. Leave this at 1 on either board: a badge with no mic reports
+// micOK false, sends no /mic, and the page hides its microphone panel. Set it
+// to 0 to drop the code entirely and save the flash on a board you know has
+// none. Both boards share one FQBN, so the choice cannot be made at compile
+// time -- see the probe in setup() for how a missing mic is actually detected.
 //
-// Pins are the variant's own "SPI for PDM mic" block (SERCOM3): clock SCK2 = 5,
-// data MISO2 = 6.
+// Use Adafruit_ZeroPDMSPI, NOT Adafruit_ZeroPDM. Both ship in the same
+// library (Adafruit_Zero_PDM_Library), and picking the wrong one silently
+// yields no microphone at all: ZeroPDM drives PDM through the SAMD I2S
+// peripheral and its begin() returns false unless the variant defines I2S pin
+// macros such as PIN_PA10G_I2S_SCK0, while pybadge_m4's variant.h declares
+// I2S_INTERFACES_COUNT 0. Measured on an EdgeBadge: with ZeroPDM, micOK is
+// false and no /mic is ever sent. This board instead clocks its mic through a
+// SERCOM in SPI mode -- SPI2, which is exactly what the variant's own "SPI for
+// PDM mic" block (clock 5, data 6) is describing.
 //
-// KNOWN LIMITATION, measured on an EdgeBadge: Adafruit_ZeroPDM does not work
-// on this board and micOK comes back false. That library drives PDM through
-// the SAMD's I2S peripheral -- its begin() returns false unless the variant
-// defines I2S pin macros such as PIN_PA10G_I2S_SCK0 -- and pybadge_m4's
-// variant.h declares I2S_INTERFACES_COUNT 0. The EdgeBadge instead clocks the
-// mic through a SERCOM in SPI mode, which is what that "SPI for PDM mic"
-// comment is telling us, and wants Adafruit_ZeroPDMSPI. That library is not in
-// the Library Manager index, so it is not used here.
+// STATUS: the code below has never been run with a microphone actually
+// present. It is written to the driver's documented contract and its own
+// example, and the no-microphone path is verified (see setup()), but nobody
+// has yet seen a /mic frame carrying real audio. Treat a working EdgeBadge
+// reading as unconfirmed until someone measures one.
 //
-// The board is unharmed by this: begin() fails, micOK stays false, no /mic is
-// sent and the page hides its panel -- the same path a plain PyBadge with no
-// microphone takes. Verified on hardware: 60 /pybadge frames in 3 s, no /mic.
+// decimateFilterWord() is an INTERRUPT routine, not a polling call. It reads
+// and rewrites the SERCOM data register unconditionally to keep the bit stream
+// gapless, and begin() enables the data-register-empty interrupt at NVIC
+// priority 0. Two consequences, the first of them observed on hardware:
+//
+//   * The handler MUST be defined. Leave SERCOM3_0_Handler undefined and
+//     begin() arms an interrupt that vectors into the core's default trap --
+//     the board locks up in setup() and never sends a single packet. Measured:
+//     zero frames in three seconds, versus sixty once the handler existed.
+//   * Calling it from loop() instead is not a milder version of the same
+//     thing; it corrupts the stream and still leaves the ISR armed.
+//
+// So the handler below does the DSP and accumulates into volatile state, and
+// sendMic() only snapshots that state. The filter runs at 2 interrupts per
+// sample -- 32 kHz for 16 kHz audio -- and the library measures itself at
+// about 12.5%% CPU at 120 MHz, which leaves USB and the display alone.
 #ifndef BADGE_HAS_PDM_MIC
 #define BADGE_HAS_PDM_MIC 1
 #endif
 
 #if BADGE_HAS_PDM_MIC
-#include <Adafruit_ZeroPDM.h>
-#define PDM_CLK_PIN 5
-#define PDM_DATA_PIN 6
-static Adafruit_ZeroPDM pdm(PDM_CLK_PIN, PDM_DATA_PIN);
-static bool micOK = false;
+#include <Adafruit_ZeroPDMSPI.h>
+#define PDM_SPI      SPI2            // the variant's "SPI for PDM mic" SERCOM
+#define PDM_HANDLER  SERCOM3_0_Handler   // ...and SPI2 is SERCOM3 on this board
+#define PDM_IRQ      SERCOM3_0_IRQn
+#define PDM_RATE     16000
 #define SCOPE_POINTS 96
-static uint32_t pdmbuf[64];
+#define SCOPE_DECIM  8               // 16 kHz / 8 = one scope point per 0.5 ms
+static Adafruit_ZeroPDMSPI pdmspi(&PDM_SPI);
+static bool micOK = false;
+
+// written by PDM_HANDLER, read and cleared by sendMic() with the IRQ masked
+static volatile uint32_t micSumSq  = 0;   // sum of (v>>5)^2, see PDM_HANDLER
+static volatile uint16_t micCount  = 0;
+static volatile int16_t  micPeak   = 0;   // full-scale, +-32768
+static volatile int8_t   micScope[SCOPE_POINTS];
+static volatile uint8_t  micScopeN = 0;
+static volatile uint8_t  micDecim  = 0;
 #else
 static const bool micOK = false;
 #endif
@@ -180,36 +208,62 @@ static void beep(uint16_t freq, uint16_t ms, uint8_t vol) {
 #if BADGE_HAS_PDM_MIC
 /* --------------------------------------------------------------------- mic */
 
-// /mic ,iiib  rms, peak, sampleRate, scope
-// The PDM stream is 1-bit at a high rate; each 32-bit word read is 32 raw
-// samples. Counting set bits per word is a crude but honest low-pass: a loud
-// sound skews the density away from half-full, so |popcount - 16| tracks
-// amplitude without needing a real decimation filter on an M4.
-static void sendMic() {
-  // Adafruit_ZeroPDM declares read(uint32_t*, int) but only ever defines the
-  // single-word read(), so calling the buffered one fails at link:
-  //   undefined reference to Adafruit_ZeroPDM::read(unsigned long*, int)
-  for (int i = 0; i < 64; i++) pdmbuf[i] = pdm.read();
+// The SERCOM's data-register-empty interrupt, two calls per audio sample.
+// decimateFilterWord() returns true on the second of each pair, handing back a
+// 16-bit sample centred on 32768 with the DC offset tracked out.
+//
+// Keep this short. The (v>>5) before squaring is what makes the accumulator
+// safe rather than decorative: v is +-32768, so v*v alone reaches 1.07e9 and
+// overflows uint32 after four samples. Shifted, each term caps at 1.05e6 and
+// a full 50 ms frame of 800 samples sums to at most 8.4e8.
+void PDM_HANDLER(void) {
+  uint16_t raw;
+  if (!pdmspi.decimateFilterWord(&raw)) return;
 
-  int8_t  scope[SCOPE_POINTS];
-  int32_t sumsq = 0, peak = 0;
-  for (int i = 0; i < 64; i++) {
-    const int ones = __builtin_popcount(pdmbuf[i]);
-    const int v = (ones - 16) * 8;            // centre on zero, scale to +-128
-    sumsq += v * v;
-    const int a = v < 0 ? -v : v;
-    if (a > peak) peak = a;
-    if (i < SCOPE_POINTS) scope[i] = (int8_t) constrain(v, -127, 127);
+  const int32_t v = (int32_t) raw - 32768;
+  const int32_t q = v >> 5;
+  micSumSq += (uint32_t) (q * q);
+  micCount++;
+
+  const int32_t a = v < 0 ? -v : v;
+  if (a > micPeak) micPeak = (int16_t) a;
+
+  if (++micDecim >= SCOPE_DECIM) {
+    micDecim = 0;
+    if (micScopeN < SCOPE_POINTS)
+      micScope[micScopeN++] = (int8_t) constrain(v >> 8, -127, 127);
   }
-  for (int i = 64; i < SCOPE_POINTS; i++) scope[i] = 0;
-  const int32_t rms = (int32_t) sqrtf((float) sumsq / 64.0f);
+}
+
+// /mic ,iiib  rms, peak, sampleRate, scope
+// rms and peak are sent on the same +-127 scale as the scope samples, which is
+// what the page's meter expects; scope is one signed byte per point.
+static void sendMic() {
+  int8_t   scope[SCOPE_POINTS];
+  uint32_t sumsq;
+  uint16_t count;
+  int16_t  peak;
+  uint8_t  n;
+
+  NVIC_DisableIRQ(PDM_IRQ);
+  sumsq = micSumSq; count = micCount; peak = micPeak; n = micScopeN;
+  for (uint8_t i = 0; i < n; i++) scope[i] = micScope[i];
+  micSumSq = 0; micCount = 0; micPeak = 0; micScopeN = 0; micDecim = 0;
+  NVIC_EnableIRQ(PDM_IRQ);
+
+  if (!count) return;                       // interrupt stopped: say nothing
+  for (uint8_t i = n; i < SCOPE_POINTS; i++) scope[i] = 0;
+
+  // sqrt of the mean of (v>>5)^2 is |v|>>5; >>3 more puts it on the +-127
+  // scale the scope and the page's meter use.
+  const int32_t rms = ((int32_t) sqrtf((float) sumsq / count)) >> 3;
 
   SLIPSerial.beginPacket();
   writePadded(SLIPSerial, "/mic");
   writePadded(SLIPSerial, ",iiib");
   writeBE32(SLIPSerial, (uint32_t) rms);
-  writeBE32(SLIPSerial, (uint32_t) peak);
-  writeBE32(SLIPSerial, 16000);
+  writeBE32(SLIPSerial, (uint32_t) (peak >> 8));
+  writeBE32(SLIPSerial, PDM_RATE);
   writeBE32(SLIPSerial, SCOPE_POINTS);
   SLIPSerial.write((const uint8_t *) scope, SCOPE_POINTS);
   SLIPSerial.endPacket();
@@ -291,8 +345,28 @@ void setup() {
   pixels.begin(); pixels.setBrightness(40); pixels.clear(); pixels.show();
 
 #if BADGE_HAS_PDM_MIC
-  // Either call failing simply means no mic on this badge; nothing else cares.
-  micOK = pdm.begin() && pdm.configure(16000, false);
+  // begin() returns true on any PyBadge -- it only configures a SERCOM, and
+  // the SERCOM is there whether or not a microphone is soldered to it. So
+  // probe the signal instead: listen for 100 ms and require both that the
+  // interrupt is running and that the samples actually move. A missing mic
+  // leaves the data line at a constant level, which the driver's DC tracker
+  // flattens to exactly zero variance; a real mic always has a noise floor.
+  //
+  // Verified on a SAMD51 with no microphone on those pins (a Feather M4
+  // Express built with this FQBN): the raw filter output was a flat 0, the
+  // probe returned micOK false, and the sketch went on sending /pybadge with
+  // no /mic at all. The path a mic-less PyBadge takes is therefore known good.
+  // The mic-present path is NOT verified -- see the note in the header.
+  if (pdmspi.begin(PDM_RATE)) {
+    delay(100);
+    NVIC_DisableIRQ(PDM_IRQ);
+    const uint16_t count = micCount;
+    const int16_t  peak  = micPeak;
+    micSumSq = 0; micCount = 0; micPeak = 0; micScopeN = 0; micDecim = 0;
+    NVIC_EnableIRQ(PDM_IRQ);
+    micOK = count > 0 && peak > 0;
+    if (!micOK) NVIC_DisableIRQ(PDM_IRQ);   // no mic: stop paying for the ISR
+  }
 #endif
 
   accelOK = lis.begin(0x19) || lis.begin(0x18);

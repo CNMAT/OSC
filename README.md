@@ -326,6 +326,7 @@ the board itself — so they stand.
 | Seeed XIAO ESP32S3 Sense | Xtensa, 8 MB PSRAM | 22/22 | 11/11 | — | not re-measured |
 | ESP32-C6 | RISC-V | 22/22 | 11/11 | — | not re-measured |
 | M5Stack StampS3 | Xtensa | 22/22 | 11/11 | 7/7 | not re-measured |
+| Adafruit Feather M4 Express | SAMD51 | 22/22 | 11/11 | — | not re-measured |
 
 The burst cliffs are a property of the board's USB stack, not of this library —
 see [test/hardware/README.md](./test/hardware/README.md), which has the method

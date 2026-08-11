@@ -283,6 +283,7 @@ drives only the SLIP layer.
 | moddo pinch (SAMD11) | 22/22 | 11/11 | — | not re-measured |
 | ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | not re-measured |
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | not re-measured |
+| Adafruit Feather M4 Express (SAMD51) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
 | LilyPad USB | — | — | — | not re-measured |
 | UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | not re-measured |
 | Seeed XIAO RA4M1 (RA4M1, native USB) | 22/22 | 11/11 | — | not re-measured |
