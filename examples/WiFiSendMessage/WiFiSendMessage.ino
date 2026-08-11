@@ -38,10 +38,34 @@
 #define OSC_WIFI_HAS_MODULE_STATUS
 #elif defined(ARDUINO_PORTENTA_C33)
 #include <WiFiC3.h>
+#elif defined(ADAFRUIT_FEATHER_M0) || defined(ARDUINO_SAMD_MKR1000)
+// ATWINC1500 parts: the Feather M0 WiFi and the MKR1000 want WiFi101, not
+// WiFiNINA. They are SAMD21s like several WiFiNINA boards, so there is no
+// architecture macro to separate them -- it has to be by board.
+//
+// NOTE: adafruit:samd:adafruit_feather_m0 is one FQBN for the whole Feather
+// M0 family -- Basic, Adalogger, WiFi, RFM69, LoRa -- and they all define
+// ADAFRUIT_FEATHER_M0. This branch therefore assumes the WiFi variant. On a
+// Basic or Adalogger there is simply no radio for WiFi101 to find.
+#include <SPI.h>
+#include <WiFi101.h>
+// WiFi101 has no WL_NO_MODULE; the equivalent "no radio found" status is
+// WL_NO_SHIELD, so this branch reports it under its own name rather than
+// claiming the WiFiNINA constant.
+#define OSC_WIFI_NO_RADIO WL_NO_SHIELD
+#if defined(ADAFRUIT_FEATHER_M0)
+// The Feather M0 WiFi has the ATWINC1500 on its own pins rather than the
+// shield defaults, so they must be handed to the library before begin().
+#define OSC_WIFI_PINS() WiFi.setPins(8, 7, 4, 2)
+#endif
 #else
 #include <SPI.h>
 #include <WiFiNINA.h>
 #define OSC_WIFI_HAS_MODULE_STATUS
+#endif
+
+#ifndef OSC_WIFI_PINS
+#define OSC_WIFI_PINS() do {} while (0)
 #endif
 #include <WiFiUdp.h>
 #include <OSCMessage.h>
@@ -65,7 +89,10 @@ void connectWiFi() {
   // WiFiNINA and WiFiS3 drive a separate radio chip. If it is missing or wedged
   // the sketch would otherwise sit in the connect loop below forever with no
   // clue as to why.
-  if (WiFi.status() == WL_NO_MODULE) {
+#ifndef OSC_WIFI_NO_RADIO
+#define OSC_WIFI_NO_RADIO WL_NO_MODULE
+#endif
+  if (WiFi.status() == OSC_WIFI_NO_RADIO) {
     Serial.println("communication with the WiFi module failed");
     while (true) delay(1000);
   }
