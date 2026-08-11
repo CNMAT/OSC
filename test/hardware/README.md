@@ -373,8 +373,16 @@ a give-up-at-the-end story and the fingerprint that pins it. Both
 directions run *separately* are clean at 3-7× these rates (see the table),
 so this bites only request/response traffic where replies overlap an
 incoming burst. Practical remedy on Teensy 3.x: pace request bursts, or
-decouple replies from the receive loop. Whether Teensy 4.x shares the
-behaviour is untested — its buffer architecture differs.
+decouple replies from the receive loop.
+
+A Teensy 3.6, same day, confirms the family mechanism with the severity
+gradient the pool theory predicts and nothing else does: B=50/50 ×3 with
+D=30-33/50 (against the 3.2's 26-27), and the loss window opening at
+~frame 6-9 rather than ~2-3 — the 180 MHz core queues more replies before
+the same twelve-buffer pool starves, so the window opens later and closes
+sooner. Its separate directions are likewise clean, inbound measured at
+16-25k f/s on-board. Whether Teensy 4.x shares the behaviour is untested —
+its buffer architecture differs.
 
 ## Measured
 
@@ -398,6 +406,7 @@ behaviour is untested — its buffer architecture differs.
 | LilyPad USB (ATmega32U4) | 22/22 | 11/11, int=2 long=4 ll=8 double=4 | 7/7 | not re-measured |
 | Teensy 4.0 (ARM M7) | 22/22 | 11/11 | 7/7 | not re-measured |
 | Teensy 3.2 (ARM M4) | 22/22 | 11/11 | — | bench 2026-08-11: in/out separately clean ×3 (7142 f/s in, 200-frame out); compound echo D=26/50 — TX give-up under pool contention, see burst section |
+| Teensy 3.6 (ARM M4F) | — | — | — | bench 2026-08-11: in/out separately clean ×3 (16-25k f/s in); compound echo B=50/50, D=30-33/50 — same pool mechanism, milder at 180 MHz |
 | HalloWing M0 Express (SAMD21) | 22/22 | — | — | not re-measured |
 | DFRobot Beetle RP2040 | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
 | Seeed XIAO RP2350 (Cortex-M33) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
