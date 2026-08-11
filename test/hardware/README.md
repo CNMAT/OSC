@@ -364,6 +364,27 @@ rules, which sharpened the picture four ways:
 Its transmit side is fine: `out` 200 ×3 and the compound echo both clean
 on the enlarged build.
 
+**The remedy is now baked into the library.** `_SLIPSerial::begin()` calls
+`setRxBufferSize(OSC_SLIP_RX_BUFFER)` — default 4096, 0 to opt out —
+before opening the port, on ESP32 cores only, since that is the one family
+measured to drop and the call must precede `begin()` to do anything. The
+hardware evidence for the exact call at the exact point is the A/B above:
+the enlarged build did the identical `setRxBufferSize(4096)`-before-
+`begin()` by hand, and every number in that A/B is a measurement of it.
+`bench.py` can reproduce the stock-core behaviour on demand with
+`-DOSC_SLIP_RX_BUFFER=0`.
+
+**Seeed XIAO RP2350, 2026-08-11 — the TinyUSB stack, predicted clean in
+advance and measured clean.** Gate, 50- and 200-frame one-write bursts ×3
+(~3.3k f/s on-board), `out` ×3, compound echo 50/50 both ends ×3, and the
+ring map clean through 1100-byte bursts against the 20 ms/loop lazy
+reader. TinyUSB refuses to re-arm the OUT endpoint without a free
+endpoint-buffer of FIFO space, so the host is NAKed and nothing drops —
+the fourth stack family measured, and with it every USB stack this
+library ships serial examples for is now characterised: AVR (NAK + the
+ZLP wedge), teensy3 (NAK in, pool-starved out), teensy4 (clean), TinyUSB
+(clean), SAMD (clean), HWCDC (drops; library now enlarges its ring).
+
 **Suspect — the "AVR cuts off at ~378 bytes and never recovers".** A 32U4
 has no software rx ring at all: reads come straight from the 64-byte
 endpoint banks and a full bank NAKs the host, so silent loss should be
@@ -443,13 +464,13 @@ does not share the loss. The gradient is now bounded at both ends:
 | Teensy 3.6 (ARM M4F) | — | — | — | bench 2026-08-11: in/out separately clean ×3 (16-25k f/s in); compound echo B=50/50, D=30-33/50 — same pool mechanism, milder at 180 MHz |
 | HalloWing M0 Express (SAMD21) | 22/22 | — | — | not re-measured |
 | DFRobot Beetle RP2040 | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
-| Seeed XIAO RP2350 (Cortex-M33) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
+| Seeed XIAO RP2350 (Cortex-M33) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | bench 2026-08-11: all clean incl. compound ×3 and 1100 B lazy-reader bursts — TinyUSB NAKs as sourced |
 | ESP32-C3 (RISC-V) | 22/22 | 11/11 | — | not re-measured |
 | QT Py ESP32-S3 (Xtensa, HWCDC) | 22/22 | 11/11 | — | not re-measured |
 | Seeed XIAO ESP32S3 Sense (Xtensa, 8 MB PSRAM) | 22/22 | 11/11 | — | not re-measured |
 | Gemma M0 (SAMD21) | — | — | 7/7 | not re-measured |
 | moddo pinch (SAMD11) | 22/22 | 11/11 | — | bench clean 2026-08-11: in/out 200×3, 4.4 KB one-write, 1100 B burst vs 20 ms/loop lazy reader all 0 loss, ~1830 f/s on-board — NAK stack, no drop site |
-| ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | bench 2026-08-11: byte ceiling ~264 B confirmed (12×22 B, firstGap@11); ×16 queue → ceiling ~4.3 KB; out + compound clean on enlarged build |
+| ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | bench 2026-08-11: byte ceiling ~264 B confirmed (12×22 B, firstGap@11); ×16 queue → ceiling ~4.3 KB; out + compound clean on enlarged build; remedy since baked into `begin()` |
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | not re-measured |
 | Adafruit Feather M4 Express (SAMD51) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
 | Adafruit EdgeBadge (SAMD51) | — | — | — | not re-measured |

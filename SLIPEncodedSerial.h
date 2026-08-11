@@ -128,6 +128,31 @@ static inline void oscReleaseStuckCdcRxBank() {}
 #define OSC_SLIP_TX_BUFFER 64
 #endif
 
+/*  On ESP32 cores the serial classes buffer received bytes in a ring the
+	application must drain -- and on the USB-Serial-JTAG parts (S3/C3/C6,
+	"HWCDC") the receive ISR empties the hardware FIFO whether or not that
+	ring has room, dropping what does not fit. The ring defaults to 256
+	bytes, so any burst past ~260 bytes is silently truncated even when the
+	sketch is draining flat out: measured on an ESP32-C6, a 50-frame
+	1100-byte burst delivered 12 frames, and rebuilding with a 4096-byte
+	ring moved the ceiling to ~4.3 KB -- the cliff tracks the ring size,
+	which is the experiment that convicts it (test/hardware/README.md).
+
+	The enlargement must happen BEFORE the underlying begin(), and calling
+	it later silently does nothing, so begin() here is the one place that
+	can get the order right by construction. 4096 is the hardware-tested
+	value and costs nothing against this family's RAM. Define
+	OSC_SLIP_RX_BUFFER to another size before including this header, or to
+	0 to leave the core's default alone. Bursts larger than the ring still
+	need host-side pacing; no buffer ends that arithmetic.
+
+	ESP32 only: it is the one family measured to drop (the TinyUSB, PJRC,
+	SAMD and AVR stacks all NAK instead -- same README), and its UART and
+	USB classes all take setRxBufferSize() before begin(). */
+#ifndef OSC_SLIP_RX_BUFFER
+#define OSC_SLIP_RX_BUFFER 4096
+#endif
+
 template <class T>
 class _SLIPSerial: public Stream{
 	
@@ -341,6 +366,9 @@ public:
 
 
 	void begin(unsigned long baudrate){
+#if defined(ARDUINO_ARCH_ESP32) && (OSC_SLIP_RX_BUFFER > 0)
+		serial->setRxBufferSize(OSC_SLIP_RX_BUFFER);
+#endif
 		serial->begin(baudrate);
 	}
 	// for bluetooth

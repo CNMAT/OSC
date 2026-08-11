@@ -119,12 +119,12 @@ static void handle(OSCMessage &m) {
 }
 
 void setup() {
-#if defined(ARDUINO_ARCH_ESP32) && defined(OSC_BENCH_RXBUF)
-  // The A/B for the HWCDC finding: its ISR drops bytes when the default
-  // 256-byte rx queue fills. Build with -DOSC_BENCH_RXBUF=4096 to enlarge it
-  // (must precede begin()) and watch the same burst come through clean.
-  thisBoardsSerialUSB.setRxBufferSize(OSC_BENCH_RXBUF);
-#endif
+  // On ESP32, SLIPSerial.begin() enlarges the core's receive ring to
+  // OSC_SLIP_RX_BUFFER (4096) before opening the port -- the library-level
+  // fix for the HWCDC ISR dropping bytes on its default 256-byte queue.
+  // To reproduce the stock-core drop with this bench, build with
+  //   -DOSC_SLIP_RX_BUFFER=0
+  // and watch bursts past ~260 bytes truncate with firstGap ~11.
   SLIPSerial.begin(115200);
 }
 
