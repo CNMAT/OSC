@@ -271,6 +271,7 @@ drives only the SLIP layer.
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | cliff at ~300 B |
 | LilyPad USB | — | — | — | cliff at ~378 B, then wedged |
 | UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | 0 frames lost up to 50 |
+| Seeed XIAO RA4M1 (RA4M1, native USB) | 22/22 | 11/11 | — | 0 frames lost up to 50 |
 | M5Stack NanoC6 | not run — board stopped responding | | | |
 
 The 2026-08-03 rows (LilyPad stress, Teensy widths, Beetle RP2040, ESP32-C3,
