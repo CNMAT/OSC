@@ -21,6 +21,10 @@
 //   /b/f ,ii n gap_us    flood n /b/s frames host-ward, gap_us apart
 //   /b/lazy ,i ms        delay ms per loop() before draining, to emulate a
 //                        slow application against a fixed RX ring
+//   /b/m ,i 0|1          echo mode: 1 = also echo each /b/s straight back,
+//                        so receive and transmit contend for the same USB
+//                        buffers while BOTH ends stay counted -- the compound
+//                        load that plain echo sketches cannot attribute
 //
 // crc is zlib crc32 over the 4 big-endian bytes of seq, so corruption and
 // loss are distinguishable. USB CDC preserves order, so any out-of-order
@@ -43,6 +47,7 @@ static int32_t  firstGap = -1;         // expected seq at the first discontinuit
 static uint32_t expectSeq = 0;
 static uint32_t tFirst = 0, tLast = 0; // millis() at first/last /b/s
 static uint32_t lazyMs = 0;
+static bool     echoMode = false;
 
 static uint32_t crc32_of_seq(uint32_t v) {   // zlib crc32 of the 4 BE bytes
   uint32_t crc = 0xFFFFFFFFul;
@@ -76,7 +81,8 @@ static void handle(OSCMessage &m) {
     } else {
       expectSeq++;
     }
-    return;                      // counted, never answered
+    if (echoMode) sendSeqFrame(seq);   // compound load: TX vs the incoming burst
+    return;                            // otherwise counted, never answered
   }
 
   if (m.fullMatch("/b/q")) {
@@ -103,6 +109,11 @@ static void handle(OSCMessage &m) {
 
   if (m.fullMatch("/b/lazy")) {
     lazyMs = (uint32_t) m.getInt(0);
+    return;
+  }
+
+  if (m.fullMatch("/b/m")) {
+    echoMode = m.getInt(0) != 0;
     return;
   }
 }

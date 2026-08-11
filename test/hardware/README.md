@@ -220,7 +220,8 @@ beyond `setWriteError()`, which nothing checks:
   while the host has the port closed (`lineState == 0`).
 * **Teensy 3.x** — TX gives up after a 70 ms timeout; and RX + TX share one
   pool of twelve 64-byte packet buffers across *all* endpoints, so an
-  inbound flood can starve outbound.
+  inbound flood can starve outbound. **Measured on hardware** — this is the
+  resolved Teensy burst claim above: B=50/50 while D=26/50 on the same run.
 * **RP2040 core** — `SerialUSB.write()` blocks about 1 s, then gives up.
 
 An echo test conflates these with receive loss; `bench.py out` measures the
@@ -347,22 +348,33 @@ the USB stack. Both are now testable: the library releases the stuck bank
 itself, and `bench.py PORT in 50 -1` attributes any loss to a segment. No
 AVR burst number stands until that has been run.
 
-**Unresolved — "Teensy 3.x loses 4 of 50 burst frames."** The original
-*attribution* ("smaller USB buffers") is withdrawn: PJRC's RX path NAKs like
-every native CDC stack, and — by the same arithmetic that defends the HWCDC
-finding — a ~700-byte burst sat under the host's 1024-byte buffer, so the
-short-write bug cannot explain this one either. But that cuts both ways,
-and same-day references on the same instrument ran 50/50 clean, which by
-this file's own calibration rule points at the board, not the tool. Two
-candidate mechanisms remain, one per side, and `bench.py`'s B-vs-D counters
-decide between them: (a) instrument — `stress.py`'s fixed drain window
-counted late echoes as lost (see the post-mortem note above); (b) device —
-Teensy 3.x serves all endpoints from one shared pool of twelve 64-byte
-packet buffers (`NUM_USB_BUFFERS`, usb_desc.h), so an echo test's inbound
-flood and outbound replies compete for the same twelve buffers, and its TX
-side gives up silently after a 70 ms timeout. If a Teensy 3.x bench run
-shows B=50, D=46 with the tail missing, the loss is real and lives in
-device TX; B=D=50 retires it as the drain window. Neither has been run.
+**Confirmed and relocated — "Teensy 3.x loses burst frames" is real, but
+it is transmit loss, not receive.** Measured 2026-08-11 on a Teensy 3.2
+with the corrected instrument. The historical echo shape (50 indexed frames
+in one ~700-byte kernel write against `OscEcho`, patient adaptive drain)
+reproduced the loss exactly: 46/50, 46/50, 47/50 — so the old figure was
+never the instrument. Then the discriminating run, `OscBench` in echo mode
+(`/b/m 1`), counting both ends of the same compound load, three times:
+
+```
+B board received = 50/50, 50/50, 50/50   seqErrs=0 every run
+D echoes back    = 26/50, 27/50, 26/50   missing from ~frame 2-9 onward
+```
+
+Receive is perfect — the Kinetis stack NAKs exactly as its source says, and
+the original "smaller USB buffers" attribution was wrong about the
+direction. The loss is device→host under contention: while the burst is
+still arriving, echo replies compete with queued RX packets for the shared
+pool of twelve 64-byte packet buffers (`NUM_USB_BUFFERS`, usb_desc.h), TX
+gives up silently after its 70 ms timeout, and `Print` swallows the error.
+The missing indices sit at the *start* of the run — the contention window —
+and the tail flows clean once the burst has drained, the opposite tail from
+a give-up-at-the-end story and the fingerprint that pins it. Both
+directions run *separately* are clean at 3-7× these rates (see the table),
+so this bites only request/response traffic where replies overlap an
+incoming burst. Practical remedy on Teensy 3.x: pace request bursts, or
+decouple replies from the receive loop. Whether Teensy 4.x shares the
+behaviour is untested — its buffer architecture differs.
 
 ## Measured
 
@@ -385,7 +397,7 @@ device TX; B=D=50 retires it as the drain window. Neither has been run.
 |---|---|---|---|---|
 | LilyPad USB (ATmega32U4) | 22/22 | 11/11, int=2 long=4 ll=8 double=4 | 7/7 | not re-measured |
 | Teensy 4.0 (ARM M7) | 22/22 | 11/11 | 7/7 | not re-measured |
-| Teensy 3.2 (ARM M4) | 22/22 | 11/11 | — | not re-measured |
+| Teensy 3.2 (ARM M4) | 22/22 | 11/11 | — | bench 2026-08-11: in/out separately clean ×3 (7142 f/s in, 200-frame out); compound echo D=26/50 — TX give-up under pool contention, see burst section |
 | HalloWing M0 Express (SAMD21) | 22/22 | — | — | not re-measured |
 | DFRobot Beetle RP2040 | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
 | Seeed XIAO RP2350 (Cortex-M33) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
