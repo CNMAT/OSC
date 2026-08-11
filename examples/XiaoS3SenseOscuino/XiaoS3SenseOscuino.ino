@@ -24,8 +24,28 @@
 #include <OSCBoards.h>
 #include <SLIPEncodedSerial.h>
 #include "esp_camera.h"
+#include <ESP_I2S.h>
 
 SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
+
+// PDM microphone on the Sense board. Seeed's wiki gives CLK 42, DATA 41, and
+// says only PDM mono 16-bit is supported on the S3, 16 kHz being the stable
+// rate. ESP_I2S.h is the 3.x API; the old I2S.h with setAllPins() is 2.0.x.
+#define PDM_CLK_PIN 42
+#define PDM_DATA_PIN 41
+static I2SClass I2Sin;
+static bool micOK = false;
+
+// STATUS: this microphone block compiles but has never run -- the board left
+// the USB bus before it could be flashed. The camera path above it is
+// measured (19/19 valid JPEGs); treat /mic as unconfirmed until a capture
+// shows real audio. The pin map and PDM-mono-16k constraint are from Seeed's
+// wiki, not from this hardware.
+//
+// A scope trace to draw, and a level to meter with. 128 samples at 16 kHz is
+// 8 ms of audio -- enough to see waveform shape without costing much wire.
+#define SCOPE_POINTS 128
+static int16_t pcm[512];
 
 // Pin map for CAMERA_MODEL_XIAO_ESP32S3, copied from the esp32 core's own
 // CameraWebServer/camera_pins.h so this sketch stands alone.
@@ -54,6 +74,7 @@ static bool     streaming  = true;
 static int32_t  frameSeq   = 0;
 static uint32_t frameEvery = 200;      // ms between frames; /cam/rate changes it
 static uint32_t sensorEvery = 100;
+static uint32_t micEvery    = 50;      // 20 Hz scope + level
 static framesize_t curSize = FRAMESIZE_QVGA;
 static int      curQuality = 12;       // 0..63, lower is better and bigger
 
@@ -117,6 +138,49 @@ static void sendFrame(camera_fb_t *fb) {
   SLIPSerial.endPacket();
 }
 
+/* ------------------------------------------------------------------ mic */
+
+// /mic ,iiib  rmsQ15, peakQ15, sampleRate, scope
+// The scope is SCOPE_POINTS signed bytes -- the top 8 bits of each sample --
+// sent as a blob. Full 16-bit PCM would be twice the wire for detail no
+// on-screen trace can show.
+static void sendMic() {
+  const size_t want = sizeof pcm;
+  const size_t got  = I2Sin.readBytes((char *) pcm, want);
+  const int n = got / sizeof(int16_t);
+  if (n <= 0) return;
+
+  // uint64, not a pre-shift: (s*s)>>16 truncates every sample quieter than
+  // 256 counts to zero, so a quiet room reads rms 0. That exact failure was
+  // measured on the PyBadge's mic before this sketch could repeat it.
+  uint64_t sumsq = 0;
+  int16_t peak = 0;
+  for (int i = 0; i < n; i++) {
+    const int32_t s = pcm[i];
+    sumsq += (uint32_t)(s * s);
+    const int16_t a = s < 0 ? -s : s;
+    if (a > peak) peak = a;
+  }
+  const int32_t rms = (int32_t) sqrtf((float) sumsq / (float) n);
+
+  int8_t scope[SCOPE_POINTS];
+  const int step = n > SCOPE_POINTS ? n / SCOPE_POINTS : 1;
+  for (int i = 0; i < SCOPE_POINTS; i++) {
+    const int j = i * step;
+    scope[i] = (int8_t) (j < n ? (pcm[j] >> 8) : 0);
+  }
+
+  SLIPSerial.beginPacket();
+  writePadded(SLIPSerial, "/mic");
+  writePadded(SLIPSerial, ",iiib");
+  writeBE32(SLIPSerial, (uint32_t) rms);
+  writeBE32(SLIPSerial, (uint32_t) peak);
+  writeBE32(SLIPSerial, 16000);
+  writeBE32(SLIPSerial, SCOPE_POINTS);
+  SLIPSerial.write((const uint8_t *) scope, SCOPE_POINTS);   // already a multiple of 4
+  SLIPSerial.endPacket();
+}
+
 /* ----------------------------------------------------------------- inbound */
 
 static void routeLed(OSCMessage &m) {                 // /led 0|1
@@ -135,6 +199,9 @@ static void routeQuality(OSCMessage &m) {             // /cam/quality <0..63>
   curQuality = constrain(m.getInt(0), 4, 63);
   sensor_t *s = esp_camera_sensor_get();
   if (s) s->set_quality(s, curQuality);
+}
+static void routeMicRate(OSCMessage &m) {              // /mic/rate <ms>
+  if (m.size() >= 1 && m.isInt(0)) micEvery = constrain(m.getInt(0), 20, 5000);
 }
 static void routeSize(OSCMessage &m) {                // /cam/size 0..3
   if (m.size() < 1 || !m.isInt(0)) return;
@@ -160,13 +227,17 @@ void setup() {
   digitalWrite(LED_BUILTIN, HIGH);          // off; active LOW
   cameraOK = cameraBegin(curSize, curQuality);
 
+  I2Sin.setPinsPdmRx(PDM_CLK_PIN, PDM_DATA_PIN);
+  micOK = I2Sin.begin(I2S_MODE_PDM_RX, 16000,
+                      I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
+
   OSCMessage hello("/hello");
-  hello.add("XiaoS3SenseOscuino").add((intOSC_t) NANALOG).add(cameraOK);
+  hello.add("XiaoS3SenseOscuino").add((intOSC_t) NANALOG).add(cameraOK).add(micOK);
   SLIPSerial.beginPacket(); hello.send(SLIPSerial); SLIPSerial.endPacket();
 }
 
 void loop() {
-  static uint32_t lastSensors = 0, lastFrame = 0;
+  static uint32_t lastSensors = 0, lastFrame = 0, lastMic = 0;
 
   // inbound first, so a /stream 0 takes effect before the next capture
   if (SLIPSerial.available()) {
@@ -185,6 +256,7 @@ void loop() {
       in.dispatch("/cam/rate",    routeRate);
       in.dispatch("/cam/quality", routeQuality);
       in.dispatch("/cam/size",    routeSize);
+      in.dispatch("/mic/rate",    routeMicRate);
     }
   }
 
@@ -201,6 +273,11 @@ void loop() {
     m.add((intOSC_t) frameSeq);
     m.add(cameraOK);
     SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
+  }
+
+  if (micOK && streaming && now - lastMic >= micEvery) {
+    lastMic = now;
+    sendMic();
   }
 
   if (cameraOK && streaming && frameEvery && now - lastFrame >= frameEvery) {

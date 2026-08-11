@@ -106,6 +106,8 @@
     <input type="number" id="quality" value="12" min="4" max="63">
     <label for="rate">frame gap ms</label>
     <input type="number" id="rate" value="200" min="0" max="10000" step="50">
+    <label for="micrate">mic gap ms</label>
+    <input type="number" id="micrate" value="50" min="20" max="5000" step="10">
     <button id="stream">pause</button>
     <button id="led">LED</button>
   </div>
@@ -120,6 +122,17 @@
   </div>
 
   <div>
+    <div class="panel">
+      <canvas id="scope" width="288" height="70"
+              style="width:100%;height:70px;background:#0c0f15;border:1px solid var(--line);border-radius:6px"></canvas>
+      <table style="margin-top:8px">
+        <tr><td class="k">mic level</td><td class="v" id="miclevel">–</td></tr>
+        <tr><td colspan="2"><div class="bar"><i id="micb"></i></div></td></tr>
+        <tr><td class="k">peak</td><td class="v" id="micpeak">–</td></tr>
+        <tr><td colspan="2"><div class="bar"><i id="micpb" style="background:var(--err)"></i></div></td></tr>
+      </table>
+    </div>
+
     <div class="panel">
       <table id="sensors">
         <tr><td class="k">A0</td><td class="v" id="a0">–</td></tr>
@@ -362,9 +375,43 @@ function onFrame(payload) {
     return;
   }
 
+  if (m.address === "/mic") {
+    const [rms, peak, rate, scope] = m.args;
+    if (typeof rms === "number") {
+      $("miclevel").textContent = rms;
+      $("micb").style.width = Math.min(100, rms / 128 * 100) + "%";
+    }
+    if (typeof peak === "number") {
+      $("micpeak").textContent = peak;
+      $("micpb").style.width = Math.min(100, peak / 32768 * 100) + "%";
+    }
+    if (scope instanceof Uint8Array && scope.length) drawScope(scope);
+    return;
+  }
+
   if (m.address === "/hello") {
     logLine("", "board: " + m.args.join(" "));
   }
+}
+
+// The scope blob is SCOPE_POINTS signed bytes -- the top 8 bits of each PCM
+// sample. OSC has no signed-byte type, so they arrive inside a blob and have
+// to be reinterpreted: a Uint8Array element of 200 is really -56.
+const scopeCtx = $("scope").getContext("2d");
+function drawScope(bytes) {
+  const w = $("scope").width, h = $("scope").height, mid = h / 2;
+  scopeCtx.clearRect(0, 0, w, h);
+  scopeCtx.strokeStyle = "#2a3140"; scopeCtx.lineWidth = 1;
+  scopeCtx.beginPath(); scopeCtx.moveTo(0, mid); scopeCtx.lineTo(w, mid); scopeCtx.stroke();
+  scopeCtx.strokeStyle = "#5eead4"; scopeCtx.lineWidth = 1.5;
+  scopeCtx.beginPath();
+  for (let i = 0; i < bytes.length; i++) {
+    const v = bytes[i] > 127 ? bytes[i] - 256 : bytes[i];   // to signed
+    const x = i / (bytes.length - 1) * w;
+    const y = mid - (v / 128) * (mid - 2);
+    i ? scopeCtx.lineTo(x, y) : scopeCtx.moveTo(x, y);
+  }
+  scopeCtx.stroke();
 }
 
 setInterval(() => {                       // grey the readouts if the board stops
@@ -391,6 +438,7 @@ $("disconnect").onclick = () => disconnect();
 $("size").onchange      = e => send("/cam/size",    [parseInt(e.target.value, 10)]);
 $("quality").onchange   = e => send("/cam/quality", [parseInt(e.target.value, 10) || 12]);
 $("rate").onchange      = e => send("/cam/rate",    [parseInt(e.target.value, 10) || 0]);
+$("micrate").onchange   = e => send("/mic/rate",    [parseInt(e.target.value, 10) || 50]);
 
 let streaming = true;
 $("stream").onclick = () => {
