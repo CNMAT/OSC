@@ -284,6 +284,15 @@ drives only the SLIP layer.
 | ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | not re-measured |
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | not re-measured |
 | Adafruit Feather M4 Express (SAMD51) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
+| Adafruit EdgeBadge (SAMD51) | — | — | — | not re-measured |
+
+The EdgeBadge's PDM microphone is exercised by `examples/PyBadgeOscuino`, not
+by these suites. Measured there, at `MIC_GAIN` 16 over 30 s of speech and
+taps: a quiet-room floor of rms 20 (-64 dBFS) holding steady to within
+1 count between events, rising to rms 427 (-48.5 dBFS) on speech -- 26.6 dB
+of range -- with the loudest transient pinning `peak` at exactly 32767, which
+is the driver clipping. The same code on a SAMD51 with no microphone on those
+pins gives a flat zero and reports `micOK` false.
 | LilyPad USB | — | — | — | not re-measured |
 | UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | not re-measured |
 | Seeed XIAO RA4M1 (RA4M1, native USB) | 22/22 | 11/11 | — | not re-measured |

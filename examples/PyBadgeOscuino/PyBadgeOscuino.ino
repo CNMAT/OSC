@@ -80,16 +80,31 @@
 #define PDM_HANDLER  SERCOM3_0_Handler   // ...and SPI2 is SERCOM3 on this board
 #define PDM_IRQ      SERCOM3_0_IRQn
 #define PDM_RATE     16000
+// The driver defaults to unity gain, and unity is too quiet to be useful: a
+// quiet room measured about -90 dBFS on this mic, an rms of 1 count out of
+// 32768 -- so every ordinary sound rounded to nothing. Gain is applied inside
+// the driver, after DC removal and BEFORE the clip to 16 bits, so rms and
+// peak below are post-gain figures and too much gain destroys loud sounds
+// rather than merely brightening quiet ones.
+//
+// Measured at gain 16, 30 s of speech and taps at an EdgeBadge: the noise
+// floor sat at rms 20 (-64 dBFS), quiet peaks ran about 3000 against 25000
+// plus when spoken to, and the loudest transient pinned peak at exactly
+// 32767 -- clipped. Hence 8. The gain is a plain multiply ahead of the clip,
+// so that floor should halve to an rms near 10 and the headroom should
+// double; that arithmetic has not itself been re-measured under load. Raise
+// it for a quiet installation, lower it if you expect to shout at the badge.
+#define MIC_GAIN     8.0f
 #define SCOPE_POINTS 96
 #define SCOPE_DECIM  8               // 16 kHz / 8 = one scope point per 0.5 ms
 static Adafruit_ZeroPDMSPI pdmspi(&PDM_SPI);
 static bool micOK = false;
 
 // written by PDM_HANDLER, read and cleared by sendMic() with the IRQ masked
-static volatile uint32_t micSumSq  = 0;   // sum of (v>>5)^2, see PDM_HANDLER
+static volatile uint64_t micSumSq  = 0;   // sum of v*v at full scale
 static volatile uint16_t micCount  = 0;
-static volatile int16_t  micPeak   = 0;   // full-scale, +-32768
-static volatile int8_t   micScope[SCOPE_POINTS];
+static volatile int32_t  micPeak   = 0;   // full-scale, +-32768
+static volatile int16_t  micScope[SCOPE_POINTS];   // full-scale samples
 static volatile uint8_t  micScopeN = 0;
 static volatile uint8_t  micDecim  = 0;
 #else
@@ -236,33 +251,56 @@ void PDM_HANDLER(void) {
 }
 
 // /mic ,iiib  rms, peak, sampleRate, scope
-// rms and peak are sent on the same +-127 scale as the scope samples, which is
-// what the page's meter expects; scope is one signed byte per point.
+//
+// rms and peak go out at FULL SCALE, 0..32767, because that is the number a
+// receiver can actually reason about -- it is comparable between frames, and
+// the page turns it into dBFS for the meter. Sending a pre-scaled 0..127 was
+// worse than useless here: this mic idles around 150 counts, so everything
+// quieter than a shout rounded to zero.
+//
+// The scope blob has one signed byte per point, normalised to the frame's own
+// peak. A fixed shift cannot serve both ends of a range this wide -- the same
+// divisor that renders the noise floor clips ordinary speech flat -- so the
+// waveform is sent shape-only and `peak` is the scale factor for it.
 static void sendMic() {
+  int16_t  raw[SCOPE_POINTS];
   int8_t   scope[SCOPE_POINTS];
-  uint32_t sumsq;
+  uint64_t sumsq;
   uint16_t count;
-  int16_t  peak;
+  int32_t  peak;
   uint8_t  n;
 
   NVIC_DisableIRQ(PDM_IRQ);
   sumsq = micSumSq; count = micCount; peak = micPeak; n = micScopeN;
-  for (uint8_t i = 0; i < n; i++) scope[i] = micScope[i];
+  for (uint8_t i = 0; i < n; i++) raw[i] = micScope[i];
   micSumSq = 0; micCount = 0; micPeak = 0; micScopeN = 0; micDecim = 0;
   NVIC_EnableIRQ(PDM_IRQ);
 
   if (!count) return;                       // interrupt stopped: say nothing
+
+  // Normalise against the peak of the SCOPE WINDOW, not the frame peak. The
+  // scope keeps every SCOPE_DECIM'th sample, so it routinely misses the lone
+  // spike that set `peak` -- measured: frame peak 154 while every retained
+  // sample was 0 or 1, which normalising by 154 rendered as a flat line.
+  int32_t swing = 0;
+  for (uint8_t i = 0; i < n; i++) {
+    const int32_t a = raw[i] < 0 ? -raw[i] : raw[i];
+    if (a > swing) swing = a;
+  }
+  for (uint8_t i = 0; i < n; i++)
+    scope[i] = swing ? (int8_t) ((raw[i] * 127L) / swing) : 0;
   for (uint8_t i = n; i < SCOPE_POINTS; i++) scope[i] = 0;
 
-  // sqrt of the mean of (v>>5)^2 is |v|>>5; >>3 more puts it on the +-127
-  // scale the scope and the page's meter use.
-  const int32_t rms = ((int32_t) sqrtf((float) sumsq / count)) >> 3;
+  // Float division, deliberately. `sumsq / count` in uint64 is integer
+  // division: a quiet room puts the mean square between 1 and 3, which
+  // truncates to 1, and every rms in the capture came back as exactly 1.
+  const int32_t rms = (int32_t) sqrtf((float) sumsq / (float) count);
 
   SLIPSerial.beginPacket();
   writePadded(SLIPSerial, "/mic");
   writePadded(SLIPSerial, ",iiib");
   writeBE32(SLIPSerial, (uint32_t) rms);
-  writeBE32(SLIPSerial, (uint32_t) (peak >> 8));
+  writeBE32(SLIPSerial, (uint32_t) peak);
   writeBE32(SLIPSerial, PDM_RATE);
   writeBE32(SLIPSerial, SCOPE_POINTS);
   SLIPSerial.write((const uint8_t *) scope, SCOPE_POINTS);
@@ -358,10 +396,11 @@ void setup() {
   // no /mic at all. The path a mic-less PyBadge takes is therefore known good.
   // The mic-present path is NOT verified -- see the note in the header.
   if (pdmspi.begin(PDM_RATE)) {
+    pdmspi.setMicGain(MIC_GAIN);
     delay(100);
     NVIC_DisableIRQ(PDM_IRQ);
     const uint16_t count = micCount;
-    const int16_t  peak  = micPeak;
+    const int32_t  peak  = micPeak;
     micSumSq = 0; micCount = 0; micPeak = 0; micScopeN = 0; micDecim = 0;
     NVIC_EnableIRQ(PDM_IRQ);
     micOK = count > 0 && peak > 0;

@@ -228,15 +228,35 @@
       </table>
     </div>
     <div class="panel" id="micpanel" style="display:none">
-      <canvas id="scope" width="300" height="66"
-              style="width:100%;height:66px;background:#0a0d13;border:1px solid var(--line);border-radius:6px"></canvas>
-      <table style="margin-top:8px">
-        <tr><td class="k">mic level</td><td class="v" id="miclevel">–</td></tr>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+        <label>microphone</label>
+        <span id="micclip" style="display:none;font-family:var(--mono);font-size:11px;
+              color:#241a00;background:var(--err);padding:1px 6px;border-radius:3px">CLIP</span>
+      </div>
+
+      <canvas id="scope" width="300" height="72"
+              style="width:100%;height:72px;background:#0a0d13;border:1px solid var(--line);border-radius:6px"></canvas>
+      <div style="color:var(--dim);font-size:11px;margin:4px 0 10px">
+        waveform — normalised per frame, shows shape not level
+      </div>
+
+      <canvas id="michist" width="300" height="64"
+              style="width:100%;height:64px;background:#0a0d13;border:1px solid var(--line);border-radius:6px"></canvas>
+      <div style="color:var(--dim);font-size:11px;margin:4px 0 10px">
+        level history — last 15 s, −90 dBFS at the floor to 0 at the top
+      </div>
+
+      <table>
+        <tr><td class="k">level</td><td class="v" id="miclevel">–</td></tr>
         <tr><td colspan="2"><div class="bar"><i id="micb"></i></div></td></tr>
-        <tr><td class="k">peak</td><td class="v" id="micpeak">–</td></tr>
+        <tr><td class="k">peak (1 s hold)</td><td class="v" id="micpeak">–</td></tr>
+        <tr><td class="k">sample rate</td><td class="v" id="micrate">–</td></tr>
       </table>
-      <div style="color:var(--dim);font-size:12px;margin-top:6px">
-        EdgeBadge PDM microphone
+      <div style="color:var(--dim);font-size:12px;margin-top:8px">
+        EdgeBadge PDM microphone. <code>rms</code> and <code>peak</code> arrive
+        at full scale, 0–32767, after the sketch's <code>MIC_GAIN</code> — so
+        they are gain-dependent, and CLIP lights when a transient pins 32767.
+        Measured on this badge: a quiet room floors at about −64 dBFS.
       </div>
     </div>
     <div class="panel" style="padding:10px"><div id="log">idle</div></div>
@@ -262,6 +282,8 @@ class Reader {
   get left(){ return this.b.length - this.pos; }
   int32(){ const v=this.dv.getInt32(this.pos); this.pos+=4; return v; }
   float32(){ const v=this.dv.getFloat32(this.pos); this.pos+=4; return v; }
+  float64(){ const v=this.dv.getFloat64(this.pos); this.pos+=8; return v; }
+  int64(){ const v=this.dv.getBigInt64(this.pos); this.pos+=8; return v; }
   string(){ let e=this.pos; while(e<this.b.length && this.b[e]!==0) e++;
             const s=dec.decode(this.b.subarray(this.pos,e)); this.pos=(e+4)&~3; return s; }
   blob(){ const n=this.int32();
@@ -276,11 +298,21 @@ function decodeMessage(bytes){
   if (r.left > 0) {
     const tags = r.string();
     if (tags.startsWith(",")) for (const t of tags.slice(1)) {
+      // Every tag this library can emit. Blobs matter in particular: the
+      // reader has always had blob(), but decodeMessage never called it, so a
+      // ',iiib' message like /mic decoded to three arguments and the waveform
+      // silently never drew. An unknown tag still has to bail, because
+      // without its width there is no way to find the next argument.
       if (t==="i") args.push(r.int32());
       else if (t==="f") args.push(r.float32());
       else if (t==="s") args.push(r.string());
+      else if (t==="b") args.push(r.blob());
+      else if (t==="h") args.push(r.int64());
+      else if (t==="d") args.push(r.float64());
       else if (t==="T") args.push(true);
       else if (t==="F") args.push(false);
+      else if (t==="N") args.push(null);
+      else if (t==="I") args.push("impulse");
       else return {address,args};
     }
   }
@@ -409,6 +441,42 @@ drawTilt();
 // OSC has no signed-byte type, so the scope arrives as a blob of raw bytes
 // and each one has to be reinterpreted: 200 really means -56.
 const scopeCtx = () => $("scope").getContext("2d");
+
+// Level history. 20 frames/s from the board, 15 s of it.
+const MIC_HIST = 300;
+const micHist = [];
+let micPeakHold = 0, micPeakHoldAt = 0;
+
+const DB_FLOOR = -90;                       // this mic idles near -64 at gain 8
+const dbfs  = v => v > 0 ? 20*Math.log10(v/32768) : DB_FLOOR;
+const dbPct = d => Math.max(0, Math.min(1, (d - DB_FLOOR) / -DB_FLOOR));
+
+function drawMicHist(){
+  const c=$("michist"), ctx=c.getContext("2d"), w=c.width, h=c.height;
+  ctx.clearRect(0,0,w,h);
+  // horizontal guides every 20 dB
+  ctx.strokeStyle="#212736"; ctx.lineWidth=1;
+  for(let d=-80; d<0; d+=20){
+    const y = h - dbPct(d)*h;
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
+  }
+  if(!micHist.length) return;
+  const step = w / MIC_HIST;
+  ctx.fillStyle="#fbbf2433"; ctx.strokeStyle="#fbbf24"; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(0,h);
+  micHist.forEach((d,i)=>{
+    const x = i*step, y = h - dbPct(d)*h;
+    ctx.lineTo(x,y);
+  });
+  ctx.lineTo((micHist.length-1)*step, h);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  micHist.forEach((d,i)=>{
+    const x = i*step, y = h - dbPct(d)*h;
+    i ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+  });
+  ctx.stroke();
+}
 function drawScope(bytes){
   const c=$("scope"), ctx=scopeCtx(), w=c.width, h=c.height, mid=h/2;
   ctx.clearRect(0,0,w,h);
@@ -463,13 +531,37 @@ function onFrame(payload){
     // Shown only when the board actually sends this. A PyBadge without the
     // EdgeBadge's mic never does, so the panel stays hidden rather than
     // sitting there reading zero.
+    // rms and peak arrive at full scale, 0..32767. A linear bar is the wrong
+    // instrument for that: measured on this badge, a quiet room sits near
+    // -64 dBFS, so a linear meter would pin everything short of a shout at
+    // the left end. Everything here is dBFS down to a -90 floor.
     const [rms,peak,rate,scope] = m.args;
     $("micpanel").style.display = "";
+
     if(typeof rms==="number"){
-      $("miclevel").textContent = rms;
-      $("micb").style.width = Math.min(100, rms/128*100)+"%";
+      const db = dbfs(rms);
+      $("miclevel").textContent = rms>0 ? db.toFixed(1)+" dBFS ("+rms+")" : "silent";
+      $("micb").style.width = (dbPct(db)*100).toFixed(1)+"%";
+      micHist.push(db);
+      while(micHist.length > MIC_HIST) micHist.shift();
+      drawMicHist();
     }
-    if(typeof peak==="number") $("micpeak").textContent = peak;
+
+    if(typeof peak==="number"){
+      const now = performance.now();
+      if(peak >= micPeakHold || now - micPeakHoldAt > 1000){
+        micPeakHold = peak; micPeakHoldAt = now;
+      }
+      $("micpeak").textContent = micPeakHold>0
+        ? dbfs(micPeakHold).toFixed(1)+" dBFS ("+micPeakHold+")" : "–";
+      // The driver applies MIC_GAIN before clipping to 16 bits, so a loud
+      // enough transient pins here rather than reading true. Measured at
+      // gain 16: speech pinned it at exactly 32767. Latch this to the same
+      // hold as the readout -- judging it on the instantaneous peak let a
+      // one-frame clip come and go while the held figure still read 32767.
+      $("micclip").style.display = micPeakHold >= 32767 ? "" : "none";
+    }
+    if(typeof rate==="number") $("micrate").textContent = rate+" Hz";
     if(scope instanceof Uint8Array && scope.length) drawScope(scope);
     return;
   }
