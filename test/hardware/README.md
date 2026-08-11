@@ -90,9 +90,9 @@ across short writes on real hardware — and the ring map clean through
 whole way at ~1830 frames/s on-board. That is the NAK prediction confirmed
 end to end; the same `ring` command on an HWCDC part should truncate near
 320 bytes, which is the discriminating measurement this instrument was
-built for. One caveat held open: no second reference board was connected
-that day, so this row is the instrument's first clean run, not yet a
-cross-calibrated one. A query subtlety worth knowing: `/b/q` rides the same
+built for -- and which the ESP32-C6 then delivered. The caveat this row
+carried at first -- no reference board connected that day -- closed the
+same day when the Teensy 4.0 ran the identical protocol clean. A query subtlety worth knowing: `/b/q` rides the same
 ordered byte stream as the traffic, so the board answers only after
 processing everything ahead of it — reporting cannot race the run.
 
@@ -481,8 +481,9 @@ does not share the loss. The gradient is now bounded at both ends:
 The EdgeBadge's PDM microphone is exercised by `examples/PyBadgeOscuino`, not
 by these suites. Measured there, at `MIC_GAIN` 16 over 30 s of speech and
 taps: a quiet-room floor of rms 20 (-64 dBFS) holding steady to within
-1 count between events, rising to rms 427 (-48.5 dBFS) on speech -- 26.6 dB
-of range -- with the loudest transient pinning `peak` at exactly 32767, which
+1 count between events, rising with speech to a one-second mean of rms 123
+(-48.5 dBFS) and a loudest frame of rms 427 (-37.7 dBFS) -- 26.6 dB between
+floor and loudest frame -- with a transient pinning `peak` at exactly 32767, which
 is the driver clipping. The same code on a SAMD51 with no microphone on those
 pins gives a flat zero and reports `micOK` false.
 

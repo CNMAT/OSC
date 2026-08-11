@@ -48,11 +48,11 @@
 // SERCOM in SPI mode -- SPI2, which is exactly what the variant's own "SPI for
 // PDM mic" block (clock 5, data 6) is describing.
 //
-// STATUS: the code below has never been run with a microphone actually
-// present. It is written to the driver's documented contract and its own
-// example, and the no-microphone path is verified (see setup()), but nobody
-// has yet seen a /mic frame carrying real audio. Treat a working EdgeBadge
-// reading as unconfirmed until someone measures one.
+// STATUS: measured working on an EdgeBadge, 2026-08-11 -- quiet-room floor
+// rms 20 (-64 dBFS) at MIC_GAIN 16, rising with speech, 26.6 dB between the
+// floor and the loudest frame. The no-microphone path is verified separately
+// (see setup()). Still unmeasured: MIC_GAIN 8, the shipped default -- the
+// figures above are at 16, and halving them is arithmetic, not a capture.
 //
 // decimateFilterWord() is an INTERRUPT routine, not a polling call. It reads
 // and rewrites the SERCOM data register unconditionally to keep the bit stream

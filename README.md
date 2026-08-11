@@ -297,6 +297,13 @@ micro-controllers.
 
 ### Tested in 4.0.0
 
+The complete, current hardware record — every board and chip measured, by
+USB stack family, with the flashing procedures — is
+[BOARDS.md](./BOARDS.md). Bringing the library up on a new board, including
+the demo-page flow for boards with built-in peripherals, is
+[BRINGUP.md](./BRINGUP.md). The table below is the frozen 4.0.0 release
+record.
+
 Two different things, kept apart deliberately.
 
 **Run on hardware.** Byte-exact echo (22 packets covering every type, encoded
