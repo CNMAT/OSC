@@ -81,6 +81,21 @@ an instrument bug until proven otherwise.
 increasing size in one kernel write against a deliberately slow application;
 where the received count stops tracking the burst size is the ring.
 
+First hardware validation, 2026-08-11, on a moddo pinch (SAMD11, Arduino
+SAMD USB stack): trickle gate clean, 200 frames × 3 runs clean in both
+directions, a 200-frame 4.4 KB single kernel write clean — that write spans
+the host's 1024-byte tty queue, so it also proves `write_all()` delivering
+across short writes on real hardware — and the ring map clean through
+1100-byte bursts against a 20 ms/loop reader, the board NAK-throttling the
+whole way at ~1830 frames/s on-board. That is the NAK prediction confirmed
+end to end; the same `ring` command on an HWCDC part should truncate near
+320 bytes, which is the discriminating measurement this instrument was
+built for. One caveat held open: no second reference board was connected
+that day, so this row is the instrument's first clean run, not yet a
+cross-calibrated one. A query subtlety worth knowing: `/b/q` rides the same
+ordered byte stream as the traffic, so the board answers only after
+processing everything ahead of it — reporting cannot race the run.
+
 ## The ATmega32U4 receive stall: a zero-length packet the core never releases
 
 `stress.py` found inbound bursts truncated and a 32U4 refusing to receive until
@@ -378,7 +393,7 @@ device TX; B=D=50 retires it as the drain window. Neither has been run.
 | QT Py ESP32-S3 (Xtensa, HWCDC) | 22/22 | 11/11 | — | not re-measured |
 | Seeed XIAO ESP32S3 Sense (Xtensa, 8 MB PSRAM) | 22/22 | 11/11 | — | not re-measured |
 | Gemma M0 (SAMD21) | — | — | 7/7 | not re-measured |
-| moddo pinch (SAMD11) | 22/22 | 11/11 | — | not re-measured |
+| moddo pinch (SAMD11) | 22/22 | 11/11 | — | bench clean 2026-08-11: in/out 200×3, 4.4 KB one-write, 1100 B burst vs 20 ms/loop lazy reader all 0 loss, ~1830 f/s on-board — NAK stack, no drop site |
 | ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | not re-measured |
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | not re-measured |
 | Adafruit Feather M4 Express (SAMD51) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
