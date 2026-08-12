@@ -21,7 +21,7 @@ The suites, briefly:
 
 ## By USB stack family
 
-The stack, not the board, is what determines transport behaviour. Six
+The stack, not the board, is what determines transport behaviour. Seven
 families have been characterised on hardware:
 
 | family | host→device | device→host | verdict |
@@ -32,6 +32,7 @@ families have been characterised on hardware:
 | PJRC teensy4 | NAK | clean | clean end to end, including compound; the bench's reference board |
 | TinyUSB (RP2040/RP2350 core) | NAK — refuses to re-arm the endpoint without FIFO space | clean | clean end to end, including compound |
 | ESP32 HWCDC (USB-Serial-JTAG) | **drops** — ISR drains the 64-byte FIFO into a 256-byte queue and discards overflow | clean | bursts past ~260 B truncate *with mid-frame corruption* even against a fast-draining sketch; `begin()` now enlarges the queue (`OSC_SLIP_RX_BUFFER`, default 4096) |
+| Renesas RA4M1 **bridged UART** (UNO R4 WiFi) | **drops** — no USB at all on this path; the on-board ESP32-S3 bridge terminates flow control, so a full 512-byte UART ring simply overruns | clean | the only non-USB transport here; clean at ordinary rates and against a fast-draining sketch, but a slow reader loses the tail of any burst past its ring |
 
 ## Measured boards
 
@@ -71,7 +72,7 @@ families have been characterised on hardware:
 
 | board | chip | ran | found |
 |---|---|---|---|
-| Arduino UNO R4 WiFi | RA4M1, **bridged UART** (ESP32-S3 bridge) | echo 22/22 · widths 11/11 | The only non-native-USB board here: baud rate is real (115200), a mismatch reads as framing noise, and flashes intermittently report success without taking. No end-to-end NAK path exists across the bridge. |
+| Arduino UNO R4 WiFi | RA4M1, **bridged UART** (ESP32-S3 bridge) | echo 22/22 · widths 11/11 · bench 2026-08-12: gate, 50/200-frame one-write bursts ×3, out ×3, compound ×3 all clean (~530 f/s on-board); ring map pins at 25 frames / `firstGap@24` ×3 · `UnoR4MatrixOscuino` LED-matrix demo end to end | The only non-native-USB board here: baud rate is real (115200), a mismatch reads as framing noise, and flashes intermittently report success without taking. **The bridge has no end-to-end flow control**, so the core's 512-byte UART ring overruns rather than back-pressuring — see the burst section. Also the only board here to wedge mid-session and need a physical RESET; a reflashed known-good sketch failed the trickle gate until then, which is exactly what that gate is for. |
 | Seeed XIAO RA4M1 | RA4M1, native USB | echo 22/22 · widths 11/11 | Same chip, native CDC — the pairing isolates bridge effects from silicon. |
 
 ### ESP32 (HWCDC unless noted)

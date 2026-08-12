@@ -1,0 +1,386 @@
+<title>UNO R4 WiFi — scrolling messages on the LED matrix over OSC</title>
+<style>
+  :root {
+    --bg:#0d1017; --panel:#161a23; --panel-2:#1d2331; --line:#2b3242;
+    --text:#dde3ec; --dim:#8b95a7; --accent:#fbbf24; --rx:#86efac; --err:#fca5a5;
+    --led-on:#ff3b30; --led-off:#241012;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px; background:var(--bg); color:var(--text);
+         font:15px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p.lede { color:var(--dim); margin:0 0 20px; max-width:74ch; }
+  code { font-family:var(--mono); font-size:.92em; color:var(--accent); }
+  .wrap { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:20px;
+          align-items:start; max-width:1100px; }
+  @media (max-width:900px) { .wrap { grid-template-columns:1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--line);
+           border-radius:10px; padding:16px; margin-bottom:16px; }
+  button { background:var(--panel-2); color:var(--text); border:1px solid var(--line);
+           border-radius:7px; padding:8px 14px; font-size:14px; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.primary { background:var(--accent); color:#241a00; border-color:var(--accent);
+                   font-weight:600; }
+  label { color:var(--dim); font-size:12px; text-transform:uppercase;
+          letter-spacing:.06em; display:block; margin-bottom:6px; }
+  input[type=text] { background:var(--panel-2); color:var(--text);
+                     border:1px solid var(--line); border-radius:7px;
+                     padding:9px 11px; font-size:15px; width:100%;
+                     font-family:var(--mono); }
+  input[type=range] { width:100%; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td { padding:3px 0; }
+  td.k { color:var(--dim); }
+  td.v { text-align:right; font-family:var(--mono); }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%;
+         background:#3a4152; margin-right:7px; vertical-align:middle; }
+  .dot.on { background:var(--rx); }
+  #log { font-family:var(--mono); font-size:12px; color:var(--dim);
+         white-space:pre-wrap; max-height:130px; overflow:auto; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .chip { background:var(--panel-2); border:1px solid var(--line);
+          border-radius:6px; padding:5px 9px; font-size:13px; cursor:pointer; }
+  .chip:hover { border-color:var(--accent); }
+</style>
+
+<h1>UNO R4 WiFi — scrolling messages on the LED matrix over OSC</h1>
+<p class="lede">
+  Type a message, send it as an OSC string, and watch the board's 12&times;8
+  matrix scroll it. The panel below is not a simulation: the sketch sends the
+  exact 96 pixels it lit as an OSC blob on every scroll step, and this page
+  draws those. Web Serial needs <code>http://localhost</code> &mdash; a
+  <code>file://</code> URL gets an empty port picker.
+</p>
+
+<div class="panel row">
+  <button id="connect" class="primary">Connect</button>
+  <button id="disconnect" disabled>Disconnect</button>
+  <span><span class="dot" id="rxdot"></span><span id="status">not connected</span></span>
+</div>
+
+<div class="wrap">
+  <div>
+    <div class="panel">
+      <label>the panel, as lit</label>
+      <canvas id="matrix" width="600" height="400"
+              style="width:100%;height:auto;background:#0a0d13;
+                     border:1px solid var(--line);border-radius:8px"></canvas>
+      <div style="color:var(--dim);font-size:12px;margin-top:8px">
+        Every dot is one of the board's 96 LEDs, drawn from the
+        <code>/frame</code> blob the sketch sends after each step.
+      </div>
+    </div>
+
+    <div class="panel">
+      <label for="msg">message</label>
+      <input type="text" id="msg" value="OSC" maxlength="60"
+             placeholder="type, then press Enter">
+      <div class="row" style="margin-top:10px">
+        <button id="send" class="primary">Send</button>
+        <button id="pause">Pause</button>
+        <button id="blank">Blank</button>
+        <span class="chip" data-t="HELLO WORLD">HELLO WORLD</span>
+        <span class="chip" data-t="OSC 4.0">OSC 4.0</span>
+        <span class="chip" data-t="ARDUINO UNO R4">ARDUINO UNO R4</span>
+      </div>
+      <div style="margin-top:14px">
+        <label for="rate">scroll step <span id="ratev">90</span> ms/column</label>
+        <input type="range" id="rate" min="20" max="400" value="90">
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <label>board</label>
+      <table>
+        <tr><td class="k">sketch</td><td class="v" id="name">–</td></tr>
+        <tr><td class="k">matrix driver</td><td class="v" id="mok">–</td></tr>
+        <tr><td class="k">message</td><td class="v" id="cur">–</td></tr>
+        <tr><td class="k">column</td><td class="v" id="col">–</td></tr>
+        <tr><td class="k">frames in</td><td class="v" id="frames">0</td></tr>
+        <tr><td class="k">frame rate</td><td class="v" id="hz">–</td></tr>
+      </table>
+      <div style="color:var(--dim);font-size:12px;margin-top:10px">
+        This board's serial port is a real UART bridged to the host by an
+        on-board ESP32-S3, not native USB &mdash; so both ends must agree on
+        115200 and there is no end-to-end USB flow control. See BOARDS.md.
+      </div>
+    </div>
+    <div class="panel"><div id="log">idle</div></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const enc = new TextEncoder(), dec = new TextDecoder();
+
+/* ============================================================
+   1. OSC
+   ============================================================ */
+class Reader {
+  constructor(b){ this.b=b; this.pos=0;
+                  this.dv=new DataView(b.buffer,b.byteOffset,b.byteLength); }
+  get left(){ return this.b.length - this.pos; }
+  int32(){ const v=this.dv.getInt32(this.pos); this.pos+=4; return v; }
+  float32(){ const v=this.dv.getFloat32(this.pos); this.pos+=4; return v; }
+  float64(){ const v=this.dv.getFloat64(this.pos); this.pos+=8; return v; }
+  int64(){ const v=this.dv.getBigInt64(this.pos); this.pos+=8; return v; }
+  string(){ let e=this.pos; while(e<this.b.length && this.b[e]!==0) e++;
+            const s=dec.decode(this.b.subarray(this.pos,e));
+            this.pos=(e+4)&~3; return s; }
+  blob(){ const n=this.int32();
+          if(n<0 || n>this.left){ this.pos=this.b.length; return new Uint8Array(0); }
+          const v=this.b.subarray(this.pos,this.pos+n);
+          this.pos+=(n+3)&~3; return v; }
+}
+
+// Every tag this library can emit. Blobs matter especially here -- /frame IS
+// a blob, so an unhandled 'b' would leave the panel permanently dark.
+function decodeMessage(bytes){
+  const r = new Reader(bytes);
+  const address = r.string();
+  const args = [];
+  if (r.left > 0) {
+    const tags = r.string();
+    if (tags.startsWith(",")) for (const t of tags.slice(1)) {
+      if (t==="i") args.push(r.int32());
+      else if (t==="f") args.push(r.float32());
+      else if (t==="s") args.push(r.string());
+      else if (t==="b") args.push(r.blob());
+      else if (t==="h") args.push(r.int64());
+      else if (t==="d") args.push(r.float64());
+      else if (t==="T") args.push(true);
+      else if (t==="F") args.push(false);
+      else if (t==="N") args.push(null);
+      else if (t==="I") args.push("impulse");
+      else return {address,args};       // unknown width: cannot find the next
+    }
+  }
+  return {address,args};
+}
+
+const pad4 = b => { const n=(b.length+3)&~3; const o=new Uint8Array(n);
+                    o.set(b); return o; };
+
+function encodeMessage(address, args){
+  const parts=[pad4(enc.encode(address+"\0"))];
+  let tags=","; for(const a of args) tags += (typeof a==="string") ? "s":"i";
+  parts.push(pad4(enc.encode(tags+"\0")));
+  for(const a of args){
+    if(typeof a==="string") parts.push(pad4(enc.encode(a+"\0")));
+    else { const b=new Uint8Array(4); new DataView(b.buffer).setInt32(0,a|0);
+           parts.push(b); }
+  }
+  const out=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));
+  let o=0; for(const p of parts){ out.set(p,o); o+=p.length; }
+  return out;
+}
+
+/* ============================================================
+   2. SLIP
+   ============================================================ */
+const END=0xC0, ESC=0xDB, ESC_END=0xDC, ESC_ESC=0xDD;
+
+function slipEncode(payload){
+  const out=[END];
+  for(const b of payload){
+    if(b===END){ out.push(ESC,ESC_END); }
+    else if(b===ESC){ out.push(ESC,ESC_ESC); }
+    else out.push(b);
+  }
+  out.push(END);
+  return new Uint8Array(out);
+}
+
+class SlipDecoder {
+  constructor(onFrame){ this.cur=[]; this.esc=false; this.onFrame=onFrame; }
+  push(chunk){
+    for(const b of chunk){
+      if(this.esc){ this.cur.push(b===ESC_END?END:b===ESC_ESC?ESC:b);
+                    this.esc=false; }
+      else if(b===ESC) this.esc=true;
+      else if(b===END){ if(this.cur.length){ this.onFrame(new Uint8Array(this.cur));
+                                             this.cur=[]; } }
+      else this.cur.push(b);
+    }
+  }
+}
+
+/* ============================================================
+   3. panel
+   ============================================================ */
+const MW=12, MH=8;
+let frame = new Uint8Array(MW*MH);
+
+function drawMatrix(){
+  const c=$("matrix"), ctx=c.getContext("2d"), w=c.width, h=c.height;
+  ctx.clearRect(0,0,w,h);
+  // the real panel is wider than it is tall; keep the LED pitch square
+  const pitch = Math.min(w/(MW+1), h/(MH+1));
+  const r = pitch*0.38;
+  const x0 = (w - pitch*MW)/2 + pitch/2;
+  const y0 = (h - pitch*MH)/2 + pitch/2;
+  for(let y=0;y<MH;y++) for(let x=0;x<MW;x++){
+    const on = frame[y*MW+x];
+    const cx = x0 + x*pitch, cy = y0 + y*pitch;
+    if(on){
+      const g = ctx.createRadialGradient(cx,cy,0,cx,cy,r*2.6);
+      g.addColorStop(0,"rgba(255,80,60,.55)");
+      g.addColorStop(1,"rgba(255,80,60,0)");
+      ctx.fillStyle=g;
+      ctx.beginPath(); ctx.arc(cx,cy,r*2.6,0,7); ctx.fill();
+    }
+    ctx.fillStyle = on ? "var(--led-on)" : "#241012";
+    ctx.fillStyle = on ? "#ff3b30" : "#241012";
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
+  }
+}
+
+/* ============================================================
+   4. wire
+   ============================================================ */
+let port=null, writer=null, reader=null, keepReading=false;
+let frames=0, t0=0;
+
+function logLine(tag,s){
+  const el=$("log");
+  el.textContent = (tag?tag+" ":"") + s + "\n" + el.textContent;
+  if(el.textContent.length>1800) el.textContent=el.textContent.slice(0,1800);
+}
+
+// Never hand this board a SLIP frame whose length is a multiple of 64: a
+// host that terminates such a transfer with a zero-length packet wedges an
+// ATmega32U4 CDC endpoint permanently. The R4 is not a 32U4, but the pages
+// share this helper and an extra END closes an empty frame, which every SLIP
+// decoder skips -- so it is free insurance.
+function padAwayZLP(bytes){
+  if(bytes.length % 64 !== 0) return bytes;
+  const out=new Uint8Array(bytes.length+1);
+  out.set(bytes); out[bytes.length]=END;
+  return out;
+}
+
+async function send(address, args){
+  if(!writer) return;
+  await writer.write(padAwayZLP(slipEncode(encodeMessage(address,args))));
+}
+
+function onFrame(payload){
+  let m; try{ m=decodeMessage(payload); }catch{ return; }
+
+  if(m.address==="/frame"){
+    const blob=m.args[0];
+    if(blob instanceof Uint8Array && blob.length===MW*MH){
+      frame = blob; drawMatrix();
+      frames++; if(!t0) t0=performance.now();
+      const secs=(performance.now()-t0)/1000;
+      if(secs>0.5) $("hz").textContent=(frames/secs).toFixed(1)+" Hz";
+      $("frames").textContent=frames;
+    }
+    return;
+  }
+
+  if(m.address==="/matrix"){
+    const [text,col,total,paused]=m.args;
+    if(typeof text==="string") $("cur").textContent=JSON.stringify(text);
+    if(typeof col==="number" && typeof total==="number")
+      $("col").textContent=col+" / "+total;
+    if(typeof paused==="number")
+      $("pause").textContent = paused ? "Resume" : "Pause";
+    return;
+  }
+
+  if(m.address==="/hello"){
+    const [name,cols,ok]=m.args;
+    $("name").textContent=name ?? "–";
+    // The sketch reports the DRIVER, not the panel -- it cannot tell a wired
+    // matrix from a bare RA4M1, and says so.
+    $("mok").textContent = ok ? "started" : "failed";
+    $("mok").style.color = ok ? "var(--rx)" : "var(--err)";
+    logLine("","board: "+m.args.join(" "));
+    return;
+  }
+}
+
+async function readLoop(){
+  const slip=new SlipDecoder(onFrame);
+  while(keepReading){
+    try{
+      const {value,done}=await reader.read();
+      if(done) break;
+      if(value && value.length){
+        slip.push(value);
+        $("rxdot").classList.add("on");
+        clearTimeout(window._rxt);
+        window._rxt=setTimeout(()=>$("rxdot").classList.remove("on"),150);
+      }
+    }catch(e){ logLine("!",String(e)); break; }
+  }
+}
+
+$("connect").onclick = async () => {
+  if(!("serial" in navigator)){
+    logLine("!","Web Serial not available. Use Chrome or Edge over http://localhost.");
+    return;
+  }
+  try{
+    port = await navigator.serial.requestPort();
+    // 115200 is not a formality on this board: its Serial is a real UART
+    // bridged by the on-board ESP32-S3, and a mismatch arrives as framing
+    // noise that reads exactly like a board running the wrong sketch.
+    await port.open({ baudRate: 115200 });
+    writer = port.writable.getWriter();
+    reader = port.readable.getReader();
+    keepReading = true;
+    readLoop();
+    $("status").textContent="connected at 115200";
+    $("connect").disabled=true; $("disconnect").disabled=false;
+    frames=0; t0=0;
+    logLine("","connected");
+  }catch(e){ logLine("!",String(e)); }
+};
+
+$("disconnect").onclick = async () => {
+  keepReading=false;
+  try{ await reader?.cancel(); reader?.releaseLock(); }catch{}
+  try{ writer?.releaseLock(); }catch{}
+  try{ await port?.close(); }catch{}
+  port=writer=reader=null;
+  $("status").textContent="not connected";
+  $("connect").disabled=false; $("disconnect").disabled=true;
+  logLine("","disconnected");
+};
+
+const sendText = () => {
+  const t=$("msg").value || " ";
+  send("/matrix/text",[t]);
+  logLine("→","/matrix/text "+JSON.stringify(t));
+};
+$("send").onclick = sendText;
+$("msg").addEventListener("keydown", e => { if(e.key==="Enter") sendText(); });
+
+document.querySelectorAll(".chip").forEach(c => {
+  c.onclick = () => { $("msg").value=c.dataset.t; sendText(); };
+});
+
+let paused=false;
+$("pause").onclick = () => { paused=!paused; send("/matrix/pause",[paused?1:0]); };
+
+let blanked=false;
+$("blank").onclick = () => {
+  blanked=!blanked;
+  send("/matrix/bright",[blanked?0:1]);
+  $("blank").textContent = blanked ? "Light" : "Blank";
+};
+
+$("rate").oninput = e => {
+  const v=parseInt(e.target.value,10);
+  $("ratev").textContent=v;
+  send("/matrix/rate",[v]);
+};
+
+drawMatrix();
+</script>
