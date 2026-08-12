@@ -364,14 +364,18 @@ rules, which sharpened the picture four ways:
 Its transmit side is fine: `out` 200 ×3 and the compound echo both clean
 on the enlarged build.
 
-**The remedy is now baked into the library.** `_SLIPSerial::begin()` calls
+**The remedy is baked into the library, and the baked-in path is itself
+hardware-confirmed.** `_SLIPSerial::begin()` calls
 `setRxBufferSize(OSC_SLIP_RX_BUFFER)` — default 4096, 0 to opt out —
 before opening the port, on ESP32 cores only, since that is the one family
-measured to drop and the call must precede `begin()` to do anything. The
-hardware evidence for the exact call at the exact point is the A/B above:
-the enlarged build did the identical `setRxBufferSize(4096)`-before-
-`begin()` by hand, and every number in that A/B is a measurement of it.
-`bench.py` can reproduce the stock-core behaviour on demand with
+measured to drop and the call must precede `begin()` to do anything.
+Re-measured on the same ESP32-C6 with a stock, flag-free build of the
+bench after the change landed: 50-frame one-write bursts 50/50 ×3 (were
+15–16/50), the lazy-reader ring map clean through 1100 bytes (was pinned
+at 12 frames), compound echo clean ×3 — and the 4400-byte burst loses its
+tail at `firstGap@193` ×2, the queue's own arithmetic (4400 > 4096)
+showing through, which pins the library's value as the one in effect.
+`bench.py` reproduces the stock-core behaviour on demand with
 `-DOSC_SLIP_RX_BUFFER=0`.
 
 **Seeed XIAO RP2350, 2026-08-11 — the TinyUSB stack, predicted clean in

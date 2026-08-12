@@ -78,7 +78,7 @@ families have been characterised on hardware:
 
 | board | chip | ran | found |
 |---|---|---|---|
-| ESP32-C6 devkit | ESP32-C6 (RISC-V, 160 MHz) | echo 22/22 · widths 11/11 · bench: byte ceiling ~264 B (12 × 22 B frames, `firstGap@11`), ×16 queue → ceiling ~4.3 KB, out + compound clean | The HWCDC conviction: the cliff moves with the configured queue, twice. Remedy baked into `begin()` since. Needs `:CDCOnBoot=cdc`. |
+| ESP32-C6 devkit | ESP32-C6 (RISC-V, 160 MHz) | echo 22/22 · widths 11/11 · bench: byte ceiling ~264 B (12 × 22 B frames, `firstGap@11`), ×16 queue → ceiling ~4.3 KB, out + compound clean · library default re-verified: flag-free build 50/50 ×3, ring clean to 1100 B, 4400 B tail loss @193 (queue arithmetic) | The HWCDC conviction: the cliff moves with the configured queue, twice — and the `begin()`-baked remedy reproduces the hand-rolled A/B identically on hardware. Needs `:CDCOnBoot=cdc`. |
 | ESP32-C3 devkit | ESP32-C3 (RISC-V) | echo 22/22 · widths 11/11 · original 4-board HWCDC boundary | Needs `:CDCOnBoot=cdc`. |
 | Adafruit QT Py ESP32-S3 | ESP32-S3 (Xtensa LX7) | echo 22/22 · widths 11/11 · original 4-board HWCDC boundary | Needs `:USBMode=hwcdc,CDCOnBoot=cdc` — its default USB-OTG mode enumerates nothing. First flash needs BOOT+RESET by hand, then a plain RESET to leave download mode. |
 | Seeed XIAO ESP32S3 Sense | ESP32-S3, 8 MB PSRAM, OV2640 | echo 22/22 · widths 11/11 · `XiaoS3SenseOscuino` camera: 19/19 valid JPEGs, 320×240, ~4.8 f/s over SLIP | Stock FQBN defaults — carrying the QT Py's options here silences it completely. The sketch's PDM microphone block compiles but has **never run**; it says so in its own header. |
