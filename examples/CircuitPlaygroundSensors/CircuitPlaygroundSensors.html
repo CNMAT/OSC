@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<!--
+  Running this page. Web Serial needs a real browser and a real origin, and
+  the two ways of getting that wrong both look like the page is broken:
+
+    * Opening the file from disk (file://...) does not work. Chrome refuses
+      Web Serial there because a permission cannot be persisted against an
+      opaque origin. Serve it and use the served URL:
+
+          cd examples/CircuitPlaygroundSensors && python3 -m http.server 8765
+          open -a "Google Chrome" http://localhost:8765/CircuitPlaygroundSensors.html
+
+    * An embedded or sandboxed webview will report navigator.serial as
+      present and then show an EMPTY port picker, because it can enumerate
+      no serial devices at all. A correct filter with nothing listed means
+      the browser, not this page. Use Chrome or Edge proper.
+
+  python3 -m http.server sends no Cache-Control, so Chrome will happily
+  re-serve a stale copy of this file and edits appear to do nothing. Hard
+  reload (Cmd-Shift-R) after changing it.
+
+  Connect lists only boards matching CPX_FILTERS (0x239A/0x8018 for the
+  sketch, 0x0018 for the bootloader). Tick "show all ports" to drop the
+  filter -- if ports appear only then, the board's USB ids are not stock.
+  Double-tapping reset puts the board in the bootloader, which enumerates
+  under the second id and does not speak OSC.
+
+  The indicators are drawn over circuitplayground.jpg, a photograph of the
+  author's own board, so every reading lights up where its part actually is.
+  The coordinates were measured from that image rather than estimated -- see
+  the geometry note in the script -- which means a DIFFERENT photograph needs
+  new numbers. Swapping the picture is a two-step job: replace the .jpg, then
+  update PIXEL_XY, PAD_XY and the handful of cx/cy attributes in the SVG.
+
+  Pixel 0 is taken to be the one beside the D8 silkscreen, running
+  counter-clockwise. That part is inferred rather than measured; if your ring
+  lights up mirrored or rotated, reorder PIXEL_XY.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CircuitPlaygroundSensors &mdash; the whole board in one OSC message</title>
+<style>
+  :root {
+    --bg: #10131a; --panel: #171b24; --panel-2: #1e2430; --line: #2a3140;
+    --text: #dde3ec; --dim: #8b95a7; --accent: #5eead4; --rx: #86efac;
+    --err: #fca5a5; --board: #14181f; --silk: #cfe8e1;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px; background:var(--bg); color:var(--text);
+         font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size:18px; margin:0 0 2px; font-weight:600; }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:20px; }
+  .panel { background:var(--panel); border:1px solid var(--line);
+           border-radius:10px; padding:16px; margin-bottom:14px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  label { color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  input, select, button { font:inherit; color:var(--text); background:var(--panel-2);
+           border:1px solid var(--line); border-radius:7px; padding:8px 10px; }
+  button { cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  button.primary { background:var(--accent); color:#06231f; border-color:var(--accent); font-weight:600; }
+  button.on { border-color:var(--accent); color:var(--accent); }
+  .dot { width:8px; height:8px; border-radius:50%; background:#555e6e; display:inline-block; }
+  .dot.on { background:var(--accent); box-shadow:0 0 8px var(--accent); }
+  .cols { display:grid; grid-template-columns: minmax(320px,1fr) minmax(260px,330px); gap:14px; }
+  @media (max-width: 820px) { .cols { grid-template-columns: 1fr; } }
+  table.state { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12.5px; }
+  table.state td { padding:2px 6px; border-bottom:1px solid #222836; }
+  table.state td:first-child { color:var(--dim); }
+  table.state td:last-child { text-align:right; }
+  .stale { opacity:.45; }
+  .meter { height:9px; background:#0c0f15; border:1px solid var(--line);
+           border-radius:5px; overflow:hidden; }
+  .meter > i { display:block; height:100%; background:var(--accent); width:0; transition:width .05s linear; }
+  .mrow { display:grid; grid-template-columns: 62px 1fr 58px; gap:8px; align-items:center;
+          margin-bottom:7px; font-size:12px; }
+  .mrow span:last-child { font-family:var(--mono); text-align:right; color:var(--dim); }
+  #log { font-family:var(--mono); font-size:12.5px; height:150px; overflow-y:auto;
+         background:#0c0f15; border:1px solid var(--line); border-radius:8px; padding:10px; }
+  .warn { color:var(--err); }
+  #board .pix { cursor:pointer; }
+  #board text { font-family:var(--mono); font-size:11px; fill:var(--dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>CircuitPlaygroundSensors</h1>
+  <div class="sub">
+    The entire Circuit Playground Express state arrives as a single OSC message —
+    <code>/cpx</code> with 17 arguments, sampled in one pass — rather than a bundle
+    of seventeen. Sent on change, plus a heartbeat so silence still means something.
+    Click a pixel to paint it. Chrome or Edge, over Web Serial.
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <button id="connect" class="primary">Connect</button>
+      <button id="disconnect" disabled>Disconnect</button>
+      <span class="dot" id="led"></span>
+      <span id="status" style="color:var(--dim)">not connected</span>
+      <span style="flex:1"></span>
+      <label style="text-transform:none">
+        <input type="checkbox" id="allPorts" style="vertical-align:-2px"> show all ports
+      </label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label>paint</label>
+      <input type="color" id="paint" value="#5eead4" style="padding:2px; width:52px">
+      <button id="fill">all</button>
+      <button id="clear">off</button>
+      <span style="width:8px"></span>
+      <label>bright</label>
+      <input type="range" id="bright" min="0" max="255" value="40" style="width:110px">
+      <span id="brightV" style="font-family:var(--mono); color:var(--dim); width:30px">40</span>
+      <span style="width:8px"></span>
+      <button id="sweep">sweep</button>
+      <button id="tilt">tilt</button>
+      <button id="redled">red LED</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label>tone</label>
+      <input type="number" id="freq" value="440" min="0" max="8000" style="width:88px">
+      <button id="beep">beep 200ms</button>
+      <button id="quiet">stop</button>
+      <span style="width:8px"></span>
+      <label>min gap</label>
+      <select id="rate">
+        <option value="0">none</option>
+        <option value="10">10 ms</option>
+        <option value="20" selected>20 ms</option>
+        <option value="50">50 ms</option>
+        <option value="200">200 ms</option>
+      </select>
+      <label>heartbeat</label>
+      <select id="heartbeat">
+        <option value="0">off</option>
+        <option value="500">0.5 s</option>
+        <option value="2000" selected>2 s</option>
+        <option value="5000">5 s</option>
+      </select>
+      <label>deadband</label>
+      <input type="number" id="deadband" value="4" min="0" max="64" style="width:66px">
+    </div>
+  </div>
+
+  <div class="cols">
+    <div class="panel" style="padding:10px">
+      <!-- Live indicators drawn over a photograph of the board, so everything
+           lights up where it actually is. Coordinates are the photo's own pixel
+           space (832x900) and were measured from the image rather than eyeballed:
+           the board centres on (408,415), the ten NeoPixels sit at radius 274
+           and the alligator pads at radius 358. See the note above RING in the
+           script for how, and for why the ring is not evenly spaced. -->
+      <svg id="board" viewBox="0 0 832 900" style="width:100%">
+        <defs>
+          <!-- Crop to the board. Whatever the photograph was taken on is not
+               part of the instrument, and a bright surround fights the page. -->
+          <!-- The pad circle fitted at (410,432) r367; the rim sits ~28 px beyond
+               it. Clipping the image only — the indicators are outside this
+               group, so none of them gets cut. -->
+          <clipPath id="boardClip"><circle cx="410" cy="432" r="395"/></clipPath>
+        </defs>
+        <image href="circuitplayground.jpg" x="0" y="0" width="832" height="900"
+               clip-path="url(#boardClip)"/>
+
+        <g id="pads"></g>     <!-- seven touch pads, filled by script -->
+        <g id="ring"></g>     <!-- ten NeoPixels, filled by script -->
+
+        <!-- buttons A and B, over the real switches -->
+        <circle id="btnA" cx="250" cy="392" r="46" fill="var(--accent)" fill-opacity="0"
+                stroke="var(--accent)" stroke-opacity=".55" stroke-width="3"/>
+        <circle id="btnB" cx="568" cy="388" r="46" fill="var(--accent)" fill-opacity="0"
+                stroke="var(--accent)" stroke-opacity=".55" stroke-width="3"/>
+
+        <!-- slide switch, bottom centre: the bar leans to the side that reads 1 -->
+        <g>
+          <rect id="slideBox" x="358" y="536" width="104" height="52" rx="10" fill="none"
+                stroke="var(--accent)" stroke-opacity=".5" stroke-width="3"/>
+          <rect id="slideKnob" x="366" y="544" width="40" height="36" rx="8"
+                fill="var(--accent)" fill-opacity=".55"/>
+        </g>
+
+        <!-- passive sensors: rings that brighten with their reading -->
+        <circle id="ringLight" cx="282" cy="292" r="30" fill="var(--accent)" fill-opacity="0"
+                stroke="var(--accent)" stroke-opacity=".55" stroke-width="3"/>
+        <circle id="ringMic" cx="588" cy="468" r="28" fill="var(--rx)" fill-opacity="0"
+                stroke="var(--rx)" stroke-opacity=".55" stroke-width="3"/>
+
+        <!-- thermistor: the reading sits beside the sensor it comes from -->
+        <circle id="ringTemp" cx="545" cy="262" r="26" fill="none"
+                stroke="var(--accent)" stroke-opacity=".45" stroke-width="3"/>
+        <!-- paint-order puts the dark stroke behind the glyphs, which is what
+             makes small text survive over a photograph of a circuit board -->
+        <text id="tempText" x="405" y="330" text-anchor="middle" style="font-size:34px"
+              fill="var(--text)" stroke="#0b0e14" stroke-width="7" paint-order="stroke">–</text>
+
+        <!-- accelerometer bubble, over the LIS3DH -->
+        <circle cx="405" cy="445" r="54" fill="none" stroke="var(--accent)"
+                stroke-opacity=".35" stroke-dasharray="5 7" stroke-width="2"/>
+        <circle id="accDot" cx="405" cy="445" r="17" fill="var(--rx)" fill-opacity=".85"/>
+      </svg>
+    </div>
+
+    <div>
+      <div class="panel">
+        <div class="mrow"><span>light</span><div class="meter"><i id="mLight"></i></div><span id="vLight">–</span></div>
+        <div class="mrow"><span>sound</span><div class="meter"><i id="mSound"></i></div><span id="vSound">–</span></div>
+        <div class="mrow"><span>accel Z</span><div class="meter"><i id="mAccZ"></i></div><span id="vAccZ">–</span></div>
+        <div class="row" style="margin-top:4px; justify-content:space-between">
+          <span style="color:var(--dim); font-size:12px">temperature</span>
+          <span id="vTemp" style="font-family:var(--mono)">–</span>
+        </div>
+        <div class="row" style="margin-top:4px; justify-content:space-between">
+          <span style="color:var(--dim); font-size:12px">buttons / slide</span>
+          <span id="vBtns" style="font-family:var(--mono)">–</span>
+        </div>
+      </div>
+      <div class="panel">
+        <table class="state" id="raw"><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row" style="margin-bottom:8px">
+      <label>log</label><span style="flex:1"></span>
+      <span id="rateOut" style="color:var(--dim); font-family:var(--mono); font-size:12px">–</span>
+      <button id="clearLog">clear</button>
+    </div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   1. OSC — decode only what this page needs, plus int encode
+   ============================================================ */
+const dec = new TextDecoder(), enc = new TextEncoder();
+
+class Reader {
+  constructor(b) { this.b = b; this.pos = 0; this.dv = new DataView(b.buffer, b.byteOffset, b.byteLength); }
+  get left() { return this.b.length - this.pos; }
+  int32() { const v = this.dv.getInt32(this.pos); this.pos += 4; return v; }
+  float32() { const v = this.dv.getFloat32(this.pos); this.pos += 4; return v; }
+  string() {
+    let e = this.pos; while (e < this.b.length && this.b[e] !== 0) e++;
+    const s = dec.decode(this.b.subarray(this.pos, e));
+    this.pos = (e + 4) & ~3;
+    return s;
+  }
+}
+
+function decodeMessage(bytes) {
+  const r = new Reader(bytes);
+  const address = r.string();
+  const args = [];
+  if (r.left > 0) {
+    const tags = r.string();
+    if (tags.startsWith(",")) {
+      for (const t of tags.slice(1)) {
+        if (t === "i") args.push(r.int32());
+        else if (t === "f") args.push(r.float32());
+        else if (t === "s") args.push(r.string());
+        else if (t === "T") args.push(true);
+        else if (t === "F") args.push(false);
+        else return { address, args };   // unknown tag: payload size unknown
+      }
+    }
+  }
+  return { address, args };
+}
+
+// Everything this page sends is integers — pixel indices, colour components,
+// frequencies, milliseconds — so an int-only encoder is the whole requirement.
+function encodeMessage(address, ints) {
+  const parts = [];
+  const ostr = s => { const b = enc.encode(s + "\0"); const p = (4 - b.length % 4) % 4;
+                      return new Uint8Array([...b, ...new Uint8Array(p)]); };
+  parts.push(ostr(address), ostr("," + "i".repeat(ints.length)));
+  for (const v of ints) {
+    const b = new Uint8Array(4); new DataView(b.buffer).setInt32(0, v | 0); parts.push(b);
+  }
+  const n = parts.reduce((a, p) => a + p.length, 0);
+  const out = new Uint8Array(n); let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+
+/* ============================================================
+   2. SLIP framing (RFC 1055)
+   ============================================================ */
+const END = 0xC0, ESC = 0xDB, ESC_END = 0xDC, ESC_ESC = 0xDD;
+
+function slipEncode(data) {
+  const out = new Uint8Array(data.length * 2 + 1); let n = 0;
+  for (const b of data) {
+    if (b === END)      { out[n++] = ESC; out[n++] = ESC_END; }
+    else if (b === ESC) { out[n++] = ESC; out[n++] = ESC_ESC; }
+    else                { out[n++] = b; }
+  }
+  out[n++] = END;
+  return out.slice(0, n);
+}
+
+class SlipDecoder {
+  constructor() { this.acc = []; this.esc = false; }
+  transform(chunk, controller) {
+    for (const b of chunk) {
+      if (this.esc) { this.acc.push(b === ESC_END ? END : b === ESC_ESC ? ESC : b); this.esc = false; }
+      else if (b === ESC) { this.esc = true; }
+      else if (b === END) {
+        if (this.acc.length) { controller.enqueue(Uint8Array.from(this.acc)); this.acc.length = 0; }
+      } else this.acc.push(b);
+    }
+  }
+  flush() { this.acc.length = 0; }
+}
+
+/* ============================================================
+   3. Web Serial transport
+   ============================================================ */
+// 0x8018 is the running sketch — read off the attached board with
+// system_profiler — and 0x0019 the bootloader, which both the Adafruit core's
+// boards.txt and this repo's own extras/webserial/boards.json agree on.
+const CPX_FILTERS = [{ usbVendorId: 0x239A, usbProductId: 0x8018 },
+                     { usbVendorId: 0x239A, usbProductId: 0x0019 }];
+let port = null, writer = null, reader = null, pipeDone = null;
+
+async function connect() {
+  const opts = $("allPorts").checked ? {} : { filters: CPX_FILTERS };
+  port = await navigator.serial.requestPort(opts);
+  // Chrome's default read buffer is 255 bytes and one /cpx frame is a little
+  // over 100, so the default holds barely two. The board can send fifty a
+  // second; give it room to absorb a slow paint without dropping any.
+  await port.open({ baudRate: 115200, bufferSize: 8192 });
+  writer = port.writable.getWriter();
+  const stream = port.readable.pipeThrough(new TransformStream(new SlipDecoder()));
+  reader = stream.getReader();
+  pipeDone = readLoop();
+  setConnected(true);
+  logLine("", "connected");
+  // The board's startup hello went out 300 ms after it was plugged in, long
+  // before anyone clicked Connect, so ask for a fresh one rather than waiting
+  // for a message that has already been and gone. The reply is where the
+  // accelerometer's address — or its absence — is reported.
+  send("/hello", []);
+}
+
+async function readLoop() {
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      onFrame(value);
+    }
+  } catch (e) {
+    // Unplugging the board lands here. Without the disconnect() below the page
+    // went on claiming "connected", the sweep timer went on writing to a dead
+    // port, and the only symptom was that the numbers stopped changing.
+    logLine("warn", "read error: " + e.message);
+  }
+  if (port) disconnect();
+}
+
+async function disconnect() {
+  stopSweep(); tiltOn = false; $("tilt").classList.remove("on");
+  try { if (reader) { await reader.cancel(); reader.releaseLock(); } } catch {}
+  try { if (pipeDone) await pipeDone; } catch {}
+  try { if (writer) writer.releaseLock(); } catch {}
+  try { if (port) await port.close(); } catch {}
+  port = writer = reader = null;
+  padBase.reset();          // a different board, or a different day, rests elsewhere
+  setConnected(false);
+  markStale();
+  logLine("", "disconnected");
+}
+
+const USB_ENDPOINT = 64;
+
+// Never hand the device a write whose length is an exact multiple of the USB
+// endpoint size. On Arduino's ATmega32U4 CDC such a transfer ends in a
+// zero-length packet that the core never releases, stalling reception until
+// reset. The SAMD core this board runs does not have that fault, but one extra
+// END byte is a no-op in SLIP — it closes an empty frame, which every decoder
+// skips — so the insurance is free and stays in for anyone who copies this page
+// to a 32U4 board.
+function padAwayZLP(frame) {
+  if (frame.length % USB_ENDPOINT !== 0) return frame;
+  const out = new Uint8Array(frame.length + 1);
+  out.set(frame);
+  out[frame.length] = END;
+  return out;
+}
+
+async function send(address, ints) {
+  if (!writer) return;
+  // A write to a port whose board has just been pulled rejects. Nothing here
+  // can usefully retry, and an unhandled rejection from a timer is invisible,
+  // so swallow it and let the disconnect path do the tidying.
+  try {
+    await writer.write(padAwayZLP(slipEncode(encodeMessage(address, ints))));
+  } catch (e) {
+    if (port) disconnect();
+  }
+}
+
+/* ============================================================
+   4. Touch baselines, and angles
+   ============================================================ */
+
+const TWO_PI = Math.PI * 2;
+
+/* Shortest angle between two bearings, always 0..pi.
+
+   Worth its own function because the obvious inline version is wrong. Taking a
+   remainder of a possibly-negative number is the trap: JS % keeps the sign of
+   the left operand, so ((x - y + 3pi) % 2pi) - pi escapes [-pi,pi] the moment
+   the left side goes negative — which it does for the far side of the ring,
+   quietly lighting the wrong pixel. */
+const angleGap = (x, y) => {
+  const d = Math.abs((x - y) % TWO_PI);
+  return d > Math.PI ? TWO_PI - d : d;
+};
+
+/* A pad's resting count depends on its wiring, on humidity, and on whatever is
+   clipped to it, so the page learns each one rather than using a fixed
+   threshold. It must learn it the right way round.
+
+   The first version tracked the running minimum, which measurement killed. Left
+   alone, this board's pads are rock steady — 196..275 counts, moving by one over
+   six seconds. But across 45 seconds of being pressed and touched, two of them
+   dipped to 56 and 58. A running minimum latches onto such a dip for the whole
+   session, and (230-56)/56 = 3.1 then clamps to "fully touched": a pad stuck
+   bright for as long as the page is open.
+
+   Two changes fix it. Those dips are single samples, so a median of the last
+   three rejects them outright while still following any level that persists for
+   more than one reading. And the baseline then follows the signal rather than
+   remembering its worst moment: quickly downward, because a genuinely lower
+   resting level is real and should be adopted; slowly upward, so a finger —
+   which raises the count for a second or two — registers as an excursion
+   instead of being absorbed into the baseline.
+
+   Measured on hardware: resting 196..275, a touch reaching 686..1014. */
+class PadBaseline {
+  constructor(n, fall = 0.25, rise = 0.002) {
+    this.base = new Array(n).fill(null);
+    this.hist = Array.from({ length: n }, () => []);
+    this.fall = fall;
+    this.rise = rise;
+  }
+  // Returns how far above its own baseline this pad now sits, 0 at rest and
+  // around 1 under a finger. Can go negative on a falling edge; the caller
+  // clamps.
+  update(i, v) {
+    const h = this.hist[i];
+    h.push(v);
+    if (h.length > 3) h.shift();
+    if (h.length < 3) return 0;              // not enough to filter yet
+    const med = [...h].sort((a, b) => a - b)[1];
+
+    // Seed from a median, never from a raw first reading: seeding on a dip
+    // starts the pad looking touched and it takes the slow rise ten seconds to
+    // climb out of it.
+    if (this.base[i] === null) { this.base[i] = med; return 0; }
+    this.base[i] += (med - this.base[i]) * (med < this.base[i] ? this.fall : this.rise);
+    return this.base[i] > 0 ? (med - this.base[i]) / this.base[i] : 0;
+  }
+  reset() { this.base.fill(null); this.hist.forEach(h => h.length = 0); }
+}
+
+/* ============================================================
+   5. State display
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+
+// Positional layout of /cpx, mirroring the comment block in the sketch.
+const FIELDS = [
+  "seq", "buttonA", "buttonB", "slide", "light", "tempC", "sound",
+  "accelX", "accelY", "accelZ",
+  "touch1", "touch2", "touch3", "touch4", "touch5", "touch6", "touch7",
+];
+// The sketch's type tag string, so the raw table can format by declared type
+// rather than by what a value happens to look like: a temperature of exactly
+// 23.0 is still a float and should not print as "23".
+const FIELD_TYPES = "iiiiififffiiiiiii";
+
+let lastSeq = null, dropped = 0, frames = 0, lastRateAt = performance.now();
+let latest = null;                       // most recent sample, for the tilt demo
+
+/* ---- geometry, measured off the photograph rather than assumed -------------
+ *
+ * The ring is NOT evenly spaced. A Circuit Playground puts its ten NeoPixels at
+ * 30 degree intervals with 60 degree gaps at top and bottom, where the USB
+ * socket and the JST battery connector interrupt it — five down each side. An
+ * evenly-spaced ring of ten at 36 degrees, which is the obvious thing to draw,
+ * matches no board that was ever made.
+ *
+ * These coordinates come from the photo itself: each entry is the centroid of
+ * the white LED package within a window, iterated to convergence. A circle
+ * fitted to the ten lands at (408,422) radius 274 with 2.1 px rms, and their
+ * bearings match the 30 degree model to within 3.8 degrees once the board's
+ * 2.9 degree tilt in the frame is taken out. The pads were found the same way,
+ * by their gold: fourteen of them fit (410,432) radius 367 with 2.5 px rms, and
+ * each was checked against the silkscreen beside it before being labelled.
+ *
+ * The two fitted centres differ by 10 px, which is the camera not being quite
+ * perpendicular — the board projects as a very slightly squashed circle. That
+ * is why the tables below are measured positions rather than an angle and a
+ * radius: each marker sits where its part actually is in this photograph, and
+ * no single centre has to be right for all of them.
+ *
+ * WHICH INDEX IS WHERE is the one thing here that was NOT measured. Index 0 is
+ * taken to be the pixel beside the D8 silkscreen, because D8 is the NeoPixel
+ * data pin and the chain has to start where the data arrives, with the
+ * numbering running counter-clockwise from it. That is an inference from the
+ * board, not an observation of it: the on-board light sensor cannot settle it
+ * (a single pixel moves it by less than a count against an ambient that drifts
+ * by tens), so it wants ten seconds of a human eye. Send /pix 0 255 0 0 and see
+ * whether the pixel that turns red is the one beside D8; if the ring lights up
+ * mirrored or rotated, reorder PIXEL_XY and nothing else changes.
+ */
+const CX = 408, CY = 422;        // the LED ring's centre, for bearings
+
+const PIXEL_XY = [
+  [258, 189], [169, 291], [136, 419], [169, 561], [282, 663],
+  [563, 648], [661, 531], [683, 402], [636, 271], [525, 178],
+];
+// A1..A7. A0 is the speaker's DAC pad, not a touch pad, so it is not here.
+const PAD_XY = [
+  [754, 508], [728, 255], [654, 155], [106, 222], [59, 336], [83, 564], [152, 665],
+];
+
+// Derived, so a coordinate added or removed above cannot leave a count behind.
+const PIXELS = PIXEL_XY.length, PADS = PAD_XY.length;
+const padBase = new PadBaseline(PADS);
+
+// Bearing of each pixel from the board centre, for the tilt demo.
+const pixelAngle = i => Math.atan2(PIXEL_XY[i][1] - CY, PIXEL_XY[i][0] - CX);
+
+const SVGNS = "http://www.w3.org/2000/svg";
+const el = (name, attrs) => {
+  const n = document.createElementNS(SVGNS, name);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  return n;
+};
+
+function buildBoard() {
+  const ring = $("ring"), pads = $("pads");
+  PIXEL_XY.forEach(([x, y], i) => {
+    // The disc sits over the real LED and carries its colour; the ring around it
+    // keeps it findable while it is black.
+    const c = el("circle", { class: "pix", id: "pix" + i, cx: x, cy: y, r: 30,
+                             fill: "#000", "fill-opacity": ".8",
+                             stroke: "#dfe7f0", "stroke-opacity": ".65", "stroke-width": 3 });
+    c.onclick = () => paintPixel(i);
+    ring.appendChild(c);
+    // Index label pushed outward, into the gap between ring and pads.
+    const a = pixelAngle(i);
+    ring.appendChild(el("text", { x: (CX + Math.cos(a) * 322).toFixed(0),
+                                  y: (CY + Math.sin(a) * 322 + 8).toFixed(0),
+                                  "text-anchor": "middle", style: "font-size:24px",
+                                  fill: "#dfe7f0", stroke: "#0b0e14", "stroke-width": 5,
+                                  "paint-order": "stroke" }))
+        .textContent = i;
+  });
+  PAD_XY.forEach(([x, y], i) => {
+    pads.appendChild(el("circle", { id: "pad" + i, cx: x, cy: y, r: 34,
+                                    fill: "var(--rx)", "fill-opacity": "0",
+                                    stroke: "var(--rx)", "stroke-opacity": ".5",
+                                    "stroke-width": 3 }));
+  });
+}
+
+function onFrame(bytes) {
+  let pkt; try { pkt = decodeMessage(bytes); } catch { return; }
+
+  if (pkt.address === "/hello") {
+    logLine("", `hello from ${pkt.args[0]} — ${pkt.args[1]} args, ${pkt.args[2]} pixels, ` +
+                (pkt.args[3] ? "accelerometer at 0x" + Number(pkt.args[3]).toString(16)
+                             : "NO ACCELEROMETER FOUND"));
+    return;
+  }
+  if (pkt.address !== "/cpx") return;
+
+  if (pkt.args.length !== FIELDS.length) {
+    logLine("warn", `/cpx has ${pkt.args.length} args, expected ${FIELDS.length}` +
+                    " — sketch and page are out of step");
+    return;
+  }
+  const s = {};
+  FIELDS.forEach((k, i) => s[k] = pkt.args[i]);
+
+  if (lastSeq !== null && s.seq !== lastSeq + 1) dropped += Math.max(0, s.seq - lastSeq - 1);
+  lastSeq = s.seq;
+  frames++;
+  latest = s;
+
+  render(s);
+  if (tiltOn) followTilt(s);
+}
+
+function render(s) {
+  document.querySelectorAll(".stale").forEach(n => n.classList.remove("stale"));
+
+  $("btnA").setAttribute("fill-opacity", s.buttonA ? ".5" : "0");
+  $("btnB").setAttribute("fill-opacity", s.buttonB ? ".5" : "0");
+  // Measured on hardware: the switch reads 1 with the actuator to the RIGHT.
+  $("slideKnob").setAttribute("x", s.slide ? 414 : 366);
+
+  $("ringLight").setAttribute("fill-opacity", (clamp(s.light / 1023, 0, 1) * 0.85).toFixed(2));
+  // sound is -1 when the sketch was built without the microphone
+  const haveMic = s.sound >= 0;
+  $("ringMic").setAttribute("fill-opacity", haveMic ? (clamp(s.sound / 1023, 0, 1) * 0.85).toFixed(2) : "0");
+
+  // The accelerometer reads in g. +-1 g of tilt covers the well.
+  $("accDot").setAttribute("cx", (405 + clamp(s.accelX, -1, 1) * 40).toFixed(1));
+  $("accDot").setAttribute("cy", (445 + clamp(s.accelY, -1, 1) * 40).toFixed(1));
+
+  for (let i = 0; i < PADS; i++) {
+    const excursion = padBase.update(i, s["touch" + (i + 1)]);
+    $("pad" + i).setAttribute("fill-opacity", clamp(excursion, 0, 1).toFixed(2));
+  }
+
+  meter("Light", s.light / 1023, s.light);
+  meter("Sound", haveMic ? s.sound / 1023 : 0, haveMic ? s.sound : "off");
+  meter("AccZ", (s.accelZ + 2) / 4, s.accelZ.toFixed(2));
+
+  const t = Number.isFinite(s.tempC) ? s.tempC.toFixed(1) + " °C" : "–";
+  $("vTemp").textContent = t;
+  $("tempText").textContent = t;
+  $("vBtns").textContent =
+    (s.buttonA ? "A" : "–") + " " + (s.buttonB ? "B" : "–") + " " + (s.slide ? "◀" : "▶");
+
+  const tb = $("raw").tBodies[0];
+  if (tb.rows.length !== FIELDS.length + 1) {
+    tb.innerHTML = FIELDS.map(k => `<tr><td>${k}</td><td id="r_${k}">–</td></tr>`).join("")
+                 + `<tr><td>dropped</td><td id="r_dropped">0</td></tr>`;
+  }
+  FIELDS.forEach((k, i) => {
+    const v = s[k];
+    $("r_" + k).textContent = FIELD_TYPES[i] !== "f" ? v
+                            : Number.isFinite(v) ? v.toFixed(3) : "NaN";
+  });
+  $("r_dropped").textContent = dropped;
+}
+
+function meter(name, frac, value) {
+  $("m" + name).style.width = (clamp(frac, 0, 1) * 100).toFixed(1) + "%";
+  $("v" + name).textContent = value;
+}
+
+function markStale() { $("board").classList.add("stale"); $("raw").classList.add("stale"); }
+
+function setConnected(on) {
+  $("connect").disabled = on;
+  $("disconnect").disabled = !on;
+  $("led").classList.toggle("on", on);
+  $("status").textContent = on ? "connected" : "not connected";
+}
+
+function logLine(cls, text) {
+  const d = document.createElement("div");
+  if (cls) d.className = cls;
+  d.textContent = new Date().toLocaleTimeString() + "  " + text;
+  $("log").appendChild(d);
+  $("log").scrollTop = $("log").scrollHeight;
+}
+
+setInterval(() => {
+  const now = performance.now(), dt = (now - lastRateAt) / 1000;
+  if (dt >= 1) {
+    $("rateOut").textContent = `${(frames / dt).toFixed(0)} msg/s   dropped ${dropped}`;
+    frames = 0; lastRateAt = now;
+  }
+}, 1000);
+
+/* ============================================================
+   6. Driving the pixels
+   ============================================================ */
+const hex = v => [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)];
+const showPixel = (i, css) => $("pix" + i).setAttribute("fill", css);
+
+function paintPixel(i) {
+  const c = $("paint").value;
+  showPixel(i, c);
+  send("/pix", [i, ...hex(c)]);
+}
+
+function fillAll(cssColour) {
+  for (let i = 0; i < PIXELS; i++) showPixel(i, cssColour);
+  send("/rgb", hex(cssColour));
+}
+
+// One /pixels message carries all ten, so an animation frame is a single packet
+// rather than ten. Both the sweep and the tilt demo go through here.
+function sendAll(colours) {
+  const flat = [];
+  for (let i = 0; i < PIXELS; i++) {
+    const c = colours[i] || [0, 0, 0];
+    flat.push(c[0], c[1], c[2]);
+    showPixel(i, `rgb(${c[0]},${c[1]},${c[2]})`);
+  }
+  send("/pixels", flat);
+}
+
+let sweepTimer = null, sweepPos = 0;
+function startSweep() {
+  const [r, g, b] = hex($("paint").value);
+  sweepTimer = setInterval(() => {
+    const colours = [];
+    for (let i = 0; i < PIXELS; i++) {
+      // a comet: brightest at the head, trailing off behind it
+      const d = (sweepPos - i + PIXELS) % PIXELS;
+      const k = d === 0 ? 1 : d === 1 ? 0.35 : d === 2 ? 0.12 : 0;
+      colours[i] = [Math.round(r * k), Math.round(g * k), Math.round(b * k)];
+    }
+    sendAll(colours);
+    sweepPos = (sweepPos + 1) % PIXELS;
+  }, 90);
+  $("sweep").classList.add("on");
+}
+function stopSweep() {
+  if (sweepTimer) { clearInterval(sweepTimer); sweepTimer = null; }
+  $("sweep").classList.remove("on");
+}
+
+// Tilt the board and the light runs downhill, the way a bubble would not.
+//
+// An accelerometer at rest measures the force holding it up, so the axis that
+// reads positive is the one pointing UP: face up on a table this board reads
+// accelZ near +1, which is what was seen on hardware. atan2(accelY, accelX)
+// therefore points at the RAISED edge, and downhill is the opposite bearing.
+//
+// The ring geometry is the page's own, so the lit pixel follows the drawing; if
+// a board numbers its ring the other way the light will run the other way.
+let tiltOn = false, tiltSentAt = 0;
+function followTilt(s) {
+  const now = performance.now();
+  if (now - tiltSentAt < 60) return;              // ~16 Hz is plenty for the eye
+  tiltSentAt = now;
+  const mag = Math.hypot(s.accelX, s.accelY);
+  const [r, g, b] = hex($("paint").value);
+  const colours = [];
+  if (mag < 0.12) {                                // lying flat: nothing to point at
+    for (let i = 0; i < PIXELS; i++) colours[i] = [0, 0, 0];
+  } else {
+    const downhill = Math.atan2(-s.accelY, -s.accelX);
+    for (let i = 0; i < PIXELS; i++) {
+      const k = clamp(1 - angleGap(pixelAngle(i), downhill) / 0.9, 0, 1) * clamp(mag, 0, 1);
+      colours[i] = [Math.round(r * k), Math.round(g * k), Math.round(b * k)];
+    }
+  }
+  sendAll(colours);
+}
+
+/* ============================================================
+   7. Wiring
+   ============================================================ */
+buildBoard();
+
+if (!("serial" in navigator)) {
+  logLine("warn", "This browser has no Web Serial. Use Chrome or Edge over https or localhost.");
+  $("connect").disabled = true;
+} else {
+  // Pulling the USB lead is the common case and the reader does not always
+  // notice promptly. Without this the page went on saying "connected" while
+  // the sweep timer wrote into a closed port.
+  navigator.serial.addEventListener("disconnect", () => { if (port) disconnect(); });
+}
+
+$("connect").onclick = () => connect().catch(e => logLine("warn", e.message));
+$("disconnect").onclick = () => disconnect();
+$("clearLog").onclick = () => $("log").textContent = "";
+
+$("fill").onclick  = () => fillAll($("paint").value);
+$("clear").onclick = () => { stopSweep(); fillAll("#000000"); };
+
+// The brightness slider fires continuously while dragging and every /bright
+// makes the board rewrite all ten pixels, so coalesce to the latest value at
+// ~20 Hz and let onchange deliver the committed one exactly.
+let brightLatest = null, brightTimer = null;
+$("bright").oninput = e => {
+  brightLatest = +e.target.value;
+  $("brightV").textContent = brightLatest;
+  if (brightTimer) return;                        // one in flight; newest wins
+  brightTimer = setTimeout(() => { brightTimer = null; send("/bright", [brightLatest]); }, 50);
+};
+$("bright").onchange = e => {
+  if (brightTimer) { clearTimeout(brightTimer); brightTimer = null; }
+  send("/bright", [+e.target.value]);
+};
+
+$("sweep").onclick = () => sweepTimer ? stopSweep() : startSweep();
+$("tilt").onclick = () => {
+  tiltOn = !tiltOn;
+  $("tilt").classList.toggle("on", tiltOn);
+  if (!tiltOn) fillAll("#000000");
+  else if (latest) followTilt(latest);
+};
+let redOn = false;
+$("redled").onclick = () => {
+  redOn = !redOn;
+  $("redled").classList.toggle("on", redOn);
+  send("/led", [redOn ? 1 : 0]);
+};
+
+$("beep").onclick  = () => send("/tone", [parseInt($("freq").value, 10) || 440, 200]);
+$("quiet").onclick = () => send("/tone", [0]);
+$("rate").onchange = e => send("/rate", [parseInt(e.target.value, 10)]);
+$("heartbeat").onchange = e => send("/heartbeat", [parseInt(e.target.value, 10)]);
+$("deadband").onchange  = e => send("/deadband", [parseInt(e.target.value, 10) || 0]);
+
+markStale();
+</script>
+</body>
+</html>
