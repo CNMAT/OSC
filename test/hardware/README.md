@@ -389,6 +389,31 @@ library ships serial examples for is now characterised: AVR (NAK + the
 ZLP wedge), teensy3 (NAK in, pool-starved out), teensy4 (clean), TinyUSB
 (clean), SAMD (clean), HWCDC (drops; library now enlarges its ring).
 
+**Confirmed — the UNO R4 WiFi's bridged UART overruns a 512-byte ring.**
+Measured 2026-08-12. This board has no USB on its serial path at all: it
+builds with `-DNO_USB`, `Serial` is a real UART, and an on-board ESP32-S3
+bridges it to the host — so the NAK that protects every other board here
+terminates at the bridge and cannot reach the host. Against a fast-draining
+sketch it is clean at every size tried (200 frames, 4.4 KB, in one write,
+×3, plus out and compound ×3). Against a deliberately slow reader the ring
+map pins hard, and the ceiling tracks the drain rate exactly as a fixed
+buffer predicts:
+
+| lazy reader | ceiling | bytes |
+|---|---|---|
+| 5 ms/loop | 29 frames | 638 B |
+| 20 ms/loop | 25 frames, `firstGap@24`, ×3 identical | 550 B |
+| 50 ms/loop | 24 frames | 528 B |
+
+As the drain slows toward nothing the ceiling asymptotes onto ~512 bytes —
+`SERIAL_BUFFER_SIZE` in the core's `Serial.h`, the ring itself, with the
+faster runs' surplus being what the sketch drained mid-burst. A 200 ms
+reader was also run and is deliberately **not** reported as data: at that
+delay the `/b/q` query rides the same starved path, so the instrument stops
+measuring the board. Unlike HWCDC there is no library-side enlargement to
+bake in — `SERIAL_BUFFER_SIZE` is `#undef`'d and fixed at 512 in the core —
+so the remedy is host pacing, or simply never blocking in `loop()`.
+
 **Suspect — the "AVR cuts off at ~378 bytes and never recovers".** A 32U4
 has no software rx ring at all: reads come straight from the 64-byte
 endpoint banks and a full bank NAKs the host, so silent loss should be
