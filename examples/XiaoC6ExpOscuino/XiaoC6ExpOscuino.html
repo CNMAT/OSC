@@ -1,0 +1,397 @@
+<meta charset="utf-8">
+<title>XIAO ESP32-C6 expansion board — OSC over USB serial</title>
+<style>
+  :root {
+    --bg:#0d1017; --panel:#161a23; --panel-2:#1d2331; --line:#2b3242;
+    --text:#dde3ec; --dim:#8b95a7; --accent:#fbbf24; --rx:#86efac; --err:#fca5a5;
+    --oled:#7fe3ff;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px; background:var(--bg); color:var(--text);
+         font:15px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p.lede { color:var(--dim); margin:0 0 20px; max-width:76ch; }
+  code { font-family:var(--mono); font-size:.92em; color:var(--accent); }
+  .wrap { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:20px;
+          align-items:start; max-width:1080px; }
+  @media (max-width:880px){ .wrap{ grid-template-columns:1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--line);
+           border-radius:10px; padding:16px; margin-bottom:16px; }
+  button { background:var(--panel-2); color:var(--text); border:1px solid var(--line);
+           border-radius:7px; padding:8px 14px; font-size:14px; cursor:pointer; }
+  button:hover:not(:disabled){ border-color:var(--accent); }
+  button:disabled{ opacity:.45; cursor:default; }
+  button.primary{ background:var(--accent); color:#241a00; border-color:var(--accent);
+                  font-weight:600; }
+  label { color:var(--dim); font-size:12px; text-transform:uppercase;
+          letter-spacing:.06em; display:block; margin-bottom:6px; }
+  input[type=text]{ background:var(--panel-2); color:var(--text);
+                    border:1px solid var(--line); border-radius:7px;
+                    padding:8px 10px; font-size:14px; width:100%;
+                    font-family:var(--mono); margin-bottom:6px; }
+  input[type=range]{ width:100%; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  td{ padding:3px 0; } td.k{ color:var(--dim); }
+  td.v{ text-align:right; font-family:var(--mono); }
+  .dot{ display:inline-block; width:9px; height:9px; border-radius:50%;
+        background:#3a4152; margin-right:7px; vertical-align:middle; }
+  .dot.on{ background:var(--rx); }
+  #log{ font-family:var(--mono); font-size:12px; color:var(--dim);
+        white-space:pre-wrap; max-height:120px; overflow:auto; }
+  .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .chip{ background:var(--panel-2); border:1px solid var(--line); border-radius:6px;
+         padding:5px 9px; font-size:13px; cursor:pointer; }
+  .chip:hover{ border-color:var(--accent); }
+</style>
+
+<h1>XIAO ESP32-C6 expansion board — OSC over USB serial</h1>
+<p class="lede">
+  Drives the expansion board's OLED, buzzer and button from the browser over
+  Web Serial. The screen below mirrors what was sent to the real panel.
+  A WiFi twin of this sketch, <code>XiaoC6ExpWiFi</code>, speaks the same OSC
+  vocabulary over UDP. Web Serial needs <code>http://localhost</code> — a
+  <code>file://</code> URL gets an empty port picker.
+</p>
+
+<div class="panel row">
+  <button id="connect" class="primary">Connect</button>
+  <button id="disconnect" disabled>Disconnect</button>
+  <span><span class="dot" id="rxdot"></span><span id="status">not connected</span></span>
+</div>
+
+<div class="wrap">
+  <div>
+    <div class="panel">
+      <label>the 128&times;64 OLED, as sent</label>
+      <canvas id="oled" width="512" height="256"
+              style="width:100%;height:auto;background:#04121a;
+                     border:1px solid var(--line);border-radius:8px"></canvas>
+      <div style="color:var(--dim);font-size:12px;margin-top:8px">
+        Mirrors the text this page sent. The board holds the real pixels; this
+        is the one panel here that is a reconstruction, not a readback.
+      </div>
+    </div>
+
+    <div class="panel">
+      <label>four lines of text — <code>/disp/text</code></label>
+      <input type="text" id="l0" value="OSC over USB" maxlength="21">
+      <input type="text" id="l1" value="XIAO ESP32-C6" maxlength="21">
+      <input type="text" id="l2" value="expansion board" maxlength="21">
+      <input type="text" id="l3" value="" maxlength="21">
+      <div class="row" style="margin-top:8px">
+        <button id="send" class="primary">Send</button>
+        <button id="clear">Clear</button>
+        <button id="invert">Invert</button>
+      </div>
+      <div style="margin-top:14px">
+        <label for="big">one big centred line — <code>/disp/big</code></label>
+        <div class="row">
+          <input type="text" id="big" value="HELLO" maxlength="10" style="flex:1">
+          <button id="sendbig">Send big</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <label>buzzer — <code>/buzz freq ms</code></label>
+      <div class="row">
+        <span class="chip" data-f="523">C5</span>
+        <span class="chip" data-f="659">E5</span>
+        <span class="chip" data-f="784">G5</span>
+        <span class="chip" data-f="1047">C6</span>
+        <span class="chip" data-f="1568">G6</span>
+        <button id="chirp">Chirp</button>
+        <button id="quiet">Silence</button>
+      </div>
+      <div style="margin-top:12px">
+        <label for="dur">duration <span id="durv">200</span> ms</label>
+        <input type="range" id="dur" min="20" max="1500" value="200">
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <label>board</label>
+      <div style="text-align:center;margin:10px 0">
+        <div id="btn" style="width:56px;height:56px;border-radius:50%;
+             border:2px solid var(--line);margin:0 auto;background:var(--panel-2);
+             transition:background .05s"></div>
+        <div style="color:var(--dim);font-size:12px;margin-top:6px">user button (D1)</div>
+      </div>
+      <table>
+        <tr><td class="k">sketch</td><td class="v" id="name">–</td></tr>
+        <tr><td class="k">OLED 0x3C</td><td class="v" id="dok">–</td></tr>
+        <tr><td class="k">RTC 0x51</td><td class="v" id="rok">–</td></tr>
+        <tr><td class="k">buzzing</td><td class="v" id="bz">–</td></tr>
+        <tr><td class="k">uptime</td><td class="v" id="up">–</td></tr>
+        <tr><td class="k">seq</td><td class="v" id="seq">–</td></tr>
+        <tr><td class="k">dropped</td><td class="v" id="drop">0</td></tr>
+        <tr><td class="k">rate</td><td class="v" id="hz">–</td></tr>
+      </table>
+      <div class="row" style="margin-top:10px">
+        <button id="led1">LED on</button>
+        <button id="led0">LED off</button>
+      </div>
+    </div>
+    <div class="panel"><div id="log">idle</div></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const enc = new TextEncoder(), dec = new TextDecoder();
+
+/* ---------------------------------------------------------------- 1. OSC */
+class Reader {
+  constructor(b){ this.b=b; this.pos=0;
+                  this.dv=new DataView(b.buffer,b.byteOffset,b.byteLength); }
+  get left(){ return this.b.length - this.pos; }
+  int32(){ const v=this.dv.getInt32(this.pos); this.pos+=4; return v; }
+  float32(){ const v=this.dv.getFloat32(this.pos); this.pos+=4; return v; }
+  float64(){ const v=this.dv.getFloat64(this.pos); this.pos+=8; return v; }
+  int64(){ const v=this.dv.getBigInt64(this.pos); this.pos+=8; return v; }
+  string(){ let e=this.pos; while(e<this.b.length && this.b[e]!==0) e++;
+            const s=dec.decode(this.b.subarray(this.pos,e));
+            this.pos=(e+4)&~3; return s; }
+  blob(){ const n=this.int32();
+          if(n<0||n>this.left){ this.pos=this.b.length; return new Uint8Array(0); }
+          const v=this.b.subarray(this.pos,this.pos+n);
+          this.pos+=(n+3)&~3; return v; }
+}
+
+// Every tag the library can emit. An unknown tag has no known width, so the
+// decoder cannot find the next argument and must stop -- which is why the
+// list has to be complete rather than "the ones this sketch uses today".
+function decodeMessage(bytes){
+  const r=new Reader(bytes), address=r.string(), args=[];
+  if(r.left>0){
+    const tags=r.string();
+    if(tags.startsWith(",")) for(const t of tags.slice(1)){
+      if(t==="i") args.push(r.int32());
+      else if(t==="f") args.push(r.float32());
+      else if(t==="s") args.push(r.string());
+      else if(t==="b") args.push(r.blob());
+      else if(t==="h") args.push(r.int64());
+      else if(t==="d") args.push(r.float64());
+      else if(t==="T") args.push(true);
+      else if(t==="F") args.push(false);
+      else if(t==="N") args.push(null);
+      else if(t==="I") args.push("impulse");
+      else return {address,args};
+    }
+  }
+  return {address,args};
+}
+
+const pad4 = b => { const n=(b.length+3)&~3, o=new Uint8Array(n); o.set(b); return o; };
+
+function encodeMessage(address,args){
+  const parts=[pad4(enc.encode(address+"\0"))];
+  let tags=","; for(const a of args) tags += (typeof a==="string")?"s":"i";
+  parts.push(pad4(enc.encode(tags+"\0")));
+  for(const a of args){
+    if(typeof a==="string") parts.push(pad4(enc.encode(a+"\0")));
+    else { const b=new Uint8Array(4); new DataView(b.buffer).setInt32(0,a|0); parts.push(b); }
+  }
+  const out=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));
+  let o=0; for(const p of parts){ out.set(p,o); o+=p.length; }
+  return out;
+}
+
+/* --------------------------------------------------------------- 2. SLIP */
+const END=0xC0, ESC=0xDB, ESC_END=0xDC, ESC_ESC=0xDD;
+
+function slipEncode(p){
+  const out=[END];
+  for(const b of p){
+    if(b===END) out.push(ESC,ESC_END);
+    else if(b===ESC) out.push(ESC,ESC_ESC);
+    else out.push(b);
+  }
+  out.push(END);
+  return new Uint8Array(out);
+}
+
+class SlipDecoder {
+  constructor(cb){ this.cur=[]; this.esc=false; this.cb=cb; }
+  push(chunk){
+    for(const b of chunk){
+      if(this.esc){ this.cur.push(b===ESC_END?END:b===ESC_ESC?ESC:b); this.esc=false; }
+      else if(b===ESC) this.esc=true;
+      else if(b===END){ if(this.cur.length){ this.cb(new Uint8Array(this.cur)); this.cur=[]; } }
+      else this.cur.push(b);
+    }
+  }
+}
+
+// Never let a SLIP frame land on a multiple of 64: a host that terminates such
+// a transfer with a zero-length packet wedges an ATmega32U4 CDC endpoint for
+// good. This board is not a 32U4, but an extra END closes an empty frame that
+// every SLIP decoder skips, so the insurance is free.
+function padAwayZLP(b){
+  if(b.length % 64 !== 0) return b;
+  const o=new Uint8Array(b.length+1); o.set(b); o[b.length]=END; return o;
+}
+
+/* ------------------------------------------------------------- 3. OLED UI */
+const OW=128, OH=64;
+let oledLines=["","","",""], oledBig="", oledBigMode=false, oledInverted=false;
+
+function drawOled(){
+  const c=$("oled"), ctx=c.getContext("2d"), sx=c.width/OW, sy=c.height/OH;
+  ctx.fillStyle = oledInverted ? "#7fe3ff" : "#04121a";
+  ctx.fillRect(0,0,c.width,c.height);
+  ctx.fillStyle = oledInverted ? "#04121a" : "#7fe3ff";
+  ctx.textBaseline="top";
+  if(oledBigMode){
+    const px=16*sy;
+    ctx.font = `${px}px ${getComputedStyle(document.body).getPropertyValue('--mono')}`;
+    const w=ctx.measureText(oledBig).width;
+    ctx.fillText(oledBig, Math.max(0,(c.width-w)/2), (c.height-px)/2);
+  } else {
+    const px=8*sy;
+    ctx.font = `${px}px ${getComputedStyle(document.body).getPropertyValue('--mono')}`;
+    oledLines.forEach((t,i)=> ctx.fillText(t, 0, i*10*sy));
+  }
+}
+
+/* ------------------------------------------------------------- 4. transport */
+let port=null, writer=null, reader=null, keepReading=false;
+let frames=0, t0=0, lastSeq=null, dropped=0;
+
+function logLine(tag,s){
+  const el=$("log");
+  el.textContent=(tag?tag+" ":"")+s+"\n"+el.textContent;
+  if(el.textContent.length>1500) el.textContent=el.textContent.slice(0,1500);
+}
+
+async function send(address,args){
+  if(!writer) return;
+  await writer.write(padAwayZLP(slipEncode(encodeMessage(address,args))));
+}
+
+function onFrame(payload){
+  let m; try{ m=decodeMessage(payload); }catch{ return; }
+
+  if(m.address==="/xc6"){
+    const [seq,button,ms,buzzing]=m.args;
+    // The sequence counter is the whole point of sending one: a gap here is a
+    // dropped packet, which is otherwise indistinguishable from a quiet board.
+    if(lastSeq!==null && seq>lastSeq+1) dropped += seq-lastSeq-1;
+    lastSeq=seq;
+    $("seq").textContent=seq;
+    $("drop").textContent=dropped;
+    $("bz").textContent = buzzing ? "yes" : "no";
+    $("up").textContent = (ms/1000).toFixed(1)+" s";
+    $("btn").style.background = button ? "var(--accent)" : "var(--panel-2)";
+    frames++; if(!t0) t0=performance.now();
+    const secs=(performance.now()-t0)/1000;
+    if(secs>0.5) $("hz").textContent=(frames/secs).toFixed(1)+" Hz";
+    return;
+  }
+
+  if(m.address==="/hello"){
+    const [name,dok,rok,ledpin]=m.args;
+    $("name").textContent=name??"–";
+    $("dok").textContent = dok ? "present" : "absent";
+    $("dok").style.color = dok ? "var(--rx)" : "var(--err)";
+    $("rok").textContent = rok ? "present" : "absent";
+    logLine("","board: "+m.args.join(" "));
+    return;
+  }
+}
+
+async function readLoop(){
+  const slip=new SlipDecoder(onFrame);
+  while(keepReading){
+    try{
+      const {value,done}=await reader.read();
+      if(done) break;
+      if(value && value.length){
+        slip.push(value);
+        $("rxdot").classList.add("on");
+        clearTimeout(window._rxt);
+        window._rxt=setTimeout(()=>$("rxdot").classList.remove("on"),150);
+      }
+    }catch(e){ logLine("!",String(e)); break; }
+  }
+}
+
+$("connect").onclick = async () => {
+  if(!("serial" in navigator)){
+    logLine("!","Web Serial not available. Use Chrome or Edge over http://localhost.");
+    return;
+  }
+  try{
+    port=await navigator.serial.requestPort();
+    await port.open({ baudRate:115200 });     // native CDC ignores this
+    writer=port.writable.getWriter();
+    reader=port.readable.getReader();
+    keepReading=true; readLoop();
+    $("status").textContent="connected";
+    $("connect").disabled=true; $("disconnect").disabled=false;
+    frames=0; t0=0; lastSeq=null; dropped=0;
+    // ASK for /hello rather than hoping to have caught it. The board sends one
+    // at boot, but that is before the USB device has re-enumerated and this
+    // page has opened the port, so it is always gone.
+    setTimeout(()=>send("/hello",[]),150);
+    logLine("","connected");
+  }catch(e){ logLine("!",String(e)); }
+};
+
+$("disconnect").onclick = async () => {
+  keepReading=false;
+  try{ await reader?.cancel(); reader?.releaseLock(); }catch{}
+  try{ writer?.releaseLock(); }catch{}
+  try{ await port?.close(); }catch{}
+  port=writer=reader=null;
+  $("status").textContent="not connected";
+  $("connect").disabled=false; $("disconnect").disabled=true;
+  logLine("","disconnected");
+};
+
+/* ------------------------------------------------------------- 5. controls */
+const sendText = () => {
+  oledLines=[$("l0").value,$("l1").value,$("l2").value,$("l3").value];
+  oledBigMode=false; drawOled();
+  send("/disp/text", oledLines);
+  logLine("→","/disp/text");
+};
+$("send").onclick=sendText;
+["l0","l1","l2","l3"].forEach(id =>
+  $(id).addEventListener("keydown", e => { if(e.key==="Enter") sendText(); }));
+
+$("sendbig").onclick = () => {
+  oledBig=$("big").value; oledBigMode=true; drawOled();
+  send("/disp/big",[oledBig]);
+  logLine("→","/disp/big "+JSON.stringify(oledBig));
+};
+$("big").addEventListener("keydown", e => { if(e.key==="Enter") $("sendbig").onclick(); });
+
+$("clear").onclick = () => {
+  oledLines=["","","",""]; oledBig=""; oledBigMode=false; drawOled();
+  send("/disp/clear",[]);
+};
+
+$("invert").onclick = () => {
+  oledInverted=!oledInverted; drawOled();
+  send("/disp/invert",[oledInverted?1:0]);
+};
+
+let dur=200;
+$("dur").oninput = e => { dur=parseInt(e.target.value,10); $("durv").textContent=dur; };
+document.querySelectorAll(".chip").forEach(c =>
+  c.onclick = () => { send("/buzz",[parseInt(c.dataset.f,10),dur]);
+                      logLine("→","/buzz "+c.dataset.f+" "+dur); });
+$("chirp").onclick = async () => {
+  for(const f of [523,659,784,1047]){ await send("/buzz",[f,90]); await new Promise(r=>setTimeout(r,100)); }
+};
+$("quiet").onclick = () => send("/buzz",[0,0]);
+$("led1").onclick = () => send("/led",[1]);
+$("led0").onclick = () => send("/led",[0]);
+
+oledLines=["OSC over USB","XIAO ESP32-C6","expansion board",""];
+drawOled();
+</script>
