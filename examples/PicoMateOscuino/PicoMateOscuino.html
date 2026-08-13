@@ -1,0 +1,483 @@
+<meta charset="utf-8">
+<title>DeskPi PicoMate — every sensor, as an instrument</title>
+<style>
+  :root{
+    --pcb:#12100c; --pcb-2:#1a1712; --gold:#c9a227; --gold-2:#8a6f1a;
+    --silk:#e8e4d8; --dim:#8d8778; --bg:#0a0906; --text:#efece2;
+    --live:#7ee787; --warn:#ff7b6b;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:22px;background:
+        radial-gradient(1200px 700px at 50% -10%, #171410 0%, var(--bg) 70%);
+       color:var(--text);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif}
+  h1{font-size:19px;margin:0 0 3px;letter-spacing:.2px}
+  p.lede{color:var(--dim);margin:0 0 16px;max-width:78ch;font-size:14px}
+  code{font-family:var(--mono);font-size:.9em;color:var(--gold)}
+
+  .bar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+  button{background:#221e18;color:var(--text);border:1px solid #3a3227;
+         border-radius:7px;padding:8px 14px;font-size:14px;cursor:pointer}
+  button:hover:not(:disabled){border-color:var(--gold)}
+  button:disabled{opacity:.4;cursor:default}
+  button.primary{background:var(--gold);color:#1a1400;border-color:var(--gold);font-weight:650}
+  .dot{width:9px;height:9px;border-radius:50%;background:#3a3227;display:inline-block;
+       margin-right:7px;vertical-align:middle}
+  .dot.on{background:var(--live);box-shadow:0 0 8px var(--live)}
+
+  /* the board itself: a dark PCB with gold pads, laid out like the real one */
+  .board{background:linear-gradient(160deg,#16130e,#0e0c09);
+         border:1px solid #2a2419;border-radius:16px;padding:18px;
+         box-shadow:0 18px 50px #0008, inset 0 1px 0 #ffffff08;
+         display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:14px;
+         max-width:1180px;margin:0 auto}
+  @media (max-width:900px){ .board{grid-template-columns:1fr} }
+  .col{display:flex;flex-direction:column;gap:14px}
+
+  /* every module is a white daughter-board with gold castellations */
+  .mod{background:linear-gradient(180deg,#f4f2ea,#e4e1d6);color:#1a1712;
+       border-radius:11px;padding:11px 12px 12px;position:relative;
+       box-shadow:0 3px 0 #0006, inset 0 1px 0 #fff;min-height:96px}
+  .mod.off{filter:grayscale(1) brightness(.55);}
+  .mod::before,.mod::after{content:"";position:absolute;top:16px;bottom:16px;width:7px;
+       background:repeating-linear-gradient(#c9a227 0 7px,transparent 7px 13px);
+       border-radius:2px;opacity:.85}
+  .mod::before{left:-3px} .mod::after{right:-3px}
+  .mod h3{margin:0 0 7px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+          color:#6b6558;font-weight:700;display:flex;justify-content:space-between}
+  .mod h3 em{font-style:normal;font-family:var(--mono);color:#9a9488;font-size:10px}
+  .part{font-family:var(--mono);font-size:9.5px;color:#8a8578}
+  .val{font-family:var(--mono);font-size:22px;font-weight:600;line-height:1.15}
+  .unit{font-size:11px;color:#6b6558;font-weight:400}
+  .sub{font-family:var(--mono);font-size:10.5px;color:#6b6558}
+
+  .dock{background:linear-gradient(180deg,#1e1a14,#141109);border:1px solid #33291a;
+        border-radius:11px;padding:12px;display:flex;flex-direction:column;gap:12px}
+  .dock h3{margin:0;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--gold)}
+  .proto{background:#f4f2ea;border-radius:9px;padding:10px;box-shadow:inset 0 1px 0 #fff,0 3px 0 #0006}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  td{padding:2px 0} td.k{color:var(--dim)} td.v{text-align:right;font-family:var(--mono)}
+  #log{font-family:var(--mono);font-size:11px;color:var(--dim);white-space:pre-wrap;
+       max-height:88px;overflow:auto}
+</style>
+
+<h1>DeskPi PicoMate — every sensor, as an instrument</h1>
+<p class="lede">
+  The board laid out as it physically is: modules down each side, the Pico dock
+  and prototyping area in the middle. Each one is drawn as the thing it is — a
+  compass needle for the magnetometer, a spirit level for the accelerometer, a
+  thermometer and a hygrometer dial, a lamp for the colour sensor. Everything
+  arrives in a single <code>/pm</code> message so the readings share one
+  instant. Web Serial needs <code>http://localhost</code>.
+</p>
+
+<div class="bar">
+  <button id="connect" class="primary">Connect</button>
+  <button id="disconnect" disabled>Disconnect</button>
+  <span><span class="dot" id="rxdot"></span><span id="status">not connected</span></span>
+  <span style="margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--dim)">
+    <span id="hz">–</span> · seq <span id="seq">–</span> · dropped <span id="drop">0</span>
+  </span>
+</div>
+
+<div class="board">
+  <!-- ============ left column ============ -->
+  <div class="col">
+    <div class="mod" id="m-btn">
+      <h3>Push button <em>GP26</em></h3>
+      <svg viewBox="0 0 120 62" style="width:100%;height:58px">
+        <rect x="34" y="12" width="52" height="42" rx="4" fill="#2e2e33"/>
+        <rect x="34" y="12" width="52" height="42" rx="4" fill="none" stroke="#111" opacity=".5"/>
+        <circle id="btn-cap" cx="60" cy="30" r="15" fill="#d94f3d" stroke="#8d2f22" stroke-width="2"/>
+        <circle id="btn-gloss" cx="55" cy="25" r="5" fill="#fff" opacity=".35"/>
+      </svg>
+      <div class="sub" id="btn-txt">released</div>
+      <div class="part">shared with the encoder switch</div>
+    </div>
+
+    <div class="mod" id="m-enc">
+      <h3>Rotary encoder <em>GP7 / GP6</em></h3>
+      <svg viewBox="0 0 120 70" style="width:100%;height:66px">
+        <circle cx="60" cy="35" r="26" fill="#3a3a40" stroke="#17171a" stroke-width="2"/>
+        <circle cx="60" cy="35" r="20" fill="url(#knurl)"/>
+        <defs><linearGradient id="knurl" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#5a5a62"/><stop offset="1" stop-color="#2a2a30"/></linearGradient></defs>
+        <g id="enc-rot"><line x1="60" y1="35" x2="60" y2="17" stroke="#e8e4d8" stroke-width="3" stroke-linecap="round"/></g>
+        <circle cx="60" cy="35" r="3" fill="#1a1a1e"/>
+      </svg>
+      <div class="val" id="enc-val" style="font-size:17px">0<span class="unit"> counts</span></div>
+    </div>
+
+    <div class="mod off" id="m-imu">
+      <h3>Accel + gyro <em>0x6A</em></h3>
+      <!-- a bubble level: the bubble rides the accelerometer's tilt -->
+      <svg viewBox="0 0 200 92" style="width:100%;height:88px">
+        <circle cx="100" cy="46" r="40" fill="#dfe8ea" stroke="#a8b4b6" stroke-width="2"/>
+        <circle cx="100" cy="46" r="26" fill="none" stroke="#9fb6bb" stroke-width="1"/>
+        <circle cx="100" cy="46" r="13" fill="none" stroke="#9fb6bb" stroke-width="1"/>
+        <line x1="60" y1="46" x2="140" y2="46" stroke="#9fb6bb" stroke-width="1"/>
+        <line x1="100" y1="6" x2="100" y2="86" stroke="#9fb6bb" stroke-width="1"/>
+        <circle id="bubble" cx="100" cy="46" r="10" fill="#8fdc9c" opacity=".9" stroke="#4e9c5e"/>
+      </svg>
+      <div class="sub" id="imu-a">– g</div>
+      <div class="sub" id="imu-g">– °/s</div>
+      <div class="part">LSM6DS3TR-C</div>
+    </div>
+
+    <div class="mod off" id="m-mag">
+      <h3>Magnetometer <em>0x30</em></h3>
+      <svg viewBox="0 0 120 96" style="width:100%;height:92px">
+        <circle cx="60" cy="48" r="40" fill="#f7f5ee" stroke="#b9b2a0" stroke-width="2"/>
+        <text x="60" y="16" font-size="10" text-anchor="middle" fill="#6b6558">N</text>
+        <text x="60" y="86" font-size="10" text-anchor="middle" fill="#6b6558">S</text>
+        <text x="16" y="52" font-size="10" text-anchor="middle" fill="#6b6558">W</text>
+        <text x="104" y="52" font-size="10" text-anchor="middle" fill="#6b6558">E</text>
+        <g id="needle">
+          <polygon points="60,18 66,48 60,54 54,48" fill="#d94f3d"/>
+          <polygon points="60,78 54,48 60,42 66,48" fill="#dedad0" stroke="#b9b2a0"/>
+        </g>
+        <circle cx="60" cy="48" r="3.5" fill="#5a5348"/>
+      </svg>
+      <div class="val" id="mag-hdg" style="font-size:17px">–<span class="unit">°</span></div>
+      <div class="sub" id="mag-xyz">– µT</div>
+      <div class="part">MMC5603NJ</div>
+    </div>
+  </div>
+
+  <!-- ============ centre: dock + prototyping area ============ -->
+  <div class="col">
+    <div class="dock">
+      <h3>Pico dock</h3>
+      <table>
+        <tr><td class="k">sketch</td><td class="v" id="name">–</td></tr>
+        <tr><td class="k">i2c1 GP14/15</td><td class="v" id="bus1">–</td></tr>
+        <tr><td class="k">i2c0 GP16/17</td><td class="v" id="bus0">–</td></tr>
+      </table>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="beep">Beep</button>
+        <button id="chirp">Chirp</button>
+        <input type="color" id="rgbpick" value="#ff8800"
+               style="width:44px;height:34px;background:none;border:1px solid #3a3227;border-radius:7px">
+        <button id="rgboff">LED off</button>
+      </div>
+      <div class="proto">
+        <!-- the 204-pad prototyping area: 12 rows A-L x 17 columns -->
+        <canvas id="proto" width="440" height="330" style="width:100%;height:auto"></canvas>
+      </div>
+      <div class="part" style="color:var(--dim);text-align:center">
+        204-pad breakout — 12 rows (A–L) × 17 columns, not wired to anything
+      </div>
+      <div id="log">idle</div>
+    </div>
+  </div>
+
+  <!-- ============ right column ============ -->
+  <div class="col">
+    <div class="mod" id="m-rgb">
+      <h3>RGB LED <em>GP22</em></h3>
+      <svg viewBox="0 0 120 62" style="width:100%;height:58px">
+        <rect x="42" y="14" width="36" height="34" rx="4" fill="#e9e6dc" stroke="#b9b2a0"/>
+        <circle id="ws-glow" cx="60" cy="31" r="17" fill="#ff8800" opacity=".28"/>
+        <rect id="ws-die" x="52" y="23" width="16" height="16" rx="2" fill="#ff8800"/>
+      </svg>
+      <div class="part">WS2812 · one pixel</div>
+    </div>
+
+    <div class="mod" id="m-buz">
+      <h3>Buzzer <em>GP27</em></h3>
+      <svg viewBox="0 0 120 58" style="width:100%;height:54px">
+        <circle cx="46" cy="29" r="18" fill="#26262a" stroke="#111"/>
+        <circle cx="46" cy="29" r="5" fill="#4a4a52"/>
+        <g id="waves" opacity="0">
+          <path d="M70 18 q10 11 0 22" fill="none" stroke="var(--gold-2)" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M80 12 q16 17 0 34" fill="none" stroke="var(--gold-2)" stroke-width="2.5" stroke-linecap="round" opacity=".65"/>
+          <path d="M90 6 q22 23 0 46" fill="none" stroke="var(--gold-2)" stroke-width="2.5" stroke-linecap="round" opacity=".35"/>
+        </g>
+      </svg>
+      <div class="part">passive · driven by tone()</div>
+    </div>
+
+    <div class="mod" id="m-pir">
+      <h3>PIR motion <em>GP28</em></h3>
+      <svg viewBox="0 0 120 62" style="width:100%;height:58px">
+        <ellipse id="pir-dome" cx="60" cy="34" rx="24" ry="20" fill="#f2f0ea" stroke="#c4bdaa" stroke-width="2"/>
+        <ellipse cx="52" cy="26" rx="8" ry="6" fill="#fff" opacity=".7"/>
+        <g id="pir-rays" opacity="0">
+          <line x1="60" y1="10" x2="60" y2="2" stroke="var(--warn)" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="34" y1="18" x2="28" y2="12" stroke="var(--warn)" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="86" y1="18" x2="92" y2="12" stroke="var(--warn)" stroke-width="2.5" stroke-linecap="round"/>
+        </g>
+      </svg>
+      <div class="sub" id="pir-txt">no motion</div>
+      <div class="part">AS312</div>
+    </div>
+
+    <div class="mod off" id="m-ltr">
+      <h3>Colour + light <em>0x53</em></h3>
+      <svg viewBox="0 0 120 56" style="width:100%;height:52px">
+        <defs><radialGradient id="lampg"><stop offset="0" stop-color="#fff" stop-opacity=".95"/>
+          <stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
+        <circle id="lamp-halo" cx="60" cy="28" r="26" fill="url(#lampg)" opacity=".2"/>
+        <circle id="lamp" cx="60" cy="28" r="15" fill="#caa" stroke="#8a8578"/>
+      </svg>
+      <div class="sub" id="ltr-rgb">– / – / –</div>
+      <div class="part">LTR-381RGB-01 · register-level, no Arduino driver exists</div>
+    </div>
+
+    <div class="mod off" id="m-sht">
+      <h3>Temp + humidity <em>0x44</em></h3>
+      <div style="display:flex;gap:10px;align-items:center">
+        <svg viewBox="0 0 34 92" style="height:86px;flex:0 0 34px">
+          <rect x="12" y="6" width="10" height="62" rx="5" fill="#e9e6dc" stroke="#b9b2a0"/>
+          <rect id="merc" x="14" y="50" width="6" height="18" fill="#d94f3d"/>
+          <circle cx="17" cy="74" r="10" fill="#d94f3d" stroke="#8d2f22"/>
+        </svg>
+        <div style="flex:1">
+          <div class="val" id="tmp">–<span class="unit"> °C</span></div>
+          <svg viewBox="0 0 100 54" style="width:100%;height:50px">
+            <path d="M8 46 A42 42 0 0 1 92 46" fill="none" stroke="#ddd8ca" stroke-width="8" stroke-linecap="round"/>
+            <path id="humarc" d="M8 46 A42 42 0 0 1 92 46" fill="none" stroke="#4aa3d8"
+                  stroke-width="8" stroke-linecap="round" stroke-dasharray="132" stroke-dashoffset="132"/>
+            <text x="50" y="44" font-size="15" text-anchor="middle"
+                  font-family="var(--mono)" id="hum" fill="#1a1712">–</text>
+          </svg>
+        </div>
+      </div>
+      <div class="part">SHT30-DIS</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const enc = new TextEncoder(), dec = new TextDecoder();
+
+/* ------------------------------------------------------------------ OSC */
+class Reader{
+  constructor(b){this.b=b;this.pos=0;this.dv=new DataView(b.buffer,b.byteOffset,b.byteLength);}
+  get left(){return this.b.length-this.pos;}
+  int32(){const v=this.dv.getInt32(this.pos);this.pos+=4;return v;}
+  float32(){const v=this.dv.getFloat32(this.pos);this.pos+=4;return v;}
+  float64(){const v=this.dv.getFloat64(this.pos);this.pos+=8;return v;}
+  int64(){const v=this.dv.getBigInt64(this.pos);this.pos+=8;return v;}
+  string(){let e=this.pos;while(e<this.b.length&&this.b[e]!==0)e++;
+    const s=dec.decode(this.b.subarray(this.pos,e));this.pos=(e+4)&~3;return s;}
+  blob(){const n=this.int32();
+    if(n<0||n>this.left){this.pos=this.b.length;return new Uint8Array(0);}
+    const v=this.b.subarray(this.pos,this.pos+n);this.pos+=(n+3)&~3;return v;}
+}
+// Complete tag set. An unknown tag has no known width, so the decoder cannot
+// find the next argument and has to stop -- a missing case silently truncates
+// the message rather than erroring, which is how a blob-carrying display once
+// went permanently blank in this repo.
+function decodeMessage(bytes){
+  const r=new Reader(bytes),address=r.string(),args=[];
+  if(r.left>0){const tags=r.string();
+    if(tags.startsWith(","))for(const t of tags.slice(1)){
+      if(t==="i")args.push(r.int32());
+      else if(t==="f")args.push(r.float32());
+      else if(t==="s")args.push(r.string());
+      else if(t==="b")args.push(r.blob());
+      else if(t==="h")args.push(r.int64());
+      else if(t==="d")args.push(r.float64());
+      else if(t==="T")args.push(true);
+      else if(t==="F")args.push(false);
+      else if(t==="N")args.push(null);
+      else if(t==="I")args.push("impulse");
+      else return {address,args};
+    }}
+  return {address,args};
+}
+const pad4=b=>{const n=(b.length+3)&~3,o=new Uint8Array(n);o.set(b);return o;};
+function encodeMessage(address,args){
+  const parts=[pad4(enc.encode(address+"\0"))];
+  let tags=",";for(const a of args)tags+=(typeof a==="string")?"s":"i";
+  parts.push(pad4(enc.encode(tags+"\0")));
+  for(const a of args){
+    if(typeof a==="string")parts.push(pad4(enc.encode(a+"\0")));
+    else{const b=new Uint8Array(4);new DataView(b.buffer).setInt32(0,a|0);parts.push(b);}
+  }
+  const out=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));
+  let o=0;for(const p of parts){out.set(p,o);o+=p.length;}
+  return out;
+}
+/* ----------------------------------------------------------------- SLIP */
+const END=0xC0,ESC=0xDB,ESC_END=0xDC,ESC_ESC=0xDD;
+function slipEncode(p){const o=[END];
+  for(const b of p){ if(b===END)o.push(ESC,ESC_END);
+    else if(b===ESC)o.push(ESC,ESC_ESC); else o.push(b);} o.push(END);
+  return new Uint8Array(o);}
+class SlipDecoder{
+  constructor(cb){this.cur=[];this.esc=false;this.cb=cb;}
+  push(c){for(const b of c){
+    if(this.esc){this.cur.push(b===ESC_END?END:b===ESC_ESC?ESC:b);this.esc=false;}
+    else if(b===ESC)this.esc=true;
+    else if(b===END){if(this.cur.length){this.cb(new Uint8Array(this.cur));this.cur=[];}}
+    else this.cur.push(b);}}
+}
+// An extra END closes an empty frame that every SLIP decoder skips, so never
+// letting a frame land on a 64-byte multiple costs nothing and keeps the same
+// page usable on a 32U4, whose CDC endpoint wedges on exactly that.
+function padAwayZLP(b){ if(b.length%64!==0)return b;
+  const o=new Uint8Array(b.length+1);o.set(b);o[b.length]=END;return o;}
+
+/* ------------------------------------------------------------ the board */
+function drawProto(){
+  const c=$("proto"),x=c.getContext("2d"),W=c.width,H=c.height;
+  x.clearRect(0,0,W,H);
+  const cols=17,rows=12,mx=26,my=20;
+  const sx=(W-mx*2)/(cols-1), sy=(H-my*2)/(rows-1);
+  x.font="9px ui-monospace,monospace"; x.fillStyle="#8a8578";
+  for(let cIdx=0;cIdx<cols;cIdx++){
+    x.textAlign="center";
+    x.fillText(String(cIdx+1),mx+cIdx*sx,12);
+  }
+  for(let r=0;r<rows;r++){
+    x.textAlign="right";
+    x.fillText("ABCDEFGHIJKL"[r],18,my+r*sy+3);
+    for(let cIdx=0;cIdx<cols;cIdx++){
+      const px=mx+cIdx*sx, py=my+r*sy;
+      x.beginPath(); x.arc(px,py,4.1,0,7); x.fillStyle="#c9a227"; x.fill();
+      x.beginPath(); x.arc(px,py,1.7,0,7); x.fillStyle="#f4f2ea"; x.fill();
+    }
+  }
+}
+drawProto();
+
+let frames=0,t0=0,lastSeq=null,dropped=0;
+const logLine=(t,s)=>{const e=$("log");
+  e.textContent=(t?t+" ":"")+s+"\n"+e.textContent;
+  if(e.textContent.length>1200)e.textContent=e.textContent.slice(0,1200);};
+
+function onFrame(payload){
+  let m; try{m=decodeMessage(payload);}catch{return;}
+
+  if(m.address==="/pm"){
+    const [seq,button,pir,encv,ax,ay,az,gx,gy,gz,mx,my,mz,tempC,hum,ir,gr,rd,bl,lux]=m.args;
+
+    if(lastSeq!==null&&seq>lastSeq+1)dropped+=seq-lastSeq-1;
+    lastSeq=seq;
+    $("seq").textContent=seq; $("drop").textContent=dropped;
+    frames++; if(!t0)t0=performance.now();
+    const secs=(performance.now()-t0)/1000;
+    if(secs>0.5)$("hz").textContent=(frames/secs).toFixed(1)+" Hz";
+
+    // button: the cap actually depresses
+    $("btn-cap").setAttribute("r",button?12:15);
+    $("btn-cap").setAttribute("fill",button?"#a83526":"#d94f3d");
+    $("btn-gloss").setAttribute("opacity",button?".12":".35");
+    $("btn-txt").textContent=button?"pressed":"released";
+
+    // encoder: 4 counts per detent on most encoders; show the shaft angle
+    $("enc-rot").setAttribute("transform",`rotate(${encv*15} 60 35)`);
+    $("enc-val").innerHTML=encv+'<span class="unit"> counts</span>';
+
+    // accelerometer as a bubble level: tilt pushes the bubble off centre
+    const bx=Math.max(-1,Math.min(1,ax)), by=Math.max(-1,Math.min(1,ay));
+    $("bubble").setAttribute("cx",100+bx*30);
+    $("bubble").setAttribute("cy",46+by*30);
+    $("imu-a").textContent=`accel ${ax.toFixed(2)} ${ay.toFixed(2)} ${az.toFixed(2)} g`;
+    $("imu-g").textContent=`gyro ${gx.toFixed(0)} ${gy.toFixed(0)} ${gz.toFixed(0)} °/s`;
+
+    // compass: heading from the horizontal components
+    const hdg=(Math.atan2(my,mx)*180/Math.PI+360)%360;
+    $("needle").setAttribute("transform",`rotate(${-hdg} 60 48)`);
+    $("mag-hdg").innerHTML=hdg.toFixed(0)+'<span class="unit">°</span>';
+    $("mag-xyz").textContent=`${mx.toFixed(1)} ${my.toFixed(1)} ${mz.toFixed(1)} µT`;
+
+    // thermometer: mercury rises 0..40 C; hygrometer arc sweeps 0..100 %
+    const tf=Math.max(0,Math.min(1,tempC/40));
+    $("merc").setAttribute("y",68-tf*60); $("merc").setAttribute("height",tf*60);
+    $("tmp").innerHTML=tempC.toFixed(1)+'<span class="unit"> °C</span>';
+    $("hum").textContent=hum.toFixed(0)+"%";
+    $("humarc").setAttribute("stroke-dashoffset",132-Math.max(0,Math.min(1,hum/100))*132);
+
+    // colour sensor: paint the lamp with the actual measured RGB ratio
+    const mxv=Math.max(rd,gr,bl,1);
+    const cr=Math.round(255*rd/mxv),cg=Math.round(255*gr/mxv),cb=Math.round(255*bl/mxv);
+    // lux comes from the library's own conversion, so the halo tracks real
+    // illuminance rather than a raw-count guess; 400 lx is ordinary indoors
+    const lum=Math.max(0,Math.min(1,lux/400));
+    $("lamp").setAttribute("fill",`rgb(${cr},${cg},${cb})`);
+    $("lamp-halo").setAttribute("opacity",(0.12+lum*0.75).toFixed(2));
+    $("ltr-rgb").textContent=`${lux} lx · R ${rd} G ${gr} B ${bl} · IR ${ir}`;
+
+    // PIR
+    $("pir-rays").setAttribute("opacity",pir?"1":"0");
+    $("pir-dome").setAttribute("fill",pir?"#ffe9e4":"#f2f0ea");
+    $("pir-txt").textContent=pir?"MOTION":"no motion";
+    return;
+  }
+
+  if(m.address==="/hello"){
+    const [name,imu,mag,sht,ltr,oled]=m.args;
+    $("name").textContent=name??"–";
+    // Grey out a module that is not answering rather than drawing zeros for it
+    const set=(id,ok)=>$(id).classList.toggle("off",!ok);
+    set("m-imu",imu); set("m-mag",mag); set("m-sht",sht); set("m-ltr",ltr);
+    const n=[imu,mag,sht,ltr].filter(Boolean).length;
+    $("bus1").textContent=n+" of 4 sensors";
+    $("bus0").textContent=oled?"OLED 0x3C":"absent";
+    logLine("","board: "+m.args.join(" "));
+    return;
+  }
+}
+
+/* -------------------------------------------------------------- serial */
+let port=null,writer=null,reader=null,keep=false;
+async function send(a,args){ if(writer) await writer.write(padAwayZLP(slipEncode(encodeMessage(a,args)))); }
+
+async function readLoop(){
+  const slip=new SlipDecoder(onFrame);
+  while(keep){
+    try{
+      const {value,done}=await reader.read();
+      if(done)break;
+      if(value&&value.length){ slip.push(value);
+        $("rxdot").classList.add("on"); clearTimeout(window._t);
+        window._t=setTimeout(()=>$("rxdot").classList.remove("on"),140);}
+    }catch(e){ logLine("!",String(e)); break; }
+  }
+}
+$("connect").onclick=async()=>{
+  if(!("serial" in navigator)){logLine("!","Web Serial needs Chrome/Edge on http://localhost");return;}
+  try{
+    port=await navigator.serial.requestPort();
+    await port.open({baudRate:115200});
+    writer=port.writable.getWriter(); reader=port.readable.getReader();
+    keep=true; readLoop();
+    $("status").textContent="connected";
+    $("connect").disabled=true; $("disconnect").disabled=false;
+    frames=0;t0=0;lastSeq=null;dropped=0;
+    // Ask for /hello. The board sends one at boot, but USB re-enumerates after
+    // reset and this page opens the port later, so that one is always gone.
+    setTimeout(()=>send("/hello",[]),150);
+  }catch(e){logLine("!",String(e));}
+};
+$("disconnect").onclick=async()=>{
+  keep=false;
+  try{await reader?.cancel();reader?.releaseLock();}catch{}
+  try{writer?.releaseLock();}catch{}
+  try{await port?.close();}catch{}
+  port=writer=reader=null;
+  $("status").textContent="not connected";
+  $("connect").disabled=false;$("disconnect").disabled=true;
+};
+
+/* ------------------------------------------------------------ controls */
+function buzz(f,ms){
+  send("/pm/buzz",[f,ms]);
+  $("waves").setAttribute("opacity","1");
+  setTimeout(()=>$("waves").setAttribute("opacity","0"),ms);
+}
+$("beep").onclick=()=>buzz(1047,180);
+$("chirp").onclick=async()=>{ for(const f of [523,659,784,1047]){ buzz(f,90); await new Promise(r=>setTimeout(r,100)); } };
+$("rgbpick").oninput=e=>{
+  const h=e.target.value, r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);
+  send("/pm/rgb",[r,g,b]);
+  $("ws-die").setAttribute("fill",h); $("ws-glow").setAttribute("fill",h);
+  $("ws-glow").setAttribute("opacity",".45");
+};
+$("rgboff").onclick=()=>{ send("/pm/rgb",[0,0,0]);
+  $("ws-die").setAttribute("fill","#3a3a40"); $("ws-glow").setAttribute("opacity","0"); };
+</script>
