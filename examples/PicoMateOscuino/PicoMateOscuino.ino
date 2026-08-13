@@ -29,14 +29,15 @@
 // that claims to tell the two apart.
 //
 // Outbound
-//   /hello ,siiiii  name + a found flag per I2C sensor, so the page hides
+//   /hello ,siiiiii name + a found flag per sensor, so the page hides
 //                   panels for anything absent instead of drawing zeros
 //   /pm ,iiii ffffff fff ff iiiii
 //        seq, button, pir, encoder,
 //        ax ay az (g), gx gy gz (dps),
 //        mx my mz (uT),
 //        tempC, humidity (%),
-//        ir, green, red, blue (counts), lux
+//        ir, green, red, blue (counts), lux,
+//        micRms, micPeak (full scale, 0..32767)
 //
 //   One message, sampled in one pass, so every value belongs to the same
 //   instant -- with a bundle of separate messages the IMU and the light
@@ -57,10 +58,10 @@
 // R/G/B channel counts read very low at the library's default gain while lux
 // is sensible, so treat the raw colour ratio as uncalibrated.
 //
-// NOT IMPLEMENTED, and deliberately not faked: the ZTS6531S PDM microphone
-// (GP9 clock, GP8 data). It needs the core's PDM library and a decimation
-// path of its own; nothing here reports a microphone level, rather than
-// reporting a plausible-looking zero.
+// The ZTS6531S PDM microphone (GP9 clock, GP8 data) uses the arduino-pico
+// core's own PDM library -- PIO-based, so any pin pair works and no
+// SAMD/ESP32-specific driver is needed. Its callback fires from an interrupt,
+// so the ISR only copies; the arithmetic happens in loop().
 #include <Wire.h>
 #include <Adafruit_LSM6DS3TRC.h>
 #include <Adafruit_MMC56x3.h>
@@ -69,6 +70,7 @@
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_NeoPixel.h>
 #include <Arduino_LTR381RGB.h>
+#include <PDM.h>
 
 #include <OSCBundle.h>
 #include <OSCMessage.h>
@@ -87,6 +89,9 @@ SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 #define PIN_PIR    28      // AS312, active HIGH
 #define PIN_RGB    22      // WS2812, one pixel
 #define PIN_BUZZ   27      // passive, PWM
+#define PIN_MIC_CLK 9      // ZTS6531S PDM
+#define PIN_MIC_DIN 8
+#define MIC_RATE   16000
 
 #define ADDR_IMU  0x6A
 #define ADDR_MAG  0x30
@@ -110,6 +115,27 @@ static int32_t  seq = 0;
 static uint32_t reportMs = 50, buzzUntil = 0;
 static volatile int32_t encPos = 0;
 static char lines[4][22] = { "PicoMate", "OSC over USB", "", "" };
+
+// ---- PDM microphone --------------------------------------------------------
+// The scaling here is the PyBadge microphone's lessons applied up front rather
+// than rediscovered: accumulate squares in uint64 (a pre-shift such as
+// (v>>5)^2 silently zeroes a quiet room), divide in float (integer division
+// truncates a quiet mean-square to 1), and send rms and peak at FULL SCALE so
+// the page can render dBFS instead of a linear bar that pins everything short
+// of a shout against the left stop.
+static bool     micOK = false;
+static int16_t  micBuf[512];
+static volatile int  micSamples = 0;
+static volatile bool micReady = false;
+static int32_t  micRms = 0, micPeak = 0;
+
+static void micISR() {
+  const int avail = PDM.available();
+  if (avail <= 0 || micReady) return;              // still holding a frame
+  const int n = PDM.read(micBuf, avail > (int) sizeof micBuf ? (int) sizeof micBuf : avail);
+  micSamples = n / (int) sizeof(int16_t);
+  micReady = true;
+}
 
 static bool present(TwoWire &w, uint8_t a) {
   w.beginTransmission(a);
@@ -166,7 +192,8 @@ static void routeRate(OSCMessage &m) {
 
 static void sendHello() {
   OSCMessage h("/hello");
-  h.add("PicoMateOscuino").add(imuOK).add(magOK).add(shtOK).add(ltrOK).add(oledOK);
+  h.add("PicoMateOscuino").add(imuOK).add(magOK).add(shtOK).add(ltrOK)
+   .add(oledOK).add(micOK);
   SLIPSerial.beginPacket(); h.send(SLIPSerial); SLIPSerial.endPacket();
 }
 static void routeHello(OSCMessage &) { sendHello(); }
@@ -199,6 +226,11 @@ void setup() {
   // looks exactly like an unplugged module. It must also run AFTER the
   // Wire1 setters, because its begin() calls _wire->begin() itself.
   if (present(Wire1, ADDR_LTR)) ltrOK = (ltr.begin() != 0);
+
+  PDM.setCLK(PIN_MIC_CLK);
+  PDM.setDIN(PIN_MIC_DIN);
+  PDM.onReceive(micISR);
+  micOK = PDM.begin(1, MIC_RATE) != 0;              // 1 = mono
 
   if (present(Wire, ADDR_OLED))
     oledOK = oled.begin(SSD1306_SWITCHCAPVCC, ADDR_OLED);
@@ -258,6 +290,23 @@ void loop() {
   int ir = 0, gr = 0, rd = 0, bl = 0, rawlux = 0, lux = 0;
   if (ltrOK) ltr.readAllSensors(rd, gr, bl, rawlux, lux, ir);
 
+  if (micReady) {
+    const int n = micSamples;
+    uint64_t sumsq = 0;
+    int32_t  pk = 0;
+    for (int i = 0; i < n; i++) {
+      const int32_t v = micBuf[i];
+      sumsq += (uint32_t)(v * v);
+      const int32_t a = v < 0 ? -v : v;
+      if (a > pk) pk = a;
+    }
+    micReady = false;                               // release for the next ISR
+    if (n > 0) {
+      micRms  = (int32_t) sqrtf((float) sumsq / (float) n);
+      micPeak = pk;
+    }
+  }
+
   OSCMessage m("/pm");
   m.add((intOSC_t) seq++)
    .add((intOSC_t) (digitalRead(PIN_BTN) == LOW ? 1 : 0))
@@ -269,6 +318,7 @@ void loop() {
    .add(tempC).add(humid)
    .add((intOSC_t) ir).add((intOSC_t) gr)
    .add((intOSC_t) rd).add((intOSC_t) bl)
-   .add((intOSC_t) lux);
+   .add((intOSC_t) lux)
+   .add((intOSC_t) micRms).add((intOSC_t) micPeak);
   SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
 }

@@ -224,6 +224,31 @@
       <div class="part">LTR-381RGB-01 · register-level, no Arduino driver exists</div>
     </div>
 
+    <div class="mod off" id="m-mic">
+      <h3>Microphone <em>GP9 / GP8</em></h3>
+      <svg viewBox="0 0 120 62" style="width:100%;height:58px">
+        <rect x="46" y="8" width="28" height="34" rx="14" fill="#3a3a40" stroke="#17171a"/>
+        <g fill="#5a5a62">
+          <circle cx="55" cy="17" r="1.6"/><circle cx="60" cy="17" r="1.6"/><circle cx="65" cy="17" r="1.6"/>
+          <circle cx="55" cy="24" r="1.6"/><circle cx="60" cy="24" r="1.6"/><circle cx="65" cy="24" r="1.6"/>
+          <circle cx="55" cy="31" r="1.6"/><circle cx="60" cy="31" r="1.6"/><circle cx="65" cy="31" r="1.6"/>
+        </g>
+        <line x1="60" y1="42" x2="60" y2="54" stroke="#3a3a40" stroke-width="3"/>
+        <line x1="48" y1="54" x2="72" y2="54" stroke="#3a3a40" stroke-width="3" stroke-linecap="round"/>
+        <!-- VU needle: swings with dBFS, the way a real meter does -->
+        <g id="vu" transform="rotate(0 100 50)"></g>
+      </svg>
+      <svg viewBox="0 0 200 46" style="width:100%;height:44px">
+        <path d="M14 40 A86 86 0 0 1 186 40" fill="none" stroke="#ddd8ca" stroke-width="3"/>
+        <g id="vu-needle">
+          <line x1="100" y1="40" x2="100" y2="8" stroke="#d94f3d" stroke-width="2.5" stroke-linecap="round"/>
+        </g>
+        <circle cx="100" cy="40" r="4" fill="#5a5348"/>
+      </svg>
+      <div class="sub" id="mic-txt">– dBFS</div>
+      <div class="part">ZTS6531S PDM · core PDM library (PIO)</div>
+    </div>
+
     <div class="mod off" id="m-sht">
       <h3>Temp + humidity <em>0x44</em></h3>
       <div style="display:flex;gap:10px;align-items:center">
@@ -353,7 +378,7 @@ function onFrame(payload){
   let m; try{m=decodeMessage(payload);}catch{return;}
 
   if(m.address==="/pm"){
-    const [seq,button,pir,encv,ax,ay,az,gx,gy,gz,mx,my,mz,tempC,hum,ir,gr,rd,bl,lux]=m.args;
+    const [seq,button,pir,encv,ax,ay,az,gx,gy,gz,mx,my,mz,tempC,hum,ir,gr,rd,bl,lux,mrms,mpeak]=m.args;
 
     if(lastSeq!==null&&seq>lastSeq+1)dropped+=seq-lastSeq-1;
     lastSeq=seq;
@@ -402,6 +427,17 @@ function onFrame(payload){
     $("lamp-halo").setAttribute("opacity",(0.12+lum*0.75).toFixed(2));
     $("ltr-rgb").textContent=`${lux} lx · R ${rd} G ${gr} B ${bl} · IR ${ir}`;
 
+    // microphone: a real VU meter is logarithmic, so the needle rides dBFS
+    // across a 60 dB window. A linear needle would sit pinned at the left,
+    // this mic's own quiet-room floor being around -47 dBFS.
+    if(typeof mrms==="number"){
+      const db = mrms>0 ? 20*Math.log10(mrms/32768) : -90;
+      const t  = Math.max(0,Math.min(1,(db+60)/60));
+      $("vu-needle").setAttribute("transform",`rotate(${-80+t*160} 100 40)`);
+      $("mic-txt").textContent = mrms>0
+        ? `${db.toFixed(1)} dBFS   rms ${mrms}  peak ${mpeak}` : "silent";
+    }
+
     // PIR
     $("pir-rays").setAttribute("opacity",pir?"1":"0");
     $("pir-dome").setAttribute("fill",pir?"#ffe9e4":"#f2f0ea");
@@ -410,11 +446,12 @@ function onFrame(payload){
   }
 
   if(m.address==="/hello"){
-    const [name,imu,mag,sht,ltr,oled]=m.args;
+    const [name,imu,mag,sht,ltr,oled,mic]=m.args;
     $("name").textContent=name??"–";
     // Grey out a module that is not answering rather than drawing zeros for it
     const set=(id,ok)=>$(id).classList.toggle("off",!ok);
     set("m-imu",imu); set("m-mag",mag); set("m-sht",sht); set("m-ltr",ltr);
+    set("m-mic",mic);
     const n=[imu,mag,sht,ltr].filter(Boolean).length;
     $("bus1").textContent=n+" of 4 sensors";
     $("bus0").textContent=oled?"OLED 0x3C":"absent";
