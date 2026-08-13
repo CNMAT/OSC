@@ -3,3 +3,12 @@
 .DS_Store
 *.code-workspace
 __pycache__/
+
+# WiFi credentials never enter this repository.
+#
+# The WiFi examples read SSID and password from an arduino_secrets.h that you
+# create locally; it is ignored here, and .git/hooks/pre-commit refuses any
+# commit that tries to add one anyway. arduino_secrets.h.example is the
+# tracked template and holds placeholders only.
+arduino_secrets.h
+**/arduino_secrets.h

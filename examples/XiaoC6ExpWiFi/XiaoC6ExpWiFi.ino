@@ -72,8 +72,28 @@
 #include <OSCMessage.h>
 
 // ---------------------------------------------------------------------------
-const char *WIFI_SSID = "your-ssid";
-const char *WIFI_PASS = "your-password";
+// CREDENTIALS LIVE OUTSIDE THIS FILE, and outside the repository.
+//
+//     cp arduino_secrets.h.example arduino_secrets.h   # then edit it
+//
+// arduino_secrets.h is in .gitignore and a pre-commit hook rejects any attempt
+// to add one, so a password cannot reach git history even by accident. Editing
+// the placeholders below instead would put your password in a tracked file --
+// don't. __has_include means the sketch still compiles with no secrets file at
+// all, which is what CI and anyone cloning this gets.
+#if defined(__has_include)
+#  if __has_include("arduino_secrets.h")
+#    include "arduino_secrets.h"
+#  endif
+#endif
+
+#ifndef SECRET_SSID
+#define SECRET_SSID "your-ssid"          // placeholder: association will fail
+#define SECRET_PASS "your-password"
+#endif
+
+const char *WIFI_SSID = SECRET_SSID;
+const char *WIFI_PASS = SECRET_PASS;
 // ---------------------------------------------------------------------------
 
 #define OSC_PORT  8000

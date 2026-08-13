@@ -1,0 +1,56 @@
+#!/bin/sh
+# Refuse to commit WiFi credentials.
+#
+# Two independent checks, because .gitignore alone is not a guarantee:
+# `git add -f` overrides it, and a password pasted into some other file is not
+# covered by it at all.
+#
+#   1. no file named arduino_secrets.h may be staged, ever
+#   2. no ADDED line may assign a non-placeholder value to a credential name
+#
+# Placeholders (your-*, CHANGEME, SSID, PASSWORD, network-name, empty string)
+# stay committable so templates and examples still work.
+#
+# PORTABILITY, learned by watching this hook fail open. The first version
+# selected added lines with `grep -E '^\+' | grep -v '^\+\+\+'`. That is not
+# portable: BSD grep rejects an empty alternative like (a|b|) with "empty
+# (sub)expression", and the `grep` on the development machine here is ugrep,
+# which rejects `^\+\+\+` outright ("invalid syntax"). Either way the grep
+# exits non-zero, matches nothing, and the hook silently ALLOWS the commit --
+# a guard that fails open is worse than none, because it is trusted. Both
+# filters are now awk substring comparisons with no regex at all, and the test
+# below actually tries to defeat the hook rather than assuming it works.
+#
+# Hooks are not version-controlled, so a fresh clone has none:
+#   sh tools/install-hooks.sh
+fail=0
+
+secrets=$(git diff --cached --name-only --diff-filter=AM |
+          awk -F/ '$NF == "arduino_secrets.h"')
+if [ -n "$secrets" ]; then
+  echo "pre-commit: refusing to commit a secrets file:"
+  echo "$secrets" | sed 's/^/    /'
+  echo "    unstage it:  git restore --staged <file>"
+  fail=1
+fi
+
+# Added lines only: first char '+', but not the '+++ b/file' header. Substring
+# comparison, not regex -- see the portability note above.
+added=$(git diff --cached -U0 --diff-filter=AM |
+        awk 'substr($0,1,1)=="+" && substr($0,1,3)!="+++"')
+
+if [ -n "$added" ]; then
+  bad=$(printf '%s\n' "$added" |
+        grep -iE '(secret_(ssid|pass)|wifi_(ssid|pass)|ssid|password|passphrase|psk)[[:space:]]*[=:[:space:]]+"[^"]' |
+        grep -viE '"(your-[a-z0-9-]*|changeme|ssid|password|network-name|xxx+)"')
+  if [ -n "$bad" ]; then
+    echo "pre-commit: these staged lines look like real credentials:"
+    echo "$bad" | sed 's/^/    /'
+    echo "    move them into arduino_secrets.h (git-ignored), or if this is a"
+    echo "    false positive:  git commit --no-verify"
+    fail=1
+  fi
+fi
+
+[ "$fail" -eq 0 ] || echo "pre-commit: nothing committed."
+exit $fail
