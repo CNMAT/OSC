@@ -140,6 +140,32 @@ from the ones that exist (PyBadge, XiaoS3Sense, Esplora):
 * Anything unverified ships with a STATUS comment saying exactly what has
   and has not run. The XiaoS3Sense mic block is the template.
 
+## Credentials never enter the repository
+
+A WiFi example needs an SSID and a password, and the safe place for them is
+not the sketch. The pattern here, on the XIAO C6 WiFi example:
+
+* `arduino_secrets.h` holds `SECRET_SSID` / `SECRET_PASS` and is
+  **git-ignored**; `arduino_secrets.h.example` is the tracked template.
+* The sketch pulls it in with `#if __has_include("arduino_secrets.h")` and
+  falls back to placeholders, so it still compiles in CI and for anyone who
+  has not made one.
+* `.git/hooks/pre-commit` (install with `sh tools/install-hooks.sh`) refuses
+  any commit that stages an `arduino_secrets.h`, or that adds a line
+  assigning a non-placeholder value to an ssid/password/passphrase/psk name
+  in *any* file — `.gitignore` alone does not cover `git add -f`, nor a
+  password pasted somewhere else.
+
+**Test the guard by attacking it.** The first version of that hook filtered
+diff lines with `grep -E '^\+' | grep -v '^\+\+\+'`, which is not portable:
+BSD grep rejects an empty alternative in an ERE, and the `grep` on this
+machine is ugrep, which rejects `^\+\+\+` outright. Either way the grep
+exited non-zero, matched nothing, and the hook **allowed** the commit. A
+guard that fails open is worse than no guard, because it gets trusted. Both
+filters are awk substring comparisons now, and the check is five deliberate
+attacks — force-added secrets file, password in a sketch, in a Python
+helper, in a YAML file, plus a control that placeholders still commit.
+
 ## Phase 5 — the web page (demo flow)
 
 `examples/XxxOscuino/XxxOscuino.html`, self-contained, no dependencies.
