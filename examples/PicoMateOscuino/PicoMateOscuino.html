@@ -25,6 +25,29 @@
        margin-right:7px;vertical-align:middle}
   .dot.on{background:var(--live);box-shadow:0 0 8px var(--live)}
 
+  /* The real photograph, cropped in CSS so the source file stays untouched.
+     The PCB occupies x 180-820, y 272-968 of the 1000x1000 original, so the
+     image is scaled to 156.25% and shifted; every hotspot below is then
+     positioned in per-cent of the CROPPED box, which keeps them locked to the
+     modules at any width. */
+  .photo{position:relative;width:100%;max-width:760px;margin:0 auto 18px;
+         aspect-ratio:640/696;overflow:hidden;border-radius:14px;
+         box-shadow:0 18px 50px #0009;background:#000}
+  .photo>img{position:absolute;width:156.25%;left:-28.125%;top:-39.08%;
+             image-rendering:auto}
+  .hs{position:absolute;transform:translate(-50%,-50%);min-width:74px;
+      background:#0b0f14e0;border:1px solid #ffffff26;border-radius:7px;
+      padding:3px 6px;font:600 10.5px/1.25 var(--mono);color:#eaf3ff;
+      text-align:center;backdrop-filter:blur(3px);pointer-events:none;
+      box-shadow:0 3px 10px #0008}
+  .hs .n{display:block;font-weight:400;font-size:8.5px;color:#8fa3b8;
+         letter-spacing:.05em;text-transform:uppercase}
+  .hs.act{pointer-events:auto;cursor:pointer;border-color:var(--gold)}
+  .hs.act:hover{background:#1a1206f0;border-color:#ffd24a}
+  .hs.off{opacity:.35}
+  .hs.hot{border-color:var(--warn);color:#fff}
+  .hs svg{display:block;margin:1px auto 0}
+
   /* the board itself: a dark PCB with gold pads, laid out like the real one */
   .board{background:linear-gradient(160deg,#16130e,#0e0c09);
          border:1px solid #2a2419;border-radius:16px;padding:18px;
@@ -50,6 +73,22 @@
   .val{font-family:var(--mono);font-size:22px;font-weight:600;line-height:1.15}
   .unit{font-size:11px;color:#6b6558;font-weight:400}
   .sub{font-family:var(--mono);font-size:10.5px;color:#6b6558}
+
+  .swatches{display:flex;gap:5px;align-items:center;margin-top:7px;flex-wrap:wrap}
+  .swatches i{width:19px;height:19px;border-radius:50%;cursor:pointer;
+              border:1px solid #00000030;box-shadow:inset 0 1px 0 #ffffff60}
+  .swatches i:hover{transform:scale(1.18)}
+  .swatches input[type=color]{width:26px;height:22px;padding:0;border:1px solid #b9b2a0;
+              border-radius:4px;background:none;cursor:pointer}
+  .keys{display:flex;gap:3px;margin-top:7px}
+  .keys i{flex:1;text-align:center;font:600 10px var(--mono);font-style:normal;
+          background:linear-gradient(#fff,#e6e2d6);border:1px solid #b9b2a0;
+          border-radius:0 0 4px 4px;padding:9px 0 5px;cursor:pointer;color:#3a352c}
+  .keys i:active,.keys i.hit{background:linear-gradient(#c9a227,#a8871a);color:#fff}
+  #glass{background:#04121a;color:#7fe3ff;font:11px/13px var(--mono);
+         border-radius:5px;padding:7px 8px;min-height:62px;outline:none;
+         border:1px solid #0c2733;white-space:pre-wrap;cursor:text}
+  #glass:focus{border-color:var(--gold)}
 
   .dock{background:linear-gradient(180deg,#1e1a14,#141109);border:1px solid #33291a;
         border-radius:11px;padding:12px;display:flex;flex-direction:column;gap:12px}
@@ -78,6 +117,28 @@
   <span style="margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--dim)">
     <span id="hz">–</span> · seq <span id="seq">–</span> · dropped <span id="drop">0</span>
   </span>
+</div>
+
+<div class="photo">
+  <img src="picomate.webp" alt="DeskPi PicoMate">
+
+  <!-- Positions are per-cent of the cropped board, measured off the photo.
+       Read-only sensors just report; actuators carry .act and are clickable
+       exactly where the real part sits. -->
+  <div class="hs" id="h-btn"  style="left:16.1%;top:15.1%"><span class="n">button</span><span id="hv-btn">–</span></div>
+  <div class="hs" id="h-enc"  style="left:16.1%;top:31.6%"><span class="n">encoder</span><span id="hv-enc">–</span></div>
+  <div class="hs" id="h-mic"  style="left:16.1%;top:48.9%"><span class="n">mic</span><span id="hv-mic">–</span></div>
+  <div class="hs" id="h-imu"  style="left:16.1%;top:67.2%"><span class="n">accel/gyro</span><span id="hv-imu">–</span></div>
+  <div class="hs" id="h-mag"  style="left:16.1%;top:84.5%"><span class="n">compass</span><span id="hv-mag">–</span></div>
+
+  <div class="hs act" id="h-rgb" style="left:86.7%;top:14.4%"><span class="n">rgb led</span><span id="hv-rgb">click</span></div>
+  <div class="hs act" id="h-buz" style="left:85.5%;top:31.6%"><span class="n">buzzer</span><span id="hv-buz">click</span></div>
+  <div class="hs" id="h-pir"  style="left:85.6%;top:50.0%"><span class="n">pir</span><span id="hv-pir">–</span></div>
+  <div class="hs" id="h-ltr"  style="left:84.7%;top:67.2%"><span class="n">light</span><span id="hv-ltr">–</span></div>
+  <div class="hs" id="h-sht"  style="left:84.7%;top:84.5%"><span class="n">temp/hum</span><span id="hv-sht">–</span></div>
+
+  <div class="hs act" id="h-oled" style="left:50%;top:85.6%"><span class="n">oled — click to type</span><span id="hv-oled">PicoMate</span></div>
+  <div class="hs" id="h-dock" style="left:50%;top:22.0%"><span class="n">pico dock</span><span id="hv-dock">–</span></div>
 </div>
 
 <div class="board">
@@ -153,13 +214,6 @@
         <tr><td class="k">i2c1 GP14/15</td><td class="v" id="bus1">–</td></tr>
         <tr><td class="k">i2c0 GP16/17</td><td class="v" id="bus0">–</td></tr>
       </table>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button id="beep">Beep</button>
-        <button id="chirp">Chirp</button>
-        <input type="color" id="rgbpick" value="#ff8800"
-               style="width:44px;height:34px;background:none;border:1px solid #3a3227;border-radius:7px">
-        <button id="rgboff">LED off</button>
-      </div>
       <div class="proto">
         <!-- the 204-pad prototyping area: 12 rows A-L x 17 columns -->
         <canvas id="proto" width="440" height="330" style="width:100%;height:auto"></canvas>
@@ -180,7 +234,13 @@
         <circle id="ws-glow" cx="60" cy="31" r="17" fill="#ff8800" opacity=".28"/>
         <rect id="ws-die" x="52" y="23" width="16" height="16" rx="2" fill="#ff8800"/>
       </svg>
-      <div class="part">WS2812 · one pixel</div>
+      <div class="part">WS2812 · one pixel — click a swatch or the wheel</div>
+      <div class="swatches" id="rgbrow">
+        <i data-c="#ff0000"></i><i data-c="#ff8800"></i><i data-c="#ffee00"></i>
+        <i data-c="#00cc44"></i><i data-c="#0088ff"></i><i data-c="#8844ff"></i>
+        <i data-c="#ffffff"></i><i data-c="#000000" title="off"></i>
+        <input type="color" id="rgbpick" value="#ff8800">
+      </div>
     </div>
 
     <div class="mod" id="m-buz">
@@ -194,7 +254,16 @@
           <path d="M90 6 q22 23 0 46" fill="none" stroke="var(--gold-2)" stroke-width="2.5" stroke-linecap="round" opacity=".35"/>
         </g>
       </svg>
-      <div class="part">passive · driven by tone()</div>
+      <div class="part">passive · tone() — click a key, or the cone to stop</div>
+      <div class="keys" id="keyrow">
+        <i data-f="262">C</i><i data-f="294">D</i><i data-f="330">E</i><i data-f="349">F</i>
+        <i data-f="392">G</i><i data-f="440">A</i><i data-f="494">B</i><i data-f="523">C</i>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;margin-top:6px">
+        <span class="part" style="flex:0 0 auto">len</span>
+        <input type="range" id="buzlen" min="40" max="900" value="180" style="flex:1">
+        <span class="part" id="buzlenv" style="flex:0 0 34px">180</span>
+      </div>
     </div>
 
     <div class="mod" id="m-pir">
@@ -222,6 +291,17 @@
       </svg>
       <div class="sub" id="ltr-rgb">– / – / –</div>
       <div class="part">LTR-381RGB-01 · register-level, no Arduino driver exists</div>
+    </div>
+
+    <div class="mod off" id="m-oled">
+      <h3>OLED 128&times;64 <em>0x3C</em></h3>
+      <!-- Editable in place: type on the emulated glass and it goes to the
+           real panel. The board holds the true pixels; this mirrors what was
+           sent, which is why it is the one element here that is not a
+           readback. -->
+      <div id="glass" contenteditable="true" spellcheck="false"
+           title="click and type — Enter sends"></div>
+      <div class="part">SSD1315 on i2c0 · click the glass and type</div>
     </div>
 
     <div class="mod off" id="m-mic">
@@ -438,6 +518,21 @@ function onFrame(payload){
         ? `${db.toFixed(1)} dBFS   rms ${mrms}  peak ${mpeak}` : "silent";
     }
 
+    // the photo overlay, from the same frame -- one decode, two renderings,
+    // so the badges on the board can never disagree with the instruments
+    const hv=(id,t)=>{const e=$(id); if(e) e.textContent=t;};
+    hv("hv-btn", button?"PRESSED":"released");
+    $("h-btn").classList.toggle("hot",!!button);
+    hv("hv-enc", encv+"");
+    hv("hv-imu", `${ax.toFixed(2)} ${ay.toFixed(2)} ${az.toFixed(2)} g`);
+    hv("hv-mag", ((Math.atan2(my,mx)*180/Math.PI+360)%360).toFixed(0)+"\u00b0");
+    hv("hv-sht", `${tempC.toFixed(1)}\u00b0C  ${hum.toFixed(0)}%`);
+    hv("hv-ltr", lux+" lx");
+    hv("hv-pir", pir?"MOTION":"clear");
+    $("h-pir").classList.toggle("hot",!!pir);
+    if(typeof mrms==="number")
+      hv("hv-mic", mrms>0 ? (20*Math.log10(mrms/32768)).toFixed(0)+" dBFS" : "silent");
+
     // PIR
     $("pir-rays").setAttribute("opacity",pir?"1":"0");
     $("pir-dome").setAttribute("fill",pir?"#ffe9e4":"#f2f0ea");
@@ -452,10 +547,15 @@ function onFrame(payload){
     const set=(id,ok)=>$(id).classList.toggle("off",!ok);
     set("m-imu",imu); set("m-mag",mag); set("m-sht",sht); set("m-ltr",ltr);
     set("m-mic",mic);
+    const hv2=(id,t)=>{const e=$(id); if(e) e.textContent=t;};
     const n=[imu,mag,sht,ltr].filter(Boolean).length;
     $("bus1").textContent=n+" of 4 sensors";
     $("bus0").textContent=oled?"OLED 0x3C":"absent";
     logLine("","board: "+m.args.join(" "));
+    const hoff=(id,ok)=>$(id).classList.toggle("off",!ok);
+    hoff("h-imu",imu); hoff("h-mag",mag); hoff("h-sht",sht);
+    hoff("h-ltr",ltr); hoff("h-mic",mic); hoff("h-oled",oled);
+    hv2("hv-dock", n+"/4 + OLED");
     return;
   }
 }
@@ -501,20 +601,73 @@ $("disconnect").onclick=async()=>{
   $("connect").disabled=false;$("disconnect").disabled=true;
 };
 
-/* ------------------------------------------------------------ controls */
+/* --------------------------- controls, at the point each thing displays */
+// Every actuator is driven from its own module rather than from a control
+// strip elsewhere: the LED is set by touching the LED, the buzzer by playing
+// its keys, the screen by typing on the glass.
+
+function setRGB(hex){
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  send("/pm/rgb",[r,g,b]);
+  const dark = (r+g+b) < 24;
+  $("ws-die").setAttribute("fill",dark?"#3a3a40":hex);
+  $("ws-glow").setAttribute("fill",hex);
+  $("ws-glow").setAttribute("opacity",dark?"0":".5");
+  $("rgbpick").value=hex;
+}
+document.querySelectorAll("#rgbrow i").forEach(sw=>{
+  sw.style.background=sw.dataset.c;
+  sw.onclick=()=>setRGB(sw.dataset.c);
+});
+$("rgbpick").oninput=e=>setRGB(e.target.value);
+
+let buzLen=180;
+$("buzlen").oninput=e=>{buzLen=+e.target.value; $("buzlenv").textContent=buzLen;};
 function buzz(f,ms){
   send("/pm/buzz",[f,ms]);
   $("waves").setAttribute("opacity","1");
-  setTimeout(()=>$("waves").setAttribute("opacity","0"),ms);
+  clearTimeout(window._w);
+  window._w=setTimeout(()=>$("waves").setAttribute("opacity","0"),ms);
 }
-$("beep").onclick=()=>buzz(1047,180);
-$("chirp").onclick=async()=>{ for(const f of [523,659,784,1047]){ buzz(f,90); await new Promise(r=>setTimeout(r,100)); } };
-$("rgbpick").oninput=e=>{
-  const h=e.target.value, r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);
-  send("/pm/rgb",[r,g,b]);
-  $("ws-die").setAttribute("fill",h); $("ws-glow").setAttribute("fill",h);
-  $("ws-glow").setAttribute("opacity",".45");
+document.querySelectorAll("#keyrow i").forEach(k=>{
+  k.onclick=()=>{ buzz(+k.dataset.f,buzLen);
+    k.classList.add("hit"); setTimeout(()=>k.classList.remove("hit"),buzLen); };
+});
+$("waves").parentNode.style.cursor="pointer";
+$("waves").parentNode.onclick=e=>{ if(e.target.tagName!=="path") send("/pm/buzz",[0,0]); };
+
+// The OLED: type on the glass, and each line becomes one /pm/oled argument.
+// Debounced so a burst of keystrokes is not a burst of I2C redraws.
+let oledT=null;
+const pushOled=()=>{
+  const rows=$("glass").innerText.replace(/\u00a0/g," ").split("\n").slice(0,4);
+  while(rows.length<4) rows.push("");
+  send("/pm/oled",rows.map(r=>r.slice(0,21)));
 };
-$("rgboff").onclick=()=>{ send("/pm/rgb",[0,0,0]);
-  $("ws-die").setAttribute("fill","#3a3a40"); $("ws-glow").setAttribute("opacity","0"); };
+$("glass").addEventListener("input",()=>{ clearTimeout(oledT); oledT=setTimeout(pushOled,260); });
+$("glass").addEventListener("keydown",e=>{
+  if(e.key==="Enter" && e.shiftKey===false && $("glass").innerText.split("\n").length>=4){
+    e.preventDefault(); pushOled();
+  }
+});
+$("glass").innerText="PicoMate\nOSC over USB";
+
+// Clicking a part ON THE PHOTO drives it, and scrolls its full instrument
+// into view -- the badge is the control, the module below is the detail.
+const reveal=id=>{const e=$(id); e.scrollIntoView({block:"center",behavior:"smooth"});
+                  e.style.outline="2px solid var(--gold)";
+                  setTimeout(()=>e.style.outline="",900);};
+let hue=0;
+$("h-rgb").onclick=()=>{        // step around the wheel on each click
+  hue=(hue+40)%360;
+  const f=n=>{const k=(n+hue/30)%12, c=Math.min(k-3,9-k,1);
+              return Math.round(255*(1-Math.max(-1,Math.min(c,1)))*0.5+128*0).toString(16).padStart(2,"0");};
+  const hex="#"+f(0)+f(8)+f(4);
+  setRGB(hex); $("hv-rgb").textContent=hex; reveal("m-rgb");
+};
+$("h-buz").onclick=()=>{ buzz(880,buzLen); $("hv-buz").textContent="880 Hz"; reveal("m-buz"); };
+$("h-oled").onclick=()=>{ reveal("m-oled"); $("glass").focus(); };
+// keep the badge showing what the glass says
+new MutationObserver(()=>{ $("hv-oled").textContent=($("glass").innerText.split("\n")[0]||"").slice(0,14)||"(blank)"; })
+  .observe($("glass"),{childList:true,subtree:true,characterData:true});
 </script>
