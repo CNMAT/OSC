@@ -35,7 +35,11 @@
          box-shadow:0 18px 50px #0009;background:#000}
   .photo>img{position:absolute;width:156.25%;left:-28.125%;top:-39.08%;
              image-rendering:auto}
-  .hs{position:absolute;transform:translate(-50%,-50%);min-width:74px;
+  /* Anchored by the TOP edge, not the centre: each badge is placed at the
+     module's lower edge so the numbers read underneath the part rather than
+     covering it. The modules are about 11% of the board tall, so the tops
+     below are the module centres plus half of that. */
+  .hs{position:absolute;transform:translate(-50%,0);min-width:74px;
       background:#0b0f14e0;border:1px solid #ffffff26;border-radius:7px;
       padding:3px 6px;font:600 10.5px/1.25 var(--mono);color:#eaf3ff;
       text-align:center;backdrop-filter:blur(3px);pointer-events:none;
@@ -43,6 +47,11 @@
   .hs .n{display:block;font-weight:400;font-size:8.5px;color:#8fa3b8;
          letter-spacing:.05em;text-transform:uppercase}
   .hs.act{pointer-events:auto;cursor:pointer;border-color:var(--gold)}
+  /* the input covers the whole badge, invisibly, so the badge IS the swatch */
+  .hs input[type=color]{position:absolute;inset:0;width:100%;height:100%;
+      opacity:0;cursor:pointer;border:none;padding:0;background:none}
+  .hs .sw{display:block;height:5px;border-radius:3px;margin-top:3px;
+      background:#ff8800;box-shadow:inset 0 0 0 1px #0006}
   .hs.act:hover{background:#1a1206f0;border-color:#ffd24a}
   .hs.off{opacity:.35}
   .hs.hot{border-color:var(--warn);color:#fff}
@@ -125,20 +134,29 @@
   <!-- Positions are per-cent of the cropped board, measured off the photo.
        Read-only sensors just report; actuators carry .act and are clickable
        exactly where the real part sits. -->
-  <div class="hs" id="h-btn"  style="left:16.1%;top:15.1%"><span class="n">button</span><span id="hv-btn">–</span></div>
-  <div class="hs" id="h-enc"  style="left:16.1%;top:31.6%"><span class="n">encoder</span><span id="hv-enc">–</span></div>
-  <div class="hs" id="h-mic"  style="left:16.1%;top:48.9%"><span class="n">mic</span><span id="hv-mic">–</span></div>
-  <div class="hs" id="h-imu"  style="left:16.1%;top:67.2%"><span class="n">accel/gyro</span><span id="hv-imu">–</span></div>
-  <div class="hs" id="h-mag"  style="left:16.1%;top:84.5%"><span class="n">compass</span><span id="hv-mag">–</span></div>
+  <div class="hs" id="h-btn"  style="left:16.1%;top:20.7%"><span class="n">button</span><span id="hv-btn">–</span></div>
+  <div class="hs" id="h-enc"  style="left:16.1%;top:37.2%"><span class="n">encoder</span><span id="hv-enc">–</span></div>
+  <div class="hs" id="h-mic"  style="left:16.1%;top:54.5%"><span class="n">mic</span><span id="hv-mic">–</span></div>
+  <div class="hs" id="h-imu"  style="left:16.1%;top:72.8%"><span class="n">accel/gyro</span><span id="hv-imu">–</span></div>
+  <div class="hs" id="h-mag"  style="left:16.1%;top:90.1%"><span class="n">compass</span><span id="hv-mag">–</span></div>
 
-  <div class="hs act" id="h-rgb" style="left:86.7%;top:14.4%"><span class="n">rgb led</span><span id="hv-rgb">click</span></div>
-  <div class="hs act" id="h-buz" style="left:85.5%;top:31.6%"><span class="n">buzzer</span><span id="hv-buz">click</span></div>
-  <div class="hs" id="h-pir"  style="left:85.6%;top:50.0%"><span class="n">pir</span><span id="hv-pir">–</span></div>
-  <div class="hs" id="h-ltr"  style="left:84.7%;top:67.2%"><span class="n">light</span><span id="hv-ltr">–</span></div>
-  <div class="hs" id="h-sht"  style="left:84.7%;top:84.5%"><span class="n">temp/hum</span><span id="hv-sht">–</span></div>
+  <!-- The colour well is the badge: clicking anywhere on it opens the native
+       picker right at the LED, and every change streams straight to the pixel.
+       An earlier version only stepped through hues on click, which is not a
+       picker and did not look like one either. -->
+  <div class="hs act" id="h-rgb" style="left:86.7%;top:20.0%">
+    <span class="n">rgb led — click</span>
+    <span id="hv-rgb">#ff8800</span>
+    <span class="sw" id="hrgbsw"></span>
+    <input type="color" id="hrgbpick" value="#ff8800">
+  </div>
+  <div class="hs act" id="h-buz" style="left:85.5%;top:37.2%"><span class="n">buzzer</span><span id="hv-buz">click</span></div>
+  <div class="hs" id="h-pir"  style="left:85.6%;top:55.6%"><span class="n">pir</span><span id="hv-pir">–</span></div>
+  <div class="hs" id="h-ltr"  style="left:84.7%;top:72.8%"><span class="n">light</span><span id="hv-ltr">–</span></div>
+  <div class="hs" id="h-sht"  style="left:84.7%;top:90.1%"><span class="n">temp/hum</span><span id="hv-sht">–</span></div>
 
-  <div class="hs act" id="h-oled" style="left:50%;top:85.6%"><span class="n">oled — click to type</span><span id="hv-oled">PicoMate</span></div>
-  <div class="hs" id="h-dock" style="left:50%;top:22.0%"><span class="n">pico dock</span><span id="hv-dock">–</span></div>
+  <div class="hs act" id="h-oled" style="left:50%;top:91.2%"><span class="n">oled — click to type</span><span id="hv-oled">PicoMate</span></div>
+  <div class="hs" id="h-dock" style="left:50%;top:27.6%"><span class="n">pico dock</span><span id="hv-dock">–</span></div>
 </div>
 
 <div class="board">
@@ -614,6 +632,8 @@ function setRGB(hex){
   $("ws-glow").setAttribute("fill",hex);
   $("ws-glow").setAttribute("opacity",dark?"0":".5");
   $("rgbpick").value=hex;
+  const hp=$("hrgbpick"); if(hp){ hp.value=hex;
+    $("hv-rgb").textContent=hex; $("hrgbsw").style.background=hex; }
 }
 document.querySelectorAll("#rgbrow i").forEach(sw=>{
   sw.style.background=sw.dataset.c;
@@ -657,15 +677,14 @@ $("glass").innerText="PicoMate\nOSC over USB";
 const reveal=id=>{const e=$(id); e.scrollIntoView({block:"center",behavior:"smooth"});
                   e.style.outline="2px solid var(--gold)";
                   setTimeout(()=>e.style.outline="",900);};
-let hue=0;
-$("h-rgb").onclick=()=>{        // step around the wheel on each click
-  hue=(hue+40)%360;
-  const f=n=>{const k=(n+hue/30)%12, c=Math.min(k-3,9-k,1);
-              return Math.round(255*(1-Math.max(-1,Math.min(c,1)))*0.5+128*0).toString(16).padStart(2,"0");};
-  const hex="#"+f(0)+f(8)+f(4);
-  setRGB(hex); $("hv-rgb").textContent=hex; reveal("m-rgb");
+// live while dragging the picker, so the real LED tracks the wheel
+$("hrgbpick").oninput=e=>{
+  const hex=e.target.value;
+  setRGB(hex);
+  $("hv-rgb").textContent=hex;
+  $("hrgbsw").style.background=hex;
 };
-$("h-buz").onclick=()=>{ buzz(880,buzLen); $("hv-buz").textContent="880 Hz"; reveal("m-buz"); };
+$("h-buz").onclick=()=>{ buzz(880,buzLen); $("hv-buz").textContent="880 Hz  \u266a"; reveal("m-buz"); };
 $("h-oled").onclick=()=>{ reveal("m-oled"); $("glass").focus(); };
 // keep the badge showing what the glass says
 new MutationObserver(()=>{ $("hv-oled").textContent=($("glass").innerText.split("\n")[0]||"").slice(0,14)||"(blank)"; })
