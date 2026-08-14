@@ -65,6 +65,7 @@ families have been characterised on hardware:
 
 | board | chip | ran | found |
 |---|---|---|---|
+| Robotistan Pico Bricks v2.1 | RP2040 (M0+) | `PicoBricksOscuino` end to end: OLED, SHTC3, I²C motor driver, WS2812, LED, button, relay, buzzer, pot, LDR · I²C swept | **The silkscreen is wrong about the OLED** — printed `SDA-GP2 SCL-GP3`, actually **GP4/GP5**; Robotistan's own handbook repeats the error, which comes from their pinout diagram using Pico *physical* pin numbers. Sweep found 0x3C, 0x70, 0x22 on GP4/GP5 and nothing on GP2/GP3 — and 0x70 (SHTC3) + 0x22 (I²C motor driver) identify it as **V2**, which the photo does not: a V2 looks like a V1 until you scan it. Their V2 sketch sets `INPUT_PULLUP` on the button then treats HIGH as pressed; measured, the pin reads LOW under the internal pull-up, so there is an external pull-down and the button is **active HIGH**. GP0 is shared by the IR receiver and `Serial1` TX. To reflash from MicroPython the 1200-baud touch does nothing — send `machine.bootloader()` to its REPL. |
 | DFRobot Beetle RP2040 | RP2040 (M0+) | echo 22/22 · widths 11/11 (int=4 long=4 ll=8 double=8) | First RP2040 ever to run this library on hardware. |
 | Seeed XIAO RP2350 | RP2350 (M33) | echo 22/22 · widths 11/11 · full bench clean incl. compound ×3 and 1100 B lazy-reader bursts (~3.3k f/s) | Predicted clean in advance from TinyUSB's NAK design; measured exactly so. |
 

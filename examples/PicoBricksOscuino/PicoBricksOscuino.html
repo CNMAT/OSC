@@ -1,0 +1,409 @@
+<meta charset="utf-8">
+<title>Pico Bricks — every module over OSC</title>
+<style>
+  :root{
+    --bg:#0a0c10; --panel:#151922; --line:#28303c; --text:#e8edf5; --dim:#8b97a8;
+    --gold:#f2b134; --live:#7ee787; --warn:#ff7b6b; --relay:#57d38c;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:22px;background:radial-gradient(1100px 650px at 50% -10%,#171c26,var(--bg) 70%);
+       color:var(--text);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif}
+  h1{font-size:19px;margin:0 0 3px}
+  p.lede{color:var(--dim);margin:0 0 16px;max-width:80ch;font-size:14px}
+  code{font-family:var(--mono);font-size:.9em;color:var(--gold)}
+  .bar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+  button{background:#1e2430;color:var(--text);border:1px solid var(--line);border-radius:7px;
+         padding:8px 14px;font-size:14px;cursor:pointer}
+  button:hover:not(:disabled){border-color:var(--gold)}
+  button:disabled{opacity:.4;cursor:default}
+  button.primary{background:var(--gold);color:#231a00;border-color:var(--gold);font-weight:650}
+  .dot{width:9px;height:9px;border-radius:50%;background:#333b48;display:inline-block;
+       margin-right:7px;vertical-align:middle}
+  .dot.on{background:var(--live);box-shadow:0 0 8px var(--live)}
+
+  /* Robotistan's product photo, cropped in CSS so the file stays untouched:
+     the PCB occupies x 50-950, y 175-830 of the 1000x1000 original, and the
+     crop runs to y 875 so the lowest row of badges has somewhere to sit.
+     Hotspots
+     are then placed in per-cent of the CROPPED box, so they stay locked to
+     their modules at any width. Each badge is anchored by its TOP edge and
+     sits at the module's lower rim -- the part stays visible, the numbers
+     read underneath it. */
+  .photo{position:relative;width:100%;max-width:820px;margin:0 auto 18px;
+         aspect-ratio:900/700;overflow:hidden;border-radius:14px;
+         box-shadow:0 18px 50px #0009;background:#fff;container-type:inline-size}
+  .photo>img{position:absolute;width:111.1%;left:-5.56%;top:-25.0%}
+  /* Sized in container units so a narrow layout shrinks the badges instead of
+     overflowing the board with them. */
+  .hs{position:absolute;transform:translate(-50%,0);min-width:9.2cqw;max-width:26cqw;
+      background:#0b0f14e6;border:1px solid #ffffff2e;border-radius:6px;
+      padding:2px 5px;font:600 clamp(7px,2.05cqw,11px)/1.2 var(--mono);
+      color:#eaf3ff;text-align:center;backdrop-filter:blur(3px);
+      pointer-events:none;box-shadow:0 3px 10px #0009}
+  .hs .n{display:block;font-weight:400;font-size:clamp(6px,1.6cqw,8.5px);
+         color:#8fa3b8;letter-spacing:.04em;text-transform:uppercase;
+         white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hs.act{pointer-events:auto;cursor:pointer;border-color:var(--gold)}
+  .hs.act:hover{background:#1a1206f2;border-color:#ffd24a}
+  .hs.off{opacity:.35}
+  .hs.hot{border-color:var(--warn);color:#fff}
+  .hs input[type=color]{position:absolute;inset:0;width:100%;height:100%;opacity:0;
+      cursor:pointer;border:none;padding:0;background:none}
+  .hs .sw{display:block;height:5px;border-radius:3px;margin-top:3px;background:#000;
+      box-shadow:inset 0 0 0 1px #0006}
+  .hs .bars{display:block;height:4px;border-radius:2px;margin-top:3px;background:#2a3340}
+  .hs .bars>b{display:block;height:100%;border-radius:2px;background:var(--gold);width:0}
+
+  .strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;
+         max-width:1120px;margin:0 auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .card h3{margin:0 0 8px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+           color:var(--dim);display:flex;justify-content:space-between}
+  .card h3 em{font-style:normal;font-family:var(--mono);color:#5f6b7d}
+  .big{font-family:var(--mono);font-size:22px;font-weight:600}
+  .u{font-size:11px;color:var(--dim);font-weight:400}
+  .keys{display:flex;gap:3px;margin-top:8px}
+  .keys i{flex:1;text-align:center;font:600 10px var(--mono);font-style:normal;
+          background:#232b38;border:1px solid var(--line);border-radius:0 0 4px 4px;
+          padding:9px 0 5px;cursor:pointer}
+  .keys i:hover{border-color:var(--gold)} .keys i.hit{background:var(--gold);color:#231a00}
+  #glass{background:#04121a;color:#7fe3ff;font:11px/13px var(--mono);border-radius:5px;
+         padding:7px 8px;min-height:60px;outline:none;border:1px solid #0c2733;
+         white-space:pre-wrap;cursor:text}
+  #glass:focus{border-color:var(--gold)}
+  .sl{width:100%}
+  #log{font-family:var(--mono);font-size:11px;color:var(--dim);white-space:pre-wrap;
+       max-height:70px;overflow:auto}
+</style>
+
+<h1>Pico Bricks — every module over OSC</h1>
+<p class="lede">
+  Live values sit under the part they come from, and the actuators are the
+  badges: the RGB LED opens a colour picker, the relay toggles, the buzzer
+  plays. Everything arrives in one <code>/pb</code> message so the readings
+  share an instant. Web Serial needs <code>http://localhost</code>.
+  <strong>Note:</strong> this is Robotistan's stock photo — a v2.1 board like
+  yours carries an <code>SHTC3</code> on I²C where the picture shows a blue
+  DHT11, and its motor driver is an I²C slave rather than direct GPIO.
+</p>
+
+<div class="bar">
+  <button id="connect" class="primary">Connect</button>
+  <button id="disconnect" disabled>Disconnect</button>
+  <span><span class="dot" id="rxdot"></span><span id="status">not connected</span></span>
+  <span style="margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--dim)">
+    <span id="hz">–</span> · seq <span id="seq">–</span> · dropped <span id="drop">0</span>
+  </span>
+</div>
+
+<div class="photo">
+  <img src="picobricks.webp" alt="Robotistan Pico Bricks">
+
+  <div class="hs act" id="h-oled" style="left:16.7%;top:20.7%">
+    <span class="n">oled 0x3C — click</span><span id="hv-oled">PicoBricks</span></div>
+
+  <div class="hs act" id="h-rgb" style="left:16.7%;top:42.1%">
+    <span class="n">ws2812 gp6 — click</span><span id="hv-rgb">#000000</span>
+    <span class="sw" id="hrgbsw"></span>
+    <input type="color" id="hrgbpick" value="#ff8800"></div>
+
+  <div class="hs act" id="h-btn" style="left:16.7%;top:57.8%">
+    <span class="n">led gp7 / button gp10</span><span id="hv-btn">–</span></div>
+
+  <div class="hs" id="h-sht" style="left:16.7%;top:72.8%">
+    <span class="n">shtc3 0x70</span><span id="hv-sht">–</span></div>
+
+  <div class="hs act" id="h-relay" style="left:16.7%;top:87.8%">
+    <span class="n">relay gp12 — click</span><span id="hv-relay">open</span></div>
+
+  <div class="hs act" id="h-motor" style="left:86.7%;top:20.7%">
+    <span class="n">motor 0x22 — click</span><span id="hv-motor">stopped</span></div>
+
+  <div class="hs" id="h-ir" style="left:86.7%;top:42.1%">
+    <span class="n">ir gp0 · uart tx</span><span id="hv-ir">shared pin</span></div>
+
+  <div class="hs act" id="h-buz" style="left:86.7%;top:57.8%">
+    <span class="n">buzzer gp20 — click</span><span id="hv-buz">silent</span></div>
+
+  <div class="hs" id="h-ldr" style="left:86.7%;top:72.8%">
+    <span class="n">ldr gp27</span><span id="hv-ldr">–</span>
+    <span class="bars"><b id="ldrbar"></b></span></div>
+
+  <div class="hs" id="h-pot" style="left:86.7%;top:87.8%">
+    <span class="n">pot gp26</span><span id="hv-pot">–</span>
+    <span class="bars"><b id="potbar"></b></span></div>
+
+  <div class="hs" id="h-dock" style="left:52.2%;top:29.2%">
+    <span class="n">pico dock · i2c gp4/gp5</span><span id="hv-dock">–</span></div>
+</div>
+
+<div class="strip">
+  <div class="card">
+    <h3>OLED <em>0x3C</em></h3>
+    <div id="glass" contenteditable="true" spellcheck="false"></div>
+    <div style="color:var(--dim);font-size:10px;margin-top:6px;font-family:var(--mono)">
+      type here — four lines, sent on pause</div>
+  </div>
+  <div class="card">
+    <h3>Buzzer <em>GP20</em></h3>
+    <div class="keys" id="keyrow">
+      <i data-f="262">C</i><i data-f="294">D</i><i data-f="330">E</i><i data-f="349">F</i>
+      <i data-f="392">G</i><i data-f="440">A</i><i data-f="494">B</i><i data-f="523">C</i>
+    </div>
+    <div style="display:flex;gap:7px;align-items:center;margin-top:8px">
+      <span style="color:var(--dim);font-size:10px">len</span>
+      <input type="range" class="sl" id="buzlen" min="40" max="900" value="180">
+      <span style="font-family:var(--mono);font-size:10px" id="buzlenv">180</span>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Motors <em>I²C 0x22</em></h3>
+    <div style="display:flex;gap:7px;align-items:center">
+      <span style="color:var(--dim);font-size:10px">M1</span>
+      <input type="range" class="sl" id="m1" min="-255" max="255" value="0">
+      <span style="font-family:var(--mono);font-size:10px" id="m1v">0</span>
+    </div>
+    <div style="display:flex;gap:7px;align-items:center;margin-top:6px">
+      <span style="color:var(--dim);font-size:10px">M2</span>
+      <input type="range" class="sl" id="m2" min="-255" max="255" value="0">
+      <span style="font-family:var(--mono);font-size:10px" id="m2v">0</span>
+    </div>
+    <div style="display:flex;gap:7px;align-items:center;margin-top:6px">
+      <span style="color:var(--dim);font-size:10px">S1</span>
+      <input type="range" class="sl" id="s1" min="0" max="180" value="90">
+      <span style="font-family:var(--mono);font-size:10px" id="s1v">90</span>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Board</h3>
+    <table style="width:100%;font-size:12px">
+      <tr><td style="color:var(--dim)">sketch</td><td style="text-align:right;font-family:var(--mono)" id="name">–</td></tr>
+      <tr><td style="color:var(--dim)">temp</td><td style="text-align:right;font-family:var(--mono)" id="t2">–</td></tr>
+      <tr><td style="color:var(--dim)">humidity</td><td style="text-align:right;font-family:var(--mono)" id="h2">–</td></tr>
+    </table>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button id="led1" style="flex:1;padding:5px">LED on</button>
+      <button id="led0" style="flex:1;padding:5px">off</button>
+    </div>
+    <div id="log" style="margin-top:8px">idle</div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const enc = new TextEncoder(), dec = new TextDecoder();
+
+/* ------------------------------------------------------------------- OSC */
+class Reader{
+  constructor(b){this.b=b;this.pos=0;this.dv=new DataView(b.buffer,b.byteOffset,b.byteLength);}
+  get left(){return this.b.length-this.pos;}
+  int32(){const v=this.dv.getInt32(this.pos);this.pos+=4;return v;}
+  float32(){const v=this.dv.getFloat32(this.pos);this.pos+=4;return v;}
+  float64(){const v=this.dv.getFloat64(this.pos);this.pos+=8;return v;}
+  int64(){const v=this.dv.getBigInt64(this.pos);this.pos+=8;return v;}
+  string(){let e=this.pos;while(e<this.b.length&&this.b[e]!==0)e++;
+    const s=dec.decode(this.b.subarray(this.pos,e));this.pos=(e+4)&~3;return s;}
+  blob(){const n=this.int32();
+    if(n<0||n>this.left){this.pos=this.b.length;return new Uint8Array(0);}
+    const v=this.b.subarray(this.pos,this.pos+n);this.pos+=(n+3)&~3;return v;}
+}
+// The complete tag set. An unknown tag has no known width, so the decoder
+// cannot find the next argument and must stop -- a missing case truncates the
+// message silently rather than erroring.
+function decodeMessage(bytes){
+  const r=new Reader(bytes),address=r.string(),args=[];
+  if(r.left>0){const tags=r.string();
+    if(tags.startsWith(","))for(const t of tags.slice(1)){
+      if(t==="i")args.push(r.int32());
+      else if(t==="f")args.push(r.float32());
+      else if(t==="s")args.push(r.string());
+      else if(t==="b")args.push(r.blob());
+      else if(t==="h")args.push(r.int64());
+      else if(t==="d")args.push(r.float64());
+      else if(t==="T")args.push(true);
+      else if(t==="F")args.push(false);
+      else if(t==="N")args.push(null);
+      else if(t==="I")args.push("impulse");
+      else return {address,args};
+    }}
+  return {address,args};
+}
+const pad4=b=>{const n=(b.length+3)&~3,o=new Uint8Array(n);o.set(b);return o;};
+function encodeMessage(address,args){
+  const parts=[pad4(enc.encode(address+"\0"))];
+  let tags=",";for(const a of args)tags+=(typeof a==="string")?"s":"i";
+  parts.push(pad4(enc.encode(tags+"\0")));
+  for(const a of args){
+    if(typeof a==="string")parts.push(pad4(enc.encode(a+"\0")));
+    else{const b=new Uint8Array(4);new DataView(b.buffer).setInt32(0,a|0);parts.push(b);}}
+  const out=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));
+  let o=0;for(const p of parts){out.set(p,o);o+=p.length;}
+  return out;
+}
+/* ------------------------------------------------------------------ SLIP */
+const END=0xC0,ESC=0xDB,ESC_END=0xDC,ESC_ESC=0xDD;
+function slipEncode(p){const o=[END];
+  for(const b of p){if(b===END)o.push(ESC,ESC_END);else if(b===ESC)o.push(ESC,ESC_ESC);else o.push(b);}
+  o.push(END);return new Uint8Array(o);}
+class SlipDecoder{
+  constructor(cb){this.cur=[];this.esc=false;this.cb=cb;}
+  push(c){for(const b of c){
+    if(this.esc){this.cur.push(b===ESC_END?END:b===ESC_ESC?ESC:b);this.esc=false;}
+    else if(b===ESC)this.esc=true;
+    else if(b===END){if(this.cur.length){this.cb(new Uint8Array(this.cur));this.cur=[];}}
+    else this.cur.push(b);}}
+}
+// An extra END closes an empty frame every SLIP decoder skips, so keeping
+// frames off 64-byte multiples costs nothing and keeps this page safe on a
+// 32U4, whose CDC endpoint wedges on exactly that.
+function padAwayZLP(b){if(b.length%64!==0)return b;
+  const o=new Uint8Array(b.length+1);o.set(b);o[b.length]=END;return o;}
+
+/* ---------------------------------------------------------------- render */
+let frames=0,t0=0,lastSeq=null,dropped=0;
+const logLine=(t,s)=>{const e=$("log");
+  e.textContent=(t?t+" ":"")+s+"\n"+e.textContent;
+  if(e.textContent.length>900)e.textContent=e.textContent.slice(0,900);};
+
+function onFrame(payload){
+  let m;try{m=decodeMessage(payload);}catch{return;}
+
+  if(m.address==="/pb"){
+    const [seq,button,pot,ldr,relay,tempC,hum]=m.args;
+    if(lastSeq!==null&&seq>lastSeq+1)dropped+=seq-lastSeq-1;
+    lastSeq=seq;
+    $("seq").textContent=seq;$("drop").textContent=dropped;
+    frames++;if(!t0)t0=performance.now();
+    const secs=(performance.now()-t0)/1000;
+    if(secs>0.5)$("hz").textContent=(frames/secs).toFixed(1)+" Hz";
+
+    $("hv-btn").textContent=button?"PRESSED":"released";
+    $("h-btn").classList.toggle("hot",!!button);
+    $("hv-sht").textContent=`${tempC.toFixed(1)}°C  ${hum.toFixed(0)}%`;
+    $("t2").textContent=tempC.toFixed(2)+" °C";
+    $("h2").textContent=hum.toFixed(1)+" %";
+    // The RP2040 ADC is 12-bit but analogRead() reports 10-bit by default,
+    // so 1023 is full scale here, not 4095.
+    $("hv-pot").textContent=pot;
+    $("potbar").style.width=(pot/1023*100).toFixed(0)+"%";
+    $("hv-ldr").textContent=ldr;
+    $("ldrbar").style.width=(ldr/1023*100).toFixed(0)+"%";
+    if(!relayPending){
+      $("hv-relay").textContent=relay?"CLOSED":"open";
+      $("h-relay").classList.toggle("hot",!!relay);
+    }
+    return;
+  }
+
+  if(m.address==="/hello"){
+    const [name,oled,sht,motor,rgbn]=m.args;
+    $("name").textContent=name??"–";
+    const off=(id,ok)=>$(id).classList.toggle("off",!ok);
+    off("h-oled",oled);off("h-sht",sht);off("h-motor",motor);
+    $("hv-dock").textContent=[oled&&"oled",sht&&"shtc3",motor&&"motor"]
+      .filter(Boolean).join(" ")||"none";
+    logLine("","board: "+m.args.join(" "));
+    return;
+  }
+}
+
+/* ---------------------------------------------------------------- serial */
+let port=null,writer=null,reader=null,keep=false;
+async function send(a,args){ if(writer) await writer.write(padAwayZLP(slipEncode(encodeMessage(a,args)))); }
+
+async function readLoop(){
+  const slip=new SlipDecoder(onFrame);
+  while(keep){
+    try{
+      const {value,done}=await reader.read();
+      if(done)break;
+      if(value&&value.length){slip.push(value);
+        $("rxdot").classList.add("on");clearTimeout(window._t);
+        window._t=setTimeout(()=>$("rxdot").classList.remove("on"),140);}
+    }catch(e){logLine("!",String(e));break;}
+  }
+}
+$("connect").onclick=async()=>{
+  if(!("serial" in navigator)){logLine("!","Web Serial needs Chrome/Edge on http://localhost");return;}
+  try{
+    port=await navigator.serial.requestPort();
+    await port.open({baudRate:115200});
+    writer=port.writable.getWriter();reader=port.readable.getReader();
+    keep=true;readLoop();
+    $("status").textContent="connected";
+    $("connect").disabled=true;$("disconnect").disabled=false;
+    frames=0;t0=0;lastSeq=null;dropped=0;
+    // Ask for /hello: the boot one goes out before USB has re-enumerated and
+    // this page has opened the port, so it is always lost.
+    setTimeout(()=>send("/hello",[]),150);
+  }catch(e){logLine("!",String(e));}
+};
+$("disconnect").onclick=async()=>{
+  keep=false;
+  try{await reader?.cancel();reader?.releaseLock();}catch{}
+  try{writer?.releaseLock();}catch{}
+  try{await port?.close();}catch{}
+  port=writer=reader=null;
+  $("status").textContent="not connected";
+  $("connect").disabled=false;$("disconnect").disabled=true;
+};
+
+/* -------------------------------- controls, at the point each thing shows */
+$("hrgbpick").oninput=e=>{
+  const h=e.target.value;
+  send("/pb/rgb",[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
+  $("hv-rgb").textContent=h; $("hrgbsw").style.background=h;
+};
+
+// The relay physically switches mains-rated contacts and clicks audibly, so
+// it is a deliberate toggle, never pulsed or animated. relayPending stops the
+// badge flickering back to the old state on frames still in flight.
+let relayPending=false, relayOn=false;
+$("h-relay").onclick=()=>{
+  relayOn=!relayOn; relayPending=true;
+  send("/pb/relay",[relayOn?1:0]);
+  $("hv-relay").textContent=relayOn?"CLOSED":"open";
+  $("h-relay").classList.toggle("hot",relayOn);
+  setTimeout(()=>relayPending=false,400);
+};
+
+let buzLen=180;
+$("buzlen").oninput=e=>{buzLen=+e.target.value;$("buzlenv").textContent=buzLen;};
+function buzz(f){
+  send("/pb/buzz",[f,buzLen]);
+  $("hv-buz").textContent=f+" Hz";
+  clearTimeout(window._bz);
+  window._bz=setTimeout(()=>$("hv-buz").textContent="silent",buzLen);
+}
+document.querySelectorAll("#keyrow i").forEach(k=>{
+  k.onclick=()=>{buzz(+k.dataset.f);k.classList.add("hit");
+                 setTimeout(()=>k.classList.remove("hit"),buzLen);};
+});
+$("h-buz").onclick=()=>buzz(880);
+
+// motors: one slider each, signed, so direction and speed are one gesture
+const motorSend=(n,v)=>send("/pb/motor",[n,Math.abs(v),v<0?1:0]);
+$("m1").oninput=e=>{const v=+e.target.value;$("m1v").textContent=v;motorSend(1,v);
+  $("hv-motor").textContent=v||+$("m2").value?"running":"stopped";};
+$("m2").oninput=e=>{const v=+e.target.value;$("m2v").textContent=v;motorSend(2,v);
+  $("hv-motor").textContent=v||+$("m1").value?"running":"stopped";};
+$("s1").oninput=e=>{const v=+e.target.value;$("s1v").textContent=v;send("/pb/servo",[1,v]);};
+$("h-motor").onclick=()=>{ $("m1").value=0;$("m2").value=0;$("m1v").textContent="0";
+  $("m2v").textContent="0";motorSend(1,0);motorSend(2,0);
+  $("hv-motor").textContent="stopped"; logLine("","motors stopped"); };
+
+$("led1").onclick=()=>send("/pb/led",[1]);
+$("led0").onclick=()=>send("/pb/led",[0]);
+
+let oledT=null;
+const pushOled=()=>{
+  const rows=$("glass").innerText.replace(/ /g," ").split("\n").slice(0,4);
+  while(rows.length<4)rows.push("");
+  send("/pb/oled",rows.map(r=>r.slice(0,21)));
+  $("hv-oled").textContent=(rows[0]||"").slice(0,14)||"(blank)";
+};
+$("glass").addEventListener("input",()=>{clearTimeout(oledT);oledT=setTimeout(pushOled,260);});
+$("h-oled").onclick=()=>{$("glass").scrollIntoView({block:"center",behavior:"smooth"});$("glass").focus();};
+$("glass").innerText="PicoBricks\nOSC over USB";
+</script>
