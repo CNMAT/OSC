@@ -62,6 +62,19 @@
 // core's own PDM library -- PIO-based, so any pin pair works and no
 // SAMD/ESP32-specific driver is needed. Its callback fires from an interrupt,
 // so the ISR only copies; the arithmetic happens in loop().
+//
+// MIC RESPONSE, measured with the board's own buzzer as the source, which
+// removes the coordination problem entirely -- no one has to make a noise on
+// cue. Quiet floor rms ~140 (-47.5 dBFS); a 4800 Hz tone lifts it to ~490,
+// +10.3 dB, mean of three runs with 1.1 dB spread, and it drops back to the
+// floor afterwards. So the microphone genuinely hears.
+//
+// The frequency matters more than the level does: a sweep from 500 Hz to
+// 4800 Hz found +1 to +3 dB nearly everywhere and +11 dB only at the top.
+// That is the passive buzzer's resonance, not a property of the microphone --
+// testing at 2 kHz first gave an inconclusive +2.1 dB and nearly wrote the
+// mic off. Buzzer and mic share this PCB, so part of the coupling is
+// structural; this is a response test, not a calibration.
 #include <Wire.h>
 #include <Adafruit_LSM6DS3TRC.h>
 #include <Adafruit_MMC56x3.h>
