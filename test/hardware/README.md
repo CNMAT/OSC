@@ -414,17 +414,29 @@ measuring the board. Unlike HWCDC there is no library-side enlargement to
 bake in — `SERIAL_BUFFER_SIZE` is `#undef`'d and fixed at 512 in the core —
 so the remedy is host pacing, or simply never blocking in `loop()`.
 
-**Suspect — the "AVR cuts off at ~378 bytes and never recovers".** A 32U4
-has no software rx ring at all: reads come straight from the 64-byte
-endpoint banks and a full bank NAKs the host, so silent loss should be
-impossible there. The reinterpretation this review proposes: the
-"no recovery until reset" was the ZLP stall (previous section) wearing a
-throughput costume — the kernel coalesces buffered bytes into transfers, and
-the first transfer to land on an exact multiple of 64 stalls reception for
-good — and the byte figure was the echo sketch's own 600-byte buffer, not
-the USB stack. Both are now testable: the library releases the stuck bank
-itself, and `bench.py PORT in 50 -1` attributes any loss to a segment. No
-AVR burst number stands until that has been run.
+**Resolved — the AVR "378-byte cutoff" was the ZLP stall, not a throughput
+limit.** Measured 2026-08-13 on an Adafruit Circuit Playground (ATmega32U4),
+with the library's bank-release fix in place, and it is clean everywhere the
+old claim said it should fail:
+
+| | |
+|---|---|
+| 50 frames (~1100 B) in one write, ×3 | 50/50 clean |
+| 200 frames (**4400 B**) in one write, ×3 | 200/200 clean, 478 f/s on-board |
+| `out` 200 ×3, compound echo 50/50 ×3 | clean |
+| ring map vs a 20 ms/loop lazy reader, to 1100 B | clean at every size |
+
+The last row is the one that matters: a deliberately slow reader is exactly
+the condition under which a drop stack truncates, and the 32U4 lost nothing.
+That is the NAK prediction confirmed on the part with **no software rx ring
+at all** — reads come straight from the 64-byte endpoint banks, and a full
+bank NAKs the host rather than discarding, so silent loss was never possible
+here. 4400 bytes is more than eleven times the claimed 378-byte ceiling.
+
+So the reinterpretation this file proposed stands: the "cutoff" was the ZLP
+endpoint wedge wearing a throughput costume, and the byte figure was the echo
+sketch's own 600-byte buffer rather than anything in the USB stack. With the
+wedge worked around, a 32U4 behaves like every other NAK stack here.
 
 **Confirmed and relocated — "Teensy 3.x loses burst frames" is real, but
 it is transmit loss, not receive.** Measured 2026-08-11 on a Teensy 3.2
@@ -487,7 +499,8 @@ does not share the loss. The gradient is now bounded at both ends:
 
 | board | echo | widths | probe | stress |
 |---|---|---|---|---|
-| LilyPad USB (ATmega32U4) | 22/22 | 11/11, int=2 long=4 ll=8 double=4 | 7/7 | not re-measured |
+| LilyPad USB (ATmega32U4) | 22/22 | 11/11, int=2 long=4 ll=8 double=4 | 7/7 | not re-measured — but see the Circuit Playground 32U4 row; same part, same core |
+| Adafruit Circuit Playground (ATmega32U4) | — | — | — | bench 2026-08-13: gate + in 50/200 one-write ×3 + out ×3 + compound ×3 + 1100 B lazy-reader ring **all clean**; 4400 B one-write clean, 478 f/s — settles the "378-byte cutoff" |
 | Teensy 4.0 (ARM M7) | 22/22 | 11/11 | 7/7 | bench 2026-08-11: all clean incl. compound echo ×3, 66-100k f/s in — the reference board |
 | Teensy 3.2 (ARM M4) | 22/22 | 11/11 | — | bench 2026-08-11: in/out separately clean ×3 (7142 f/s in, 200-frame out); compound echo D=26/50 — TX give-up under pool contention, see burst section |
 | Teensy 3.6 (ARM M4F) | — | — | — | bench 2026-08-11: in/out separately clean ×3 (16-25k f/s in); compound echo B=50/50, D=30-33/50 — same pool mechanism, milder at 180 MHz |
@@ -502,6 +515,7 @@ does not share the loss. The gradient is now bounded at both ends:
 | ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | bench 2026-08-11: byte ceiling ~264 B confirmed (12×22 B, firstGap@11); ×16 queue → ceiling ~4.3 KB; out + compound clean on enlarged build; remedy since baked into `begin()` |
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | not re-measured |
 | Adafruit Feather M4 Express (SAMD51) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
+| Adafruit PyBadge (SAMD51) | — | — | — | bench 2026-08-13: gate + in 50 ×3 (8333 f/s) + out ×3 + compound ×3 + 1100 B lazy-reader ring all clean |
 | Adafruit EdgeBadge (SAMD51) | — | — | — | not re-measured |
 | UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | bench 2026-08-12: gate + in/out/compound ×3 all clean (~530 f/s); lazy-reader ring pins at 25 frames / `firstGap@24` ×3 → the 512 B UART ring, see burst section |
 | Seeed XIAO RA4M1 (RA4M1, native USB) | 22/22 | 11/11 | — | not re-measured |

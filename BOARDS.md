@@ -26,8 +26,8 @@ families have been characterised on hardware:
 
 | family | host→device | device→host | verdict |
 |---|---|---|---|
-| Arduino AVR CDC (32U4) | NAK — no ring to overflow | 250 ms give-up; drops all while port closed | safe, **except** the ZLP endpoint wedge ([#112](https://github.com/arduino/ArduinoCore-avr/issues/112)), worked around in `SLIPEncodedSerial.h` |
-| Arduino SAMD CDC | NAK | clean | clean end to end |
+| Arduino AVR CDC (32U4) | NAK — no ring to overflow, **measured** | 250 ms give-up; drops all while port closed | clean end to end once the ZLP endpoint wedge ([#112](https://github.com/arduino/ArduinoCore-avr/issues/112)) is worked around, as `SLIPEncodedSerial.h` does: 4400 B in one write and 1100 B against a lazy reader, both lossless |
+| Arduino SAMD CDC | NAK | clean | clean end to end — measured on SAMD11 and SAMD51 |
 | PJRC teensy3 | NAK | **starves under compound load** — twelve shared 64-byte buffers, 70 ms TX give-up | replies overlapping an inbound burst are silently dropped; each direction alone is clean |
 | PJRC teensy4 | NAK | clean | clean end to end, including compound; the bench's reference board |
 | TinyUSB (RP2040/RP2350 core) | NAK — refuses to re-arm the endpoint without FIFO space | clean | clean end to end, including compound |
