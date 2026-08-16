@@ -503,7 +503,7 @@ does not share the loss. The gradient is now bounded at both ends:
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | not re-measured |
 | Adafruit Feather M4 Express (SAMD51) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
 | Adafruit EdgeBadge (SAMD51) | — | — | — | not re-measured |
-| UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | not re-measured |
+| UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | bench 2026-08-12: gate + in/out/compound ×3 all clean (~530 f/s); lazy-reader ring pins at 25 frames / `firstGap@24` ×3 → the 512 B UART ring, see burst section |
 | Seeed XIAO RA4M1 (RA4M1, native USB) | 22/22 | 11/11 | — | not re-measured |
 | M5Stack NanoC6 | not run — board stopped responding | | | |
 
