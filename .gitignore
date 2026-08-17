@@ -12,3 +12,8 @@ __pycache__/
 # tracked template and holds placeholders only.
 arduino_secrets.h
 **/arduino_secrets.h
+
+# arduino-cli drops compiled output beside the sketch when --output-dir or
+# --build-path is omitted; 21 MB of it appeared under test/hardware/OscBench
+# during the board sweep. Build artifacts, never source.
+build/
