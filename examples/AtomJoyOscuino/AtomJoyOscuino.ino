@@ -141,6 +141,13 @@
 // panel never initialises on this unit either way -- consistent with the
 // display, not the base, being the thing M5GFX is stuck on.
 //
+// NARROWED 2026-08-17: M5GFX ALONE IS FINE. Driving the panel with M5GFX
+// directly -- display.begin() -- initialises the LCD, reports a real
+// width, draws text, and the sketch goes on streaming. So the fault is
+// not the display driver; it is the M5Unified wrapper around it, which
+// also brings up power, I2C and the IMU. That is why the screen is on by
+// default (ATOMJOY_USE_M5GFX) while M5Unified is not.
+//
 // Nothing here needs M5Unified: the joystick is plain I2C and the front
 // button is a GPIO. So the default build talks to the hardware directly and
 // always runs. Define ATOMJOY_USE_M5 to 1 to drive the on-board LCD on a unit
@@ -150,6 +157,21 @@
 #endif
 #if ATOMJOY_USE_M5
 #include <M5Unified.h>
+#endif
+
+// The LCD is driven through M5GFX ALONE, not through M5Unified. M5GFX is the
+// display half; M5Unified is the whole-board wrapper that also brings up
+// power, I2C and the IMU, and it is the wrapper that hangs here. Splitting
+// them keeps the screen without the part that stops the sketch.
+#ifndef ATOMJOY_USE_M5GFX
+#define ATOMJOY_USE_M5GFX 1
+#endif
+#if ATOMJOY_USE_M5GFX && !ATOMJOY_USE_M5
+#include <M5GFX.h>
+static M5GFX display;
+#define JOY_LCD display
+#elif ATOMJOY_USE_M5
+#define JOY_LCD M5.Display
 #endif
 #include <Wire.h>
 
@@ -233,14 +255,14 @@ static uint8_t joyButtons() {
 }
 
 static void redraw() {
-#if ATOMJOY_USE_M5
+#ifdef JOY_LCD
   if (!dispOK) return;
-  M5.Display.fillScreen(TFT_BLACK);
-  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  M5.Display.setTextSize(1);
+  JOY_LCD.fillScreen(TFT_BLACK);
+  JOY_LCD.setTextColor(TFT_WHITE, TFT_BLACK);
+  JOY_LCD.setTextSize(2);
   for (uint8_t i = 0; i < 5; i++) {
-    M5.Display.setCursor(2, (int)(4 + i * 12));
-    M5.Display.print(lines[i]);
+    JOY_LCD.setCursor(2, (int)(4 + i * 20));
+    JOY_LCD.print(lines[i]);
   }
 #endif
 }
@@ -279,6 +301,9 @@ void setup() {
   auto cfg = M5.config();
   M5.begin(cfg);                       // may not return on some units -- see top
   dispOK = (M5.Display.width() > 0);
+#elif ATOMJOY_USE_M5GFX
+  dispOK = display.begin() && display.width() > 0;
+  if (dispOK) { display.setRotation(0); display.fillScreen(TFT_BLACK); }
 #endif
 
   // Probe for the part, not for the board: this base is sold with an Atom as
