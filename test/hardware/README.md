@@ -336,6 +336,26 @@ default — or pace bursts to what the application drains. ESP-IDF's own
 usb_serial_jtag driver has the same unchecked-send pattern, so this is not
 Arduino-layer-only.
 
+**The remedy and the mechanism are now confirmed on a second chip, as a
+controlled A/B on one board.** An Adafruit Feather ESP32-S3 (no PSRAM)
+builds either way — its default is USB-OTG/TinyUSB, and `:USBMode=hwcdc`
+switches the same hardware to the USB-Serial-JTAG path — so the stack is the
+only variable:
+
+| Feather ESP32-S3, ring map vs a 20 ms/loop reader | at 1100 B |
+|---|---|
+| TinyUSB (its default) | clean at every size |
+| HWCDC, `-DOSC_SLIP_RX_BUFFER=0` | **12 frames, `firstGap@11`** |
+| HWCDC, library default (4096) | clean at every size |
+
+The middle row is the C6's signature reproduced exactly on a different
+part — same 12 frames, same `firstGap@11`, same 12 × 22 = 264 bytes — which
+is what makes this a family property of the HWCDC driver rather than a C6
+quirk. And the top row is the control: identical silicon, identical sketch,
+NAK stack instead of the drop stack, no ceiling at all. With the fix on, a
+4400-byte burst still truncates near frame 191 — over the configured 4096 —
+so the ring moved rather than disappeared, exactly as the C6 showed.
+
 Re-measured 2026-08-11 on an ESP32-C6 with `OscBench` under the Method
 rules, which sharpened the picture four ways:
 
