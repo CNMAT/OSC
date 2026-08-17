@@ -15,7 +15,9 @@
 //   /matrix/pixels ,b <96>      raw frame, one byte per LED, row-major 12x8;
 //                               takes over until the next /matrix/text
 // Outbound
-//   /hello ,sii  name, columns in the current message, matrixOK
+//   /hello ,siT  name, columns in the current message, matrixOK
+//                -- matrixOK is an OSC boolean: tag T or F, no payload,
+//                   NOT i (F when begin() reported failure)
 //   /matrix ,siii text, scroll column, total columns, paused
 //   /frame ,b <96>  the exact pixels being displayed, so the page mirrors
 //                   the panel instead of re-implementing the scroll

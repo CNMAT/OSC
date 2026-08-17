@@ -108,6 +108,7 @@
       <td class="k">sketch</td><td class="v" id="name">–</td>
       <td class="k">joystick MCU</td><td class="v" id="jok">–</td>
       <td class="k">display</td><td class="v" id="dok">–</td>
+      <td class="k">base fw</td><td class="v" id="fw">–</td>
     </tr></table>
   </div>
   <div id="log">idle</div>
@@ -234,11 +235,19 @@ function onFrame(payload){
   }
 
   if(m.address==="/hello"){
-    const [name,joy,disp]=m.args;
+    const [name,joy,disp,,fw,sda]=m.args;
     $("name").textContent=name??"–";
-    $("jok").textContent=joy?"0x59 found":"absent";
+    // Which internal I2C bus answered also names the module: the AtomS3 puts
+    // it on GPIO38, the AtomS3R on GPIO45.
+    const mod = sda===38 ? " (AtomS3)" : sda===45 ? " (AtomS3R)" : "";
+    $("jok").textContent=joy?"0x59 on GPIO"+sda+mod:"absent";
     $("jok").style.color=joy?"var(--live)":"var(--warn)";
     $("dok").textContent=disp?"present":"absent";
+    // The button mapping this page draws is the v2 one, read out of M5's
+    // published STM32 source. Any other version and the labels below may be
+    // wrong, so say so rather than mislabel a press.
+    $("fw").textContent = fw===undefined ? "–" : (fw===0 ? "unread" : "v"+fw);
+    $("fw").style.color = (fw===2||fw===undefined) ? "" : "var(--warn)";
     logLine("","board: "+m.args.join(" "));
     return;
   }

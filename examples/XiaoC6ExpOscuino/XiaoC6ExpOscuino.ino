@@ -29,7 +29,9 @@
 //   /rate ,i ms        state reporting interval, 20..2000
 //   /hello             ask for /hello again -- see below, this matters
 // Outbound
-//   /hello ,siii  name, displayOK, rtcOK, ledPin
+//   /hello ,sTTi  name, displayOK, rtcOK, ledPin
+//                -- displayOK and rtcOK are OSC booleans: tag T or F with
+//                   no payload, NOT i
 //   /xc6 ,iiii    seq, button (1 = pressed), millis, buzzing
 //
 // The sequence counter is what makes drops visible; without it a gap in the

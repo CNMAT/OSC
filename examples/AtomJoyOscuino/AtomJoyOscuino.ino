@@ -29,20 +29,61 @@
 // getBattery2Voltage() reads 0x60. Seven registers are less trouble than a
 // dependency you cannot install and would have to correct anyway.
 //
-//   0x00 / 0x02   left  stick X / Y, 12-bit, 2 bytes, LITTLE-endian
-//   0x20 / 0x22   right stick X / Y, 12-bit, 2 bytes, little-endian
-//   0x60 / 0x62   battery 1 / 2 in millivolts
-//   0x70..0x73    buttons, one byte each, bit 0, ACTIVE LOW
+// The map below is not read off a wiki: it is checked against M5Stack's own
+// published STM32 firmware, whose whole I2C surface is one function --
+// Slave_Complete_Callback() in code/Fly_Remoter/Core/Src/main.c of
+// github.com/m5stack/Atom-JoyStick-Internal-FW.
 //
-// BUTTON MAPPING IS THE ONE THING TO CHECK ON THE BENCH. M5Stack's own header
-// carries two contradictory mappings -- a stale set of *_ADDRESS macros and a
-// newer set enabled by #define NEW_ATOM_JOY -- which disagree about whether
-// 0x70 is the left shoulder or the left stick click. The newer set is used
-// below because it is the one their code actually compiles, but press each
-// control and confirm before trusting it.
+//   0x00..0x03    left  stick X / Y, 12-bit (0..4095), LITTLE-endian
+//   0x10 / 0x11   the same axes, 8-bit
+//   0x20..0x23    right stick X / Y, 12-bit, little-endian
+//   0x30 / 0x31   the same axes, 8-bit
+//   0x40..0x43    raw battery ADC, 12-bit      0x50 / 0x51  the same, 8-bit
+//   0x60..0x63    battery 1 / 2 in millivolts
+//   0x70..0x73    buttons, one byte each, bit 0, ACTIVE LOW
+//   0xFC          bootloader version   0xFE  firmware version (2 on shipping)
+//   0xFF          I2C address (writable)
+//
+// EACH BLOCK IS SERVED WHOLE, so one 4-byte read gets both axes of a stick
+// from the SAME ADC pass. That is why the reads below are blocks and not
+// per-axis: two transactions cannot see one instant, and this whole repo's
+// examples exist to put one instant in one message.
+//
+// DO NOT SWEEP THIS REGISTER SPACE. A two-byte write of 0xFD 0x01 makes the
+// STM32 tear down I2C and ADC and jump to its bootloader; the joystick then
+// stays dead until it is re-flashed. An innocent-looking probe loop bricks
+// the base.
+//
+// BUTTON MAPPING, settled from that firmware rather than left to the bench:
+// 0x70 = LEFT function button (PF0), 0x71 = RIGHT function button (PF1),
+// 0x72 = LEFT stick press (PA4), 0x73 = RIGHT stick press (PA7). M5Stack's
+// own atoms3joy.h carries two contradictory mappings -- a stale set of
+// *_ADDRESS macros and a newer set behind #define NEW_ATOM_JOY (defined
+// unconditionally on the line above the #ifdef that tests it, so it is the
+// one that compiles). The stale set swaps the function buttons with the
+// stick presses and is firmware-v1 naming for a board revision that never
+// shipped: v1 read BTN_1 from PA3, which on production hardware is the left
+// stick's Y axis. Read 0xFE and check it says 2 before trusting any of it.
+//
+// Active LOW is confirmed three ways: the firmware pulls those inputs up,
+// M5's library inverts them, and the schematic carries external 10K pull-ups.
+// One asymmetry to know about: 0x73 is the only button the firmware
+// configures with NO internal pull-up, so its idle level depends entirely on
+// the external part.
+//
+// M5's PUBLISHED PINMAP TABLE IS WRONG -- it shifts the left joystick by one
+// STM32 pin and lists PA1 in two roles -- so it cannot be used to cross-check
+// any of this. The firmware and the schematic agree with each other and not
+// with the table.
 //
 // Outbound
-//   /hello ,siii  name, joyOK, displayOK, buttonCount
+//   /hello ,sTTiii name, joyOK, displayOK, buttonCount, stmFirmwareVersion,
+//                  sdaPin -- the tags are assembled by OSCMessage::add(), not
+//                  written by hand; the two flags are OSC booleans, so those
+//                  positions carry T or F with no payload, NOT i. Firmware
+//                  version 0 means it could not be read. sdaPin is 38 on an
+//                  AtomS3, 45 on an AtomS3R and -1 if nothing answered, which
+//                  is how the page reports which module it is talking to.
 //   /joy ,iiiiiiiii  seq, lx, ly, rx, ry (0..4095), buttons bitmask,
 //                    bat1 mV, bat2 mV, frontBtn
 //                    bitmask: 0 L shoulder, 1 R shoulder,
@@ -55,13 +96,18 @@
 //   /hello              ask again: the boot one is lost to USB
 //                       re-enumeration before the host opens the port
 //
-// STATUS: written from M5Stack's documentation and driver sources, and NOT
-// yet run -- the board was not reachable when this was written. Unverified
-// specifically: the button mapping above, the sticks' rest value and range
-// (M5 publish no calibration; 12-bit implies 0..4095 but centre and deadband
-// are unmeasured), which panel controller this unit has, and whether it is an
-// AtomS3 or the newer AtomS3R. M5GFX detects the panel at runtime, so the
-// display should work either way.
+// STATUS: NOT YET RUN ON HARDWARE. The register map, the button assignment,
+// the little-endian byte order, the 12-bit range and the active-LOW sense are
+// all now read out of M5Stack's published STM32 firmware rather than guessed
+// -- that is source-verified, which is not the same as measured. Still open
+// until this runs on a bench: the sticks' actual rest value and travel (M5
+// publish NO centre, range or deadband anywhere; the 2048 that circulates is
+// an assumption in their StampFly application, not a device specification, so
+// the page must not pretend to a centre it has not seen), whether the second
+// battery register reads anything at all (the board has two charger circuits
+// but ships with one cell), and whether this unit is an AtomS3 or the newer
+// AtomS3R. M5GFX detects the panel at runtime, so the display should work
+// either way.
 #include <M5Unified.h>
 #include <Wire.h>
 
@@ -72,22 +118,42 @@
 SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 
 #define JOY_ADDR   0x59
-#define JOY_SDA    38          // AtomS3 internal I2C, not the Grove pins
-#define JOY_SCL    39
+// The internal I2C bus MOVES between modules, and the K137's Atom is a
+// removable socketed module, so neither pin pair can be hardcoded: AtomS3 puts
+// it on SDA 38 / SCL 39, AtomS3R on SDA 45 / SCL 0. M5Stack added AtomS3R
+// support to their own JoyStick firmware in April 2026 without changing a line
+// of it, so units of both kinds are in circulation and look alike in the base.
+// Which pair answers at 0x59 is therefore also the board identification, and
+// it is done by probing for the part rather than by trusting a build flag.
+#define JOY_SDA_S3   38
+#define JOY_SCL_S3   39
+#define JOY_SDA_S3R  45
+#define JOY_SCL_S3R   0
 #define JOY_HZ     400000U
 
-#define REG_L_X    0x00        // 12-bit, little-endian, 2 bytes
-#define REG_L_Y    0x02
-#define REG_R_X    0x20
-#define REG_R_Y    0x22
-#define REG_BAT1   0x60        // millivolts
-#define REG_BAT2   0x62
-#define REG_BTN0   0x70        // 0x70..0x73, bit 0, active LOW
+#define REG_L_BLOCK 0x00       // 4 bytes: X lo, X hi, Y lo, Y hi
+#define REG_R_BLOCK 0x20       // 4 bytes, same shape
+#define REG_BAT     0x60       // 4 bytes: bat1 lo/hi, bat2 lo/hi, millivolts
+#define REG_BTN     0x70       // 4 bytes: L fn, R fn, L stick, R stick
+#define REG_FW      0xFE       // 1 byte, 2 on shipping hardware
 
 static bool     joyOK = false, dispOK = false;
+static uint8_t  joyFw = 0;     // STM32 firmware version from 0xFE; 2 ships
+static int8_t   joySda = -1;   // which internal bus answered: 38=S3, 45=S3R
 static int32_t  seq = 0;
 static uint32_t reportMs = 50;
 static char     lines[5][22] = { "AtomJoyOscuino", "OSC over USB", "", "", "" };
+
+// Open a candidate internal bus and see whether 0x59 answers on it. Returns
+// false without leaving the bus claimed, so the next pin pair can be tried.
+static bool joyBusBegin(int sda, int scl) {
+  Wire.end();
+  if (!Wire.begin(sda, scl, JOY_HZ)) return false;
+  Wire.beginTransmission(JOY_ADDR);
+  if (Wire.endTransmission() == 0) { joySda = (int8_t) sda; return true; }
+  Wire.end();
+  return false;
+}
 
 // Every read is write-register / repeated-START / read, which is what the
 // STM32 expects; endTransmission(false) is the repeated START and matters.
@@ -100,19 +166,25 @@ static bool joyRead(uint8_t reg, uint8_t *buf, uint8_t n) {
   return true;
 }
 
-static uint16_t joy16(uint8_t reg) {
-  uint8_t b[2] = { 0, 0 };
-  if (!joyRead(reg, b, 2)) return 0;
-  return (uint16_t)(b[0] | (b[1] << 8));      // little-endian
+static uint16_t le16(const uint8_t *b) { return (uint16_t)(b[0] | (b[1] << 8)); }
+
+// One transaction per block. Both axes of a stick therefore come from the
+// same ADC pass on the STM32, which per-axis reads cannot promise -- and a
+// message whose two halves are from different instants is the one thing
+// these examples are built not to send.
+static bool joyPair(uint8_t reg, uint16_t &a, uint16_t &b) {
+  uint8_t r[4] = { 0, 0, 0, 0 };
+  if (!joyRead(reg, r, 4)) return false;
+  a = le16(r); b = le16(r + 2);
+  return true;
 }
 
 static uint8_t joyButtons() {
+  uint8_t r[4] = { 1, 1, 1, 1 };            // idle HIGH: released
+  if (!joyRead(REG_BTN, r, 4)) return 0;
   uint8_t mask = 0;
-  for (uint8_t i = 0; i < 4; i++) {
-    uint8_t b = 0xFF;
-    if (joyRead((uint8_t)(REG_BTN0 + i), &b, 1))
-      if (!(b & 0x01)) mask |= (uint8_t)(1 << i);   // active LOW
-  }
+  for (uint8_t i = 0; i < 4; i++)
+    if (!(r[i] & 0x01)) mask |= (uint8_t)(1 << i);   // active LOW
   return mask;
 }
 
@@ -143,7 +215,8 @@ static void routeRate(OSCMessage &m) {
 
 static void sendHello() {
   OSCMessage h("/hello");
-  h.add("AtomJoyOscuino").add(joyOK).add(dispOK).add((intOSC_t) 4);
+  h.add("AtomJoyOscuino").add(joyOK).add(dispOK).add((intOSC_t) 4)
+   .add((intOSC_t) joyFw).add((intOSC_t) joySda);
   SLIPSerial.beginPacket(); h.send(SLIPSerial); SLIPSerial.endPacket();
 }
 static void routeHello(OSCMessage &) { sendHello(); }
@@ -155,14 +228,18 @@ void setup() {
 
   SLIPSerial.begin(115200);
 
-  // The joystick MCU is on the internal bus, so the pins are explicit.
-  Wire.begin(JOY_SDA, JOY_SCL, JOY_HZ);
+  // Probe for the part, not for the board: this base is sold with an Atom as
+  // a unit, but the module pulls out, and a driver reading an absent device
+  // returns zeros that look exactly like centred sticks. Whichever bus answers
+  // identifies the module at the same time.
+  joyOK = joyBusBegin(JOY_SDA_S3, JOY_SCL_S3)            // AtomS3
+       || joyBusBegin(JOY_SDA_S3R, JOY_SCL_S3R);         // AtomS3R
 
-  // Probe before trusting anything: this base is sold with the AtomS3 as a
-  // unit, but the Atom can be pulled out, and a driver reading an absent
-  // device returns zeros that look exactly like centred sticks.
-  Wire.beginTransmission(JOY_ADDR);
-  joyOK = (Wire.endTransmission() == 0);
+  // Which firmware answers decides whether the button mapping above is the
+  // v2 one. Reported in /hello rather than assumed: a v1 base would need the
+  // other pinout and a different battery divisor, so the page can say so
+  // instead of drawing confident nonsense.
+  if (joyOK && !joyRead(REG_FW, &joyFw, 1)) joyFw = 0;
 
   if (dispOK) redraw();
   sendHello();                         // usually lost; the page asks again
@@ -211,9 +288,9 @@ void loop() {
   uint16_t lx = 0, ly = 0, rx = 0, ry = 0, b1 = 0, b2 = 0;
   uint8_t  btn = 0;
   if (joyOK) {
-    lx = joy16(REG_L_X); ly = joy16(REG_L_Y);
-    rx = joy16(REG_R_X); ry = joy16(REG_R_Y);
-    b1 = joy16(REG_BAT1); b2 = joy16(REG_BAT2);
+    joyPair(REG_L_BLOCK, lx, ly);      // four transactions, not ten
+    joyPair(REG_R_BLOCK, rx, ry);
+    joyPair(REG_BAT,     b1, b2);
     btn = joyButtons();
   }
 

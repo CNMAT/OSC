@@ -29,8 +29,10 @@
 // that claims to tell the two apart.
 //
 // Outbound
-//   /hello ,siiiiii name + a found flag per sensor, so the page hides
-//                   panels for anything absent instead of drawing zeros
+//   /hello ,sTTTTTT name + a found flag per sensor (imu, mag, sht, ltr,
+//                   oled, mic), so the page hides panels for anything absent
+//                   instead of drawing zeros. The flags are OSC booleans:
+//                   each tag is T or F with no payload, NOT i
 //   /pm ,iiii ffffff fff ff iiiiiii
 //        seq, button, pir, encoder,
 //        ax ay az (g), gx gy gz (dps),

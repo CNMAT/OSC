@@ -100,6 +100,13 @@
 // expect to shout at the badge.
 #define MIC_GAIN     8.0f
 #define SCOPE_POINTS 96
+// An OSC blob is padded to a multiple of four. /mic is written field by field
+// rather than through OSCMessage::add() -- the scope trace is streamed
+// straight out of the capture buffer instead of being copied into a message --
+// and a hand-written emitter has no builder to get the padding right for it.
+// 96 divides by 4, so no pad bytes are emitted. Assert it rather than rely on
+// it: change this to 100 and every /mic frame silently becomes malformed OSC.
+static_assert(SCOPE_POINTS % 4 == 0, "OSC blob payload must be a multiple of 4");
 #define SCOPE_DECIM  8               // 16 kHz / 8 = one scope point per 0.5 ms
 static Adafruit_ZeroPDMSPI pdmspi(&PDM_SPI);
 static bool micOK = false;

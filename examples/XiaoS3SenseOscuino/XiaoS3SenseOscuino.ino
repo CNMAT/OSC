@@ -45,6 +45,12 @@ static bool micOK = false;
 // A scope trace to draw, and a level to meter with. 128 samples at 16 kHz is
 // 8 ms of audio -- enough to see waveform shape without costing much wire.
 #define SCOPE_POINTS 128
+// /mic is hand-written rather than built with OSCMessage::add(), so nothing
+// pads its blob for it; 128 divides by 4 and no pad bytes are emitted. Assert
+// the invariant instead of trusting the comment beside the write -- /cam pads
+// explicitly because a JPEG length is arbitrary, but this one relies on the
+// constant, and a constant is exactly what a later edit changes.
+static_assert(SCOPE_POINTS % 4 == 0, "OSC blob payload must be a multiple of 4");
 static int16_t pcm[512];
 
 // Pin map for CAMERA_MODEL_XIAO_ESP32S3, copied from the esp32 core's own

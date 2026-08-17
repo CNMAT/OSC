@@ -31,7 +31,9 @@
 // touch Serial1.
 //
 // Outbound
-//   /hello ,siiii  name, oledOK, shtOK, motorOK, rgbCount
+//   /hello ,sTTTi  name, oledOK, shtOK, motorOK, rgbCount
+//                 -- the OK flags are OSC booleans: their tags are T or F
+//                    with no payload, NOT i
 //   /pb ,iiiii ff  seq, button, pot (0-1023), ldr (0-1023), relay,
 //                  tempC, humidity (%)
 //                  One message, sampled in one pass, so the values share an
