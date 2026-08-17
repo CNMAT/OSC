@@ -48,9 +48,10 @@
 // SERCOM in SPI mode -- SPI2, which is exactly what the variant's own "SPI for
 // PDM mic" block (clock 5, data 6) is describing.
 //
-// STATUS: measured working on an EdgeBadge, 2026-08-11 -- quiet-room floor
-// rms 20 (-64 dBFS) at MIC_GAIN 16, rising with speech, 26.6 dB between the
-// floor and the loudest frame. The no-microphone path is verified separately
+// STATUS: measured working on an EdgeBadge, 2026-08-11 -- 26.6 dB between the
+// quiet-room floor and the loudest frame at MIC_GAIN 16. The absolute levels
+// those runs printed were 32x low because of the rms scaling bug fixed below;
+// corrected, the floor is near -34 dBFS. The no-microphone path is verified separately
 // (see setup()). Still unmeasured: MIC_GAIN 8, the shipped default -- the
 // figures above are at 16, and halving them is arithmetic, not a capture.
 //
@@ -87,13 +88,16 @@
 // peak below are post-gain figures and too much gain destroys loud sounds
 // rather than merely brightening quiet ones.
 //
-// Measured at gain 16, 30 s of speech and taps at an EdgeBadge: the noise
-// floor sat at rms 20 (-64 dBFS), quiet peaks ran about 3000 against 25000
-// plus when spoken to, and the loudest transient pinned peak at exactly
-// 32767 -- clipped. Hence 8. The gain is a plain multiply ahead of the clip,
-// so that floor should halve to an rms near 10 and the headroom should
-// double; that arithmetic has not itself been re-measured under load. Raise
-// it for a quiet installation, lower it if you expect to shout at the badge.
+// Measured at gain 16, 30 s of speech and taps at an EdgeBadge. Those runs
+// predate the rms scaling fix above, so the raw figures they reported were
+// 32x low; corrected to true full scale they are a noise floor near rms 640
+// (-34 dBFS) rising to about 13700 (-8 dBFS) on the loudest frame, with the
+// transient pinning peak at 32767 -- clipped. The 26.6 dB between floor and
+// loudest frame is a RATIO and so was never affected by the scale error.
+// Hence gain 8. The gain is a plain multiply ahead of the clip, so the floor
+// should halve and the headroom double; that arithmetic has not itself been
+// re-measured under load. Raise it for a quiet installation, lower it if you
+// expect to shout at the badge.
 #define MIC_GAIN     8.0f
 #define SCOPE_POINTS 96
 #define SCOPE_DECIM  8               // 16 kHz / 8 = one scope point per 0.5 ms
@@ -227,21 +231,29 @@ static void beep(uint16_t freq, uint16_t ms, uint8_t vol) {
 // decimateFilterWord() returns true on the second of each pair, handing back a
 // 16-bit sample centred on 32768 with the DC offset tracked out.
 //
-// Keep this short. The (v>>5) before squaring is what makes the accumulator
-// safe rather than decorative: v is +-32768, so v*v alone reaches 1.07e9 and
-// overflows uint32 after four samples. Shifted, each term caps at 1.05e6 and
-// a full 50 ms frame of 800 samples sums to at most 8.4e8.
+// Keep this short, but do NOT pre-shift v before squaring. An earlier version
+// accumulated (v>>5)^2 and justified it as overflow protection -- which was
+// simply wrong: micSumSq is uint64_t, and a single v*v of 1.07e9 fits a
+// uint32 addend anyway, so nothing could overflow. What the shift actually
+// did was send rms out 32x low, i.e. 30 dB, while `peak` in the same message
+// went out at full scale, so two numbers derived from the same samples
+// disagreed by 30 dB and the page's one dBFS conversion could not be right
+// for both. Every absolute level this sketch's header used to quote was
+// wrong by that amount. PicoMateOscuino warns against this exact shift by
+// name; this file had the bug it warns about.
 void PDM_HANDLER(void) {
   uint16_t raw;
   if (!pdmspi.decimateFilterWord(&raw)) return;
 
   const int32_t v = (int32_t) raw - 32768;
-  const int32_t q = v >> 5;
-  micSumSq += (uint32_t) (q * q);
+  micSumSq += (uint32_t) (v * v);            // full scale, into a uint64
   micCount++;
 
+  // No (int16_t) here: |v| reaches 32768, which does not fit int16_t and
+  // wrapped to -32768 -- a negative peak exactly when the mic clipped
+  // hardest. micPeak is int32_t precisely so it does not need narrowing.
   const int32_t a = v < 0 ? -v : v;
-  if (a > micPeak) micPeak = (int16_t) a;
+  if (a > micPeak) micPeak = a;
 
   if (++micDecim >= SCOPE_DECIM) {
     micDecim = 0;
@@ -363,6 +375,21 @@ static void routeRate(OSCMessage &m) {              // /rate <ms>
 
 /* -------------------------------------------------------------------- main */
 
+// The boot /hello is very nearly always lost: the board resets, its USB
+// device re-enumerates, and the host opens the port some hundreds of
+// milliseconds later, by which time setup() has long finished. Measured on
+// this repo's ESP32 and SAMD boards -- a probe opening the port straight
+// after flashing never once caught it. So /hello is also an INBOUND address
+// and the page asks for it on connect.
+static void sendHello() {
+  OSCMessage hello("/hello");
+  // the page uses micOK to decide whether to show the microphone panel
+  hello.add("PyBadgeOscuino").add((intOSC_t) NEOPIX_NUM).add(accelOK).add(micOK);
+  SLIPSerial.beginPacket(); hello.send(SLIPSerial); SLIPSerial.endPacket();
+}
+
+static void routeHello(OSCMessage &) { sendHello(); }
+
 void setup() {
   SLIPSerial.begin(115200);
 
@@ -394,7 +421,7 @@ void setup() {
   // Express built with this FQBN): the raw filter output was a flat 0, the
   // probe returned micOK false, and the sketch went on sending /pybadge with
   // no /mic at all. The path a mic-less PyBadge takes is therefore known good.
-  // The mic-present path is NOT verified -- see the note in the header.
+  // The mic-present path IS verified -- see the STATUS note in the header.
   if (pdmspi.begin(PDM_RATE)) {
     pdmspi.setMicGain(MIC_GAIN);
     delay(100);
@@ -411,10 +438,7 @@ void setup() {
   accelOK = lis.begin(0x19) || lis.begin(0x18);
   if (accelOK) lis.setRange(LIS3DH_RANGE_4_G);
 
-  OSCMessage hello("/hello");
-  // the page uses micOK to decide whether to show the microphone panel
-  hello.add("PyBadgeOscuino").add((intOSC_t) NEOPIX_NUM).add(accelOK).add(micOK);
-  SLIPSerial.beginPacket(); hello.send(SLIPSerial); SLIPSerial.endPacket();
+  sendHello();          // nearly always lost; the page asks again
 }
 
 void loop() {
@@ -440,6 +464,7 @@ void loop() {
       in.dispatch("/pixel",            routePixel);
       in.dispatch("/led",              routeLed);
       in.dispatch("/rate",             routeRate);
+      in.dispatch("/hello",       routeHello);
     }
   }
 

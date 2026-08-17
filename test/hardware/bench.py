@@ -54,19 +54,27 @@ def seq_frame(seq):
                                     crc - 0x100000000 if crc > 0x7FFFFFFF else crc]))
 
 
-def query(p, tries=3):
-    """Ask for /b/r. Retries because the query itself rides the path under test."""
-    for _ in range(tries):
-        p.write(slip_encode(msg('/b/q')))
-        raw = p.drain(1.0)
-        for f in slip_frames(raw):
-            try:
-                addr, args = decode(f)
-            except Exception:
-                continue
-            if addr == '/b/r' and len(args) == 7:
-                return dict(zip(('rxFrames', 'rxBytes', 'seqErrs', 'crcErrs',
-                                 'decodeErrs', 'firstGap', 'spanMs'), args))
+def query(p, window=1.6):
+    """Ask for /b/r once, and never retry.
+
+    /b/q REPORTS AND RESETS in one operation, so a retry cannot recover a lost
+    reply -- it reports the counters that the first, lost, reply already
+    cleared. The earlier version retried three times, which meant a single
+    dropped reply produced a near-zero count indistinguishable from real loss:
+    the harness would have blamed the board for its own missed read. One
+    attempt with a longer window, and None when it does not answer, so the
+    caller reports "unreachable" instead of inventing a number.
+    """
+    p.write(slip_encode(msg('/b/q')))
+    raw = p.drain(window)
+    for f in slip_frames(raw):
+        try:
+            addr, args = decode(f)
+        except Exception:
+            continue
+        if addr == '/b/r' and len(args) == 7:
+            return dict(zip(('rxFrames', 'rxBytes', 'seqErrs', 'crcErrs',
+                             'decodeErrs', 'firstGap', 'spanMs'), args))
     return None
 
 
@@ -225,6 +233,7 @@ def main():
             if not gate(p):
                 return 1
             n = a3 or 200
+            fails_before = fails
             print(f"\nsearch: {n} frames, unpaced back-to-back writes first")
             if all(report_in(n, run_in(p, n, 0)) for _ in range(REPEATS)):
                 print(f"\nno pacing needed: {n} frames clean unpaced x{REPEATS}")
@@ -238,7 +247,11 @@ def main():
                         hi = mid
                     else:
                         lo = mid
-                        fails = 0            # lossy runs below threshold expected
+                        # A lossy run below the threshold is the search doing
+                        # its job, so it must not count as a failure -- but the
+                        # old line zeroed the WHOLE tally, wiping any real
+                        # failure recorded before the search began.
+                        fails = fails_before
                 print(f"\nminimum clean inter-frame gap: ~{hi} us"
                       f" ({1e6 / hi:.0f} f/s). A number this precise still"
                       f" needs a mechanism before the README will take it.")
@@ -259,9 +272,15 @@ def main():
             for k in (5, 10, 15, 20, 30, 50):
                 r = run_in(p, k, -1)
                 got = r['rxFrames'] if r else 0
+                # ring used to print its sweep and always exit 0, so a total
+                # loss and a clean run were the same exit status. A ceiling is
+                # the expected RESULT here, not an error, but an unreachable
+                # board is an error and must not read as success.
+                if r is None:
+                    fails += 1
                 print(f"  burst {k:3d} frames ({k * 22} SLIP bytes): received {got}"
                       + ("" if r and r['firstGap'] < 0 else
-                         f", firstGap@{r['firstGap']}" if r else ", no reply"))
+                         f", firstGap@{r['firstGap']}" if r else ", NO REPLY"))
             p.write(slip_encode(msg('/b/lazy', [0])))
         else:
             print(f"unknown mode {mode}")

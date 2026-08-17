@@ -222,6 +222,22 @@ static void send(const Sample &s) {
 
 /* -------------------------------------------------------------------- */
 
+// The boot /hello is very nearly always lost: the board resets, its USB
+// device re-enumerates, and the host opens the port some hundreds of
+// milliseconds later, by which time setup() has long finished. Measured on
+// this repo's ESP32 and SAMD boards -- a probe opening the port straight
+// after flashing never once caught it. So /hello is also an INBOUND address
+// and the page asks for it on connect.
+static void sendHello() {
+  OSCMessage hello("/hello");
+  hello.add("EsploraOscuino").add((int32_t) ARG_COUNT);
+  SLIPSerial.beginPacket();
+  hello.send(SLIPSerial);
+  SLIPSerial.endPacket();
+}
+
+static void routeHello(OSCMessage &) { sendHello(); }
+
 void setup() {
   SLIPSerial.begin(BAUD);
   Esplora.writeRGB(0, 0, 0);
@@ -229,11 +245,7 @@ void setup() {
   pinMode(TK_OUT_B, OUTPUT); analogWrite(TK_OUT_B, 0);
 
   delay(300);                       // let the host finish enumerating
-  OSCMessage hello("/hello");
-  hello.add("EsploraOscuino").add((int32_t) ARG_COUNT);
-  SLIPSerial.beginPacket();
-  hello.send(SLIPSerial);
-  SLIPSerial.endPacket();
+  sendHello();          // nearly always lost; the page asks again
 }
 
 void loop() {
@@ -246,6 +258,7 @@ void loop() {
       msgIn.dispatch("/rate",      routeRate);
       msgIn.dispatch("/heartbeat", routeHeartbeat);
       msgIn.dispatch("/deadband",  routeDeadband);
+      msgIn.dispatch("/hello",       routeHello);
     }
     msgIn.empty();
   }

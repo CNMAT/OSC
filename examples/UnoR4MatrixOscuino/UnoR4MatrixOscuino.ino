@@ -170,20 +170,37 @@ static void routePixels(OSCMessage &m) {     // /matrix/pixels ,b <96>
   matrix.loadPixels(&matrix.shadow[0][0], MW * MH);
 }
 
+// The boot /hello is very nearly always lost: the board resets, its USB
+// device re-enumerates, and the host opens the port hundreds of milliseconds
+// later, long after setup() has finished. So /hello is an INBOUND address
+// too, and the page asks for it on connect.
+static void sendHello() {
+  OSCMessage hello("/hello");
+  hello.add("UnoR4MatrixOscuino").add((intOSC_t) textCols).add(matrixOK);
+  SLIPSerial.beginPacket(); hello.send(SLIPSerial); SLIPSerial.endPacket();
+}
+
+static void routeHello(OSCMessage &) { sendHello(); }
+
 void setup() {
   SLIPSerial.begin(115200);
 
-  // begin() returns 0 on success. There is no way to tell a wired-up matrix
-  // from a bare RA4M1 -- the driver talks to on-chip peripherals either way --
-  // so this reports the DRIVER, not the panel, and /hello says so.
-  matrixOK = (matrix.begin() == 0);
+  // ArduinoLEDMatrix::begin() returns TRUE on success (it accumulates rv and
+  // returns it; only the no-free-timer path returns false). An earlier line
+  // here tested == 0 and so set matrixOK true exactly when the driver had
+  // failed. It went unnoticed because /hello was unreachable -- see the
+  // routeHello added below -- so nothing ever displayed the flag. Two bugs
+  // concealing each other.
+  //
+  // There is still no way to tell a wired-up matrix from a bare RA4M1: the
+  // driver talks to on-chip peripherals either way, so this reports the
+  // DRIVER, not the panel, and /hello says so.
+  matrixOK = (matrix.begin() != 0);
 
   recomputeWidth();
   renderScroll();
 
-  OSCMessage hello("/hello");
-  hello.add("UnoR4MatrixOscuino").add((intOSC_t) textCols).add(matrixOK);
-  SLIPSerial.beginPacket(); hello.send(SLIPSerial); SLIPSerial.endPacket();
+  sendHello();          // nearly always lost; the page asks again
 }
 
 void loop() {
@@ -205,6 +222,7 @@ void loop() {
       msg.dispatch("/matrix/bright", routeBright);
       msg.dispatch("/matrix/pause",  routePause);
       msg.dispatch("/matrix/pixels", routePixels);
+      msg.dispatch("/hello",         routeHello);
     }
   }
 

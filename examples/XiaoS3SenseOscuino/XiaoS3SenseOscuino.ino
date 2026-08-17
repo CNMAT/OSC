@@ -214,6 +214,20 @@ static void routeSize(OSCMessage &m) {                // /cam/size 0..3
 
 /* -------------------------------------------------------------------- main */
 
+// The boot /hello is very nearly always lost: the board resets, its USB
+// device re-enumerates, and the host opens the port some hundreds of
+// milliseconds later, by which time setup() has long finished. Measured on
+// this repo's ESP32 and SAMD boards -- a probe opening the port straight
+// after flashing never once caught it. So /hello is also an INBOUND address
+// and the page asks for it on connect.
+static void sendHello() {
+  OSCMessage hello("/hello");
+  hello.add("XiaoS3SenseOscuino").add((intOSC_t) NANALOG).add(cameraOK).add(micOK);
+  SLIPSerial.beginPacket(); hello.send(SLIPSerial); SLIPSerial.endPacket();
+}
+
+static void routeHello(OSCMessage &) { sendHello(); }
+
 void setup() {
 #if defined(ARDUINO_USB_MODE) && ARDUINO_USB_MODE == 1
   // HWCDC installs its 256-byte rings only if none is preset, so these have to
@@ -231,9 +245,7 @@ void setup() {
   micOK = I2Sin.begin(I2S_MODE_PDM_RX, 16000,
                       I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
 
-  OSCMessage hello("/hello");
-  hello.add("XiaoS3SenseOscuino").add((intOSC_t) NANALOG).add(cameraOK).add(micOK);
-  SLIPSerial.beginPacket(); hello.send(SLIPSerial); SLIPSerial.endPacket();
+  sendHello();          // nearly always lost; the page asks again
 }
 
 void loop() {
@@ -257,6 +269,7 @@ void loop() {
       in.dispatch("/cam/quality", routeQuality);
       in.dispatch("/cam/size",    routeSize);
       in.dispatch("/mic/rate",    routeMicRate);
+      in.dispatch("/hello",       routeHello);
     }
   }
 

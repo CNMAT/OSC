@@ -109,8 +109,25 @@ def decode(p):
             args.append(round(struct.unpack('>f', p[i:i + 4])[0], 4)); i += 4
         elif t == 's':
             s, i = dec_str(p, i); args.append(s)
+        elif t == 'b':
+            n = struct.unpack('>i', p[i:i + 4])[0]; i += 4
+            args.append(p[i:i + n]); i += (n + 3) & ~3
+        elif t == 'h':
+            args.append(struct.unpack('>q', p[i:i + 8])[0]); i += 8
+        elif t == 'd':
+            args.append(round(struct.unpack('>d', p[i:i + 8])[0], 6)); i += 8
         elif t in 'TFIN':
-            args.append(t)
+            args.append(t)          # zero width, nothing to skip
+        else:
+            # An unknown tag has no known width, so the offset cannot be
+            # advanced past it. Skipping it silently -- which this did -- left
+            # `i` pointing into the previous argument, so every remaining
+            # argument decoded to a plausible-looking number from the wrong
+            # bytes. A measurement tool that returns confident nonsense is
+            # worse than one that stops, so stop.
+            raise ValueError(
+                f"unknown OSC type tag {t!r} in {addr!r}; cannot find the "
+                f"next argument, decoded {len(args)} of {len(tags) - 1}")
     return (addr, args)
 
 

@@ -126,6 +126,20 @@ static void routeRate(OSCMessage &m) {          // /rate <ms>
 
 /* -------------------------------------------------------------------- main */
 
+// The boot /hello is very nearly always lost: the board resets, its USB
+// device re-enumerates, and the host opens the port some hundreds of
+// milliseconds later, by which time setup() has long finished. Measured on
+// this repo's ESP32 and SAMD boards -- a probe opening the port straight
+// after flashing never once caught it. So /hello is also an INBOUND address
+// and the page asks for it on connect.
+static void sendHello() {
+  OSCMessage hello("/hello");
+  hello.add("HallowingOscuino").add(accelOK);
+  SLIPSerial.beginPacket(); hello.send(SLIPSerial); SLIPSerial.endPacket();
+}
+
+static void routeHello(OSCMessage &) { sendHello(); }
+
 void setup() {
   SLIPSerial.begin(115200);
 
@@ -147,9 +161,7 @@ void setup() {
   accelOK = lis.begin(0x18) || lis.begin(0x19);   // Adafruit does not state the
   if (accelOK) lis.setRange(LIS3DH_RANGE_4_G);    // address; try both
 
-  OSCMessage hello("/hello");
-  hello.add("HallowingOscuino").add(accelOK);
-  SLIPSerial.beginPacket(); hello.send(SLIPSerial); SLIPSerial.endPacket();
+  sendHello();          // nearly always lost; the page asks again
 }
 
 void loop() {
@@ -173,6 +185,7 @@ void loop() {
       in.dispatch("/pixel",            routePixel);
       in.dispatch("/led",              routeLed);
       in.dispatch("/rate",             routeRate);
+      in.dispatch("/hello",       routeHello);
     }
   }
 
