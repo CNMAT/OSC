@@ -72,6 +72,32 @@ families have been characterised on hardware:
 | DeskPi PicoMate | RP2040 (M0+) | `PicoMateOscuino` end to end: LSM6DS3TR-C 0x6A, MMC5603 0x30, SHT30 0x44, LTR-381RGB 0x53 on `Wire1` GP14/15; SSD1315 0x3C alone on `Wire` GP16/17; PDM mic via the core's PIO PDM library; button, encoder, PIR, WS2812, buzzer · both I²C buses found by sweep · mic response +10.3 dB at the buzzer's 4.8 kHz resonance, mean of 3 | Two traps recorded in the sketch: arduino-pico defaults `Wire1` to GP26/GP27 — this board's **button and buzzer** — so a bare `Wire1.begin()` silently reconfigures both; and GP26 is shared by the button and the encoder switch. Chips identified by ID register, not address: 0x53 failed the ADXL345 DEVID check, which is what ruled that part out. |
 | Seeed XIAO RP2350 | RP2350 (M33) | echo 22/22 · widths 11/11 · full bench clean incl. compound ×3 and 1100 B lazy-reader bursts (~3.3k f/s) | Predicted clean in advance from TinyUSB's NAK design; measured exactly so. |
 
+### What the stock-queue overflow actually looks like
+
+The C6 and Feather rows above each quote a truncation count under
+`-DOSC_SLIP_RX_BUFFER=0`, and earlier revisions of this file called the
+Feather's "the C6's exact signature". Measured properly on 2026-08-17, that
+framing was wrong.
+
+Nineteen controlled trials — one 1100-byte burst per trial, a hard reset
+before every one so no trial inherits the last one's state, and the
+lazy-reader flag explicitly cleared — across an M5Stack AtomS3 (both the
+M5Stack 3.3.8 and Espressif 3.3.11 cores) and an M5Stack StampS3 (Espressif
+3.3.11): **eighteen ended with the board not answering at all, and one
+reported `rx=16/50, seqErrs=4, crcErrs=2, decodeErrs=1, firstGap=12`.**
+
+So the byte ceiling reproduces — the overflow always happens, at the same
+place — but what the board does afterwards does not. Sometimes the corruption
+leaves the SLIP decoder able to resynchronise and report a truncated count;
+more often it swallows the query that follows and the sketch goes silent
+until reset. A quoted frame count is therefore a sample from that
+distribution, not a property of the part, and two boards printing different
+numbers is not evidence that they differ.
+
+None of this is reachable with the library as shipped: `begin()` sets the
+queue to 4096 on ESP32 cores, and every HWCDC board here is clean on that
+default. It matters only if you compile the fix out.
+
 ### Renesas RA4M1
 
 | board | chip | ran | found |
@@ -84,10 +110,12 @@ families have been characterised on hardware:
 | board | chip | ran | found |
 |---|---|---|---|
 | Seeed XIAO ESP32-C6 + XIAO Expansion Board | ESP32-C6 (RISC-V, 160 MHz) | `XiaoC6ExpOscuino` end to end: OLED, buzzer, button, LED · I2C bus scanned | **Stock FQBN defaults** — this variant sets `cdc_on_boot=1`, unlike the generic C6 devkit that needs `:CDCOnBoot=cdc`. Bus scan found 0x3C (SSD1306), 0x51 (PCF8563 RTC), 0x57 (EEPROM); SDA=GPIO22/D4, SCL=GPIO23/D5, buzzer D3, button D1 active-LOW. `A3` does not exist on this variant (only A0–A2) though Seeed's wiki names the buzzer pin that way — use `D3`. The boot `/hello` is never seen: the USB device re-enumerates after reset and the host opens the port later, so `/hello` is also an inbound address the client asks for. `XiaoC6ExpWiFi` is the WiFi twin, compiled but not run. |
-| Adafruit Feather ESP32-S3 (no PSRAM) | ESP32-S3 (Xtensa LX7) | full bench clean on its TinyUSB default (5000-6250 f/s, 4.4 KB one-write); then rebuilt `:USBMode=hwcdc` for a controlled A/B | The board that generalises the HWCDC finding: same hardware, same sketch, stack as the only variable. TinyUSB clean; HWCDC with `-DOSC_SLIP_RX_BUFFER=0` truncates at **12 frames / `firstGap@11`** — the C6's exact signature; HWCDC with the library default clean. No USB-serial chip, so the first flash needs BOOT+RESET by hand and a plain RESET afterwards to leave download mode. |
+| Adafruit Feather ESP32-S3 (no PSRAM) | ESP32-S3 (Xtensa LX7) | full bench clean on its TinyUSB default (5000-6250 f/s, 4.4 KB one-write); then rebuilt `:USBMode=hwcdc` for a controlled A/B | The board that generalises the HWCDC finding: same hardware, same sketch, stack as the only variable. TinyUSB clean; HWCDC with `-DOSC_SLIP_RX_BUFFER=0` truncated at **12 frames / `firstGap@11`**, matching the C6's number; HWCDC with the library default clean. **That truncation count is one draw, not a signature** — see the note below the table. No USB-serial chip, so the first flash needs BOOT+RESET by hand and a plain RESET afterwards to leave download mode. |
 | ESP32-C6 devkit | ESP32-C6 (RISC-V, 160 MHz) | echo 22/22 · widths 11/11 · bench: byte ceiling ~264 B (12 × 22 B frames, `firstGap@11`), ×16 queue → ceiling ~4.3 KB, out + compound clean · library default re-verified: flag-free build 50/50 ×3, ring clean to 1100 B, 4400 B tail loss @193 (queue arithmetic) | The HWCDC conviction: the cliff moves with the configured queue, twice — and the `begin()`-baked remedy reproduces the hand-rolled A/B identically on hardware. Needs `:CDCOnBoot=cdc`. |
 | ESP32-C3 devkit | ESP32-C3 (RISC-V) | echo 22/22 · widths 11/11 · original 4-board HWCDC boundary | Needs `:CDCOnBoot=cdc`. |
-| Adafruit QT Py ESP32-S3 | ESP32-S3 (Xtensa LX7) | echo 22/22 · widths 11/11 · original 4-board HWCDC boundary | Needs `:USBMode=hwcdc,CDCOnBoot=cdc` — its default USB-OTG mode enumerates nothing. First flash needs BOOT+RESET by hand, then a plain RESET to leave download mode. |
+| Adafruit QT Py ESP32-S3 (N4R2) | ESP32-S3 (Xtensa LX7) | echo 22/22 · widths 11/11 · original 4-board HWCDC boundary · **full bench 2026-08-17 on the stock TinyUSB default, all clean**: gate, 50-frame one-write ×3 (5555 f/s), out 200 ×3, compound ×3, 1100 B lazy-reader ring | The earlier row said this board "needs `:USBMode=hwcdc,CDCOnBoot=cdc` — its default USB-OTG mode enumerates nothing". On the N4R2 in front of me the stock default (`build.usb_mode=0`, TinyUSB) enumerated and benched clean without any option override, so that instruction is not general — it belongs to the earlier unit/core, not to the board. First flash needs BOOT+RESET by hand, then a plain RESET to leave download mode. |
+| M5Stack AtomS3 | ESP32-S3 (Xtensa LX7, QFN56 rev v0.2) | full bench 2026-08-17 on stock defaults (**HWCDC**, `build.usb_mode=1`), all clean: gate, 50-frame one-write ×3 (5555 f/s), out 200 ×3, compound ×3, 1100 B lazy-reader ring through 1100 B | Third HWCDC part to run clean on the library's default 4096-byte queue. Pulled from an Atom JoyStick base to test — the K137 base's own USB-C is charge-only (D+/D−/SBU no-connect on `USB1`, and its STM32F030F4P6 has no USB peripheral), so the host cable must go to the AtomS3's own upper Type-C. |
+| LilyGO T-Display-S3 | ESP32-S3 (Xtensa LX7, QFN56 rev v0.2, 8 MB PSRAM) | full bench 2026-08-17 on stock defaults (**HWCDC**, `build.usb_mode=1`), all clean: gate, 50-frame one-write ×3 (5555-6250 f/s), out 200 ×3, compound ×3, 1100 B lazy-reader ring | Fourth HWCDC part clean on the library default. |
 | Seeed XIAO ESP32S3 Sense | ESP32-S3, 8 MB PSRAM, OV2640 | echo 22/22 · widths 11/11 · `XiaoS3SenseOscuino` camera: 19/19 valid JPEGs, 320×240, ~4.8 f/s over SLIP | Stock FQBN defaults — carrying the QT Py's options here silences it completely. The sketch's PDM microphone block compiles but has **never run**; it says so in its own header. |
 | M5Stack StampS3 | ESP32-S3 | echo 22/22 · widths 11/11 · probe 7/7 | |
 | M5Stack NanoC6 | ESP32-C6 | none — board stopped responding before any suite ran | Recorded so the gap is visible. |

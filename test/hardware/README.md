@@ -551,7 +551,10 @@ does not share the loss. The gradient is now bounded at both ends:
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | not re-measured |
 | Adafruit Feather M4 Express (SAMD51) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
 | Adafruit PyBadge (SAMD51) | — | — | — | bench 2026-08-13: gate + in 50 ×3 (8333 f/s) + out ×3 + compound ×3 + 1100 B lazy-reader ring all clean |
-| Adafruit Feather ESP32-S3 no PSRAM | — | — | — | bench 2026-08-16: TinyUSB default all clean (5000-6250 f/s); `:USBMode=hwcdc` + stock queue truncates at 12 frames / `firstGap@11` (the C6 signature); HWCDC + library default clean — the two-chip A/B |
+| Adafruit Feather ESP32-S3 no PSRAM | — | — | — | bench 2026-08-16: TinyUSB default all clean (5000-6250 f/s); `:USBMode=hwcdc` + stock queue truncated at 12 frames / `firstGap@11`; HWCDC + library default clean — the two-chip A/B. The truncation COUNT is one sample, not a fingerprint: see BOARDS.md, "What the stock-queue overflow actually looks like" |
+| M5Stack AtomS3 | — | — | — | bench 2026-08-17, stock defaults (HWCDC): gate + in 50 one-write ×3 (5555 f/s) + out 200 ×3 + compound ×3 + 1100 B lazy-reader ring **all clean** |
+| LilyGO T-Display-S3 | — | — | — | bench 2026-08-17, stock defaults (HWCDC): all clean, 5555-6250 f/s |
+| Adafruit QT Py ESP32-S3 N4R2 | — | — | — | bench 2026-08-17, stock defaults (**TinyUSB**, no option overrides needed on this unit): all clean, 5555 f/s |
 | Adafruit EdgeBadge (SAMD51) | — | — | — | not re-measured |
 | UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | bench 2026-08-12: gate + in/out/compound ×3 all clean (~530 f/s); lazy-reader ring pins at 25 frames / `firstGap@24` ×3 → the 512 B UART ring, see burst section |
 | Seeed XIAO RA4M1 (RA4M1, native USB) | 22/22 | 11/11 | — | bench 2026-08-13: gate + in 50/200 one-write ×3 (2173 f/s, 4.4 KB) + out ×3 + compound ×3 + 1100 B lazy-reader ring **all clean** — the native control against the bridged R4's 512 B ceiling |
