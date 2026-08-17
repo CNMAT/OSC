@@ -425,6 +425,16 @@ buffer predicts:
 | 20 ms/loop | 25 frames, `firstGap@24`, ×3 identical | 550 B |
 | 50 ms/loop | 24 frames | 528 B |
 
+**The control run confirms it is the bridge, not the chip.** A Seeed XIAO
+RA4M1 is the same RA4M1 silicon reached over NATIVE USB instead of through
+the ESP32-S3 bridge, and on the identical protocol it is clean everywhere
+the UNO R4 WiFi truncates: 50- and 200-frame one-write bursts ×3 (4.4 KB,
+2173 f/s on-board), out ×3, compound ×3, and the same 20 ms/loop
+lazy-reader ring map clean through 1100 bytes — against 25 frames / 550
+bytes on the bridged board. Same processor, same sketch, same instrument,
+same day; only the transport differs. So the 512-byte ceiling belongs to the
+bridged UART path, and nothing about the RA4M1 itself needs pacing.
+
 As the drain slows toward nothing the ceiling asymptotes onto ~512 bytes —
 `SERIAL_BUFFER_SIZE` in the core's `Serial.h`, the ring itself, with the
 faster runs' surplus being what the sketch drained mid-burst. A 200 ms
@@ -539,7 +549,7 @@ does not share the loss. The gradient is now bounded at both ends:
 | Adafruit PyBadge (SAMD51) | — | — | — | bench 2026-08-13: gate + in 50 ×3 (8333 f/s) + out ×3 + compound ×3 + 1100 B lazy-reader ring all clean |
 | Adafruit EdgeBadge (SAMD51) | — | — | — | not re-measured |
 | UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | bench 2026-08-12: gate + in/out/compound ×3 all clean (~530 f/s); lazy-reader ring pins at 25 frames / `firstGap@24` ×3 → the 512 B UART ring, see burst section |
-| Seeed XIAO RA4M1 (RA4M1, native USB) | 22/22 | 11/11 | — | not re-measured |
+| Seeed XIAO RA4M1 (RA4M1, native USB) | 22/22 | 11/11 | — | bench 2026-08-13: gate + in 50/200 one-write ×3 (2173 f/s, 4.4 KB) + out ×3 + compound ×3 + 1100 B lazy-reader ring **all clean** — the native control against the bridged R4's 512 B ceiling |
 | M5Stack NanoC6 | not run — board stopped responding | | | |
 
 The EdgeBadge's PDM microphone is exercised by `examples/PyBadgeOscuino`, not

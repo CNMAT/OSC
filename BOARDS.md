@@ -75,7 +75,7 @@ families have been characterised on hardware:
 | board | chip | ran | found |
 |---|---|---|---|
 | Arduino UNO R4 WiFi | RA4M1, **bridged UART** (ESP32-S3 bridge) | echo 22/22 · widths 11/11 · bench 2026-08-12: gate, 50/200-frame one-write bursts ×3, out ×3, compound ×3 all clean (~530 f/s on-board); ring map pins at 25 frames / `firstGap@24` ×3 · `UnoR4MatrixOscuino` LED-matrix demo end to end | The only non-native-USB board here: baud rate is real (115200), a mismatch reads as framing noise, and flashes intermittently report success without taking. **The bridge has no end-to-end flow control**, so the core's 512-byte UART ring overruns rather than back-pressuring — see the burst section. Also the only board here to wedge mid-session and need a physical RESET; a reflashed known-good sketch failed the trickle gate until then, which is exactly what that gate is for. |
-| Seeed XIAO RA4M1 | RA4M1, native USB | echo 22/22 · widths 11/11 | Same chip, native CDC — the pairing isolates bridge effects from silicon. |
+| Seeed XIAO RA4M1 | RA4M1, native USB | echo 22/22 · widths 11/11 · bench 2026-08-13: gate, 50/200-frame one-write ×3 (4.4 KB, 2173 f/s), out ×3, compound ×3, 1100 B lazy-reader ring — **all clean** | The pairing paid off: same silicon as the UNO R4 WiFi but over native USB, and it loses nothing where the bridged board pins at 25 frames / 550 B. The 512-byte ceiling is the bridge's, not the RA4M1's. Flashes over DFU; enumerates as VID 0x2886 PID 0x0049 with a real CDC port, unlike a board sitting in `RA USB Boot`. |
 
 ### ESP32 (HWCDC unless noted)
 
