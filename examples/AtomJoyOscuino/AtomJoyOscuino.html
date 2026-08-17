@@ -53,7 +53,7 @@
   .below{display:flex;justify-content:space-between;align-items:center;margin-top:14px;
          gap:12px;flex-wrap:wrap}
   .batt{font:600 11px var(--mono);color:var(--dim)}
-  .front{width:60px;height:26px;border-radius:13px;background:#242835;
+  .front{width:128px;height:22px;margin-top:6px;border-radius:11px;background:#242835;
          border:1px solid var(--line);font:600 10px var(--mono);color:var(--dim);
          display:flex;align-items:center;justify-content:center}
   .front.hot{background:var(--acc);color:#200e00}
@@ -93,6 +93,11 @@
     </div>
     <div class="lcdwrap">
       <canvas id="lcd" width="128" height="128"></canvas>
+      <!-- The front button is not a separate control: the AtomS3's SCREEN is
+           the button (GPIO41). Showing it anywhere else invites you to look
+           for a button that does not exist, so it sits directly under the
+           glass it actually is. -->
+      <div class="front" id="front" title="the AtomS3 screen itself is this button (GPIO41)">SCREEN PRESS</div>
       <div id="glass" contenteditable="true" spellcheck="false"
            title="type here — five lines go to the real screen"></div>
     </div>
@@ -103,7 +108,6 @@
   </div>
   <div class="below">
     <span class="batt">bat1 <span id="b1">–</span> mV · bat2 <span id="b2">–</span> mV</span>
-    <div class="front" id="front">FRONT</div>
     <table><tr>
       <td class="k">sketch</td><td class="v" id="name">–</td>
       <td class="k">joystick MCU</td><td class="v" id="jok">–</td>
@@ -195,7 +199,12 @@ function drawStick(cv, x, y){
   ctx.strokeStyle="#2a2e3a";ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(W/2,0);ctx.lineTo(W/2,H);ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
   ctx.strokeStyle="#3a3f4e";ctx.strokeRect(6,6,W-12,H-12);
-  const px=6+(x/4095)*(W-12), py=6+(1-y/4095)*(H-12);
+  // Canvas y grows downward, and so does this hardware's stick count:
+  // pushing a stick UP RAISES the raw value, measured on the bench, so the
+  // two agree and no flip belongs here. The 1-y/4095 that used to sit in
+  // this line was an assumption about axis polarity, and it drew both
+  // sticks upside down.
+  const px=6+(x/4095)*(W-12), py=6+(y/4095)*(H-12);
   ctx.beginPath();ctx.arc(px,py,9,0,7);ctx.fillStyle="#ff7a1a";ctx.fill();
   ctx.beginPath();ctx.arc(px,py,3.5,0,7);ctx.fillStyle="#fff";ctx.fill();
 }
