@@ -8,4 +8,5 @@ patterns
 dos
 fuzzbad
 sliptcp
+buffered
 *.dSYM/

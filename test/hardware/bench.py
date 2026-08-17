@@ -109,10 +109,38 @@ def run_in(p, n, gap_us):
     return query(p)
 
 
+def count_bs(raw):
+    n = 0
+    for f in slip_frames(raw):
+        try:
+            a, ar = decode(f)
+            if a == '/b/s' and len(ar) == 2:
+                n += 1
+        except Exception:
+            pass
+    return n
+
+
 def run_out(p, n, gap_us):
     query(p)
     p.write(slip_encode(msg('/b/f', [n, gap_us])))
-    raw = p.drain(2.0 + n * max(gap_us, 100) / 1e6)
+    # Drain until the board goes quiet, not for a scheduled window: the old
+    # fixed window (2 s + 100 us/frame) assumed the board sends at 10k f/s
+    # or faster, and a slower board's tail was counted as loss BY THE
+    # HARNESS. Quiet means 1.5 s with no bytes; the deadline scales with the
+    # commanded pacing so a deliberately slow flood is not cut off mid-run.
+    raw = b''
+    quiet_until = time.time() + 2.0
+    deadline = time.time() + max(30.0, 5.0 + n * max(gap_us, 0) / 1e6 * 2)
+    while time.time() < deadline:
+        chunk = p.drain(0.25)
+        if chunk:
+            raw += chunk
+            quiet_until = time.time() + 1.5
+            if count_bs(raw) >= n:
+                break
+        elif time.time() > quiet_until:
+            break
     got, seq_bad, crc_bad = 0, 0, 0
     expect = 0
     first_gap = None
@@ -238,7 +266,21 @@ def main():
             if all(report_in(n, run_in(p, n, 0)) for _ in range(REPEATS)):
                 print(f"\nno pacing needed: {n} frames clean unpaced x{REPEATS}")
             else:
-                lo, hi = 0, 20000            # us; hi known-clean by the gate
+                # 20000 us stood in this file as "known-clean by the gate"
+                # without ever being tested at this frame count -- the gate
+                # trickles a different, smaller pattern. A bisection between
+                # a lossy lo and an untested hi converges on noise, so the
+                # ceiling is measured first. A lossy ceiling is a RESULT
+                # (pacing alone does not rescue the board), not a harness
+                # failure, so it does not touch the tally -- same rule as
+                # ring mode's byte ceiling.
+                lo, hi = 0, 20000            # us
+                print(f"\n  gap {hi} us: testing the ceiling before bisecting")
+                if not all(report_in(n, run_in(p, n, hi)) for _ in range(REPEATS)):
+                    print(f"\neven {hi} us gaps lose frames at n={n}:"
+                          f" no minimum clean gap exists in this range,"
+                          f" and pacing alone does not rescue this board.")
+                    return 0 if fails == fails_before else 1
                 while hi - lo > 50:
                     mid = (lo + hi) // 2
                     ok = all(report_in(n, run_in(p, n, mid)) for _ in range(REPEATS))

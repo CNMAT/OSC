@@ -48,7 +48,7 @@ Two bundle timetag fixes also land in 4.0.0:
 
 # Installation
 
-Install using the Library Manager. Use a current Arduino IDE (2.x) or `arduino-cli`: the boards this release is verified on -- UNO R4, ESP32, RP2040, nRF52, UNO Q -- ship as Boards Manager packages that 1.8.5 predates. Teensy support is the "Teensy (for Arduino IDE 2.0.4 or later)" Boards Manager package, not the old Teensyduino overlay.
+Install using the Library Manager. Use a current Arduino IDE (2.x) or `arduino-cli`: the platforms this release targets -- UNO R4, ESP32, RP2040 (all three verified on hardware), plus nRF52 and UNO Q (compile-tested only; see the table below) -- ship as Boards Manager packages that 1.8.5 predates. Teensy support is the "Teensy (for Arduino IDE 2.0.4 or later)" Boards Manager package, not the old Teensyduino overlay.
 
 Additional information about installing libraries on [Arduino's website](https://www.arduino.cc/en/Guide/Libraries).
 
@@ -66,17 +66,21 @@ The `Serial*` sketches and the various `*Oscuino` sketches carry OSC over USB or
 hardware serial, framed with SLIP (below). Several of the `*Oscuino` ones ship
 with a Web Serial page next to them that talks to the board from a browser.
 
-Two examples go past the generic `/d/<pin>` and `/a/<pin>` addresses and speak
-their board's own hardware, each sending the whole board as a single message so
-that every reading in it belongs to the same instant:
+A set of hand-written demos goes past the generic `/d/<pin>` and `/a/<pin>`
+addresses and speaks each board's own hardware, sending the whole board as a
+single message so that every reading in it belongs to the same instant. The
+family has grown to eleven (PyBadge/EdgeBadge, HalloWing M0, XIAO ESP32S3
+Sense camera, UNO R4 LED matrix, DeskPi PicoMate, Pico Bricks, the XIAO C6
+expansion board over serial and again over WiFi, Atom JoyStick, and the two
+below, which started it):
 
 * `EsploraOscuino` — the Esplora's eighteen channels as `/esplora`, drawn over a
   photograph of the board.
 * `CircuitPlaygroundSensors` — the Circuit Playground Express as `/cpx`: light,
   thermistor, accelerometer, seven capacitive pads, both buttons and the slide
-  switch, with the ten NeoPixels painted from the page. Needs Adafruit NeoPixel
-  and Adafruit FreeTouch; the Express's PDM microphone is opt-in behind a
-  `#define` because it needs a third library. This is the sensor half of the
+  switch, with the ten NeoPixels painted from the page. Needs Adafruit NeoPixel,
+  Adafruit FreeTouch and Adafruit LIS3DH; the Express's PDM microphone is opt-in
+  behind a `#define` because it needs yet another. This is the sensor half of the
   board — `PlaygroundOscuino`, generated from the template, is the pin half.
 
 Both are hand-written rather than generated from `extras/webserial`, so `make
@@ -320,7 +324,7 @@ calibration against a reference board before any number is recorded. `echo`
 and `widths` never routed through the suspect path — `widths` is reported by
 the board itself — so they stand.
 
-| board | architecture | echo | int widths | probe | not re-measured |
+| board | architecture | echo | int widths | probe | stress |
 |---|---|---|---|---|---|
 | LilyPad USB (ATmega32U4) | AVR, `int` is 16-bit | 22/22 | 11/11 | 7/7 | not re-measured |
 | Esplora (ATmega32U4) | AVR | — | — | — | not re-measured |
@@ -378,8 +382,9 @@ The tests require [ArduinoUnit](https://github.com/mmurdoch/arduinounit) to be i
 
 These ArduinoUnit sketches predate 4.0.0 and were last exercised on an Esplora,
 a Leonardo, a Teensy 3.x and a Mega 2560. They are not what checks this release
-— see [Tested in 4.0.0](#tested-in-400) for that, and the two suites below,
-which run on every push:
+— see [Tested in 4.0.0](#tested-in-400) for that, and the two suites below.
+The host suite runs in CI on every push; the hardware suite needs physical
+boards on a bench and runs before releases, not in CI:
 
 * `test/host` — the whole encoder and decoder on a workstation, no board and no
   Arduino toolchain needed. `make` to run it, `make asan` for AddressSanitizer

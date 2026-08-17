@@ -223,9 +223,14 @@ static void handlePacket(const uint8_t *data, size_t len) {
   m.dispatch("/rate",        routeRate);
 }
 
+// seq is NOT incremented here. buildState() has three callers -- the
+// periodic refresh, the UDP reply, and GET /state -- and when each bump was
+// buried in here the counter stopped meaning "reporting periods elapsed":
+// every poll consumed numbers, and the page's gap arithmetic dutifully
+// reported the phantom drops. Only the periodic tick in loop() advances it.
 static void buildState() {
   OSCMessage m("/xc6");
-  m.add((intOSC_t) seq++)
+  m.add((intOSC_t) seq)
    .add((intOSC_t) (digitalRead(PIN_BTN) == LOW ? 1 : 0))
    .add((intOSC_t) millis())
    .add((intOSC_t) (buzzUntil ? 1 : 0));
@@ -249,16 +254,39 @@ static void buildState() {
 
 static void cors() { http.sendHeader("Access-Control-Allow-Origin", "*"); }
 
-static void httpOsc() {                       // POST /osc, body = OSC packet
-  cors();
+// The OSC body must NOT come through http.arg("plain"): the WebServer stores
+// that as an Arduino String built with strlen, and every OSC packet contains
+// NUL bytes -- the address terminator at minimum -- so "/led 1" (16 bytes on
+// the wire) arrived as 4 and nothing ever dispatched. The whole browser path
+// was dead, exactly as the header's untested warning allowed. The raw-upload
+// path below hands over the bytes uncounted and untouched; it is enabled by
+// registering the FOURTH argument in http.on(), which is what makes the
+// server's canRaw() true.
+static uint8_t oscRaw[512];
+static size_t  oscRawLen = 0;
+
+static void httpOscRaw() {
+  HTTPRaw &r = http.raw();
+  if (r.status == RAW_START) {
+    oscRawLen = 0;
+  } else if (r.status == RAW_WRITE) {
+    const size_t room = sizeof oscRaw - oscRawLen;
+    const size_t n = r.currentSize < room ? r.currentSize : room;
+    memcpy(oscRaw + oscRawLen, r.buf, n);
+    oscRawLen += n;
+  } else if (r.status == RAW_END) {
+    handlePacket(oscRaw, oscRawLen);
+  }
+}
+
+static void httpOsc() {                       // POST /osc -- body already
+  cors();                                     // dispatched by httpOscRaw
   if (http.method() == HTTP_OPTIONS) {        // preflight
     http.sendHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
     http.sendHeader("Access-Control-Allow-Headers", "content-type");
     http.send(204);
     return;
   }
-  const String &body = http.arg("plain");
-  handlePacket((const uint8_t *) body.c_str(), body.length());
   http.send(200, "text/plain", "ok");
 }
 
@@ -303,7 +331,9 @@ void setup() {
   if (WiFi.status() == WL_CONNECTED) {
     Udp.begin(OSC_PORT);
 #if XC6_HTTP_BRIDGE
-    http.on("/osc",   HTTP_POST,    httpOsc);
+    // 4-arg form: the raw handler is what routes the body around the
+    // String-based arg parser (see httpOscRaw above)
+    http.on("/osc",   HTTP_POST,    httpOsc, httpOscRaw);
     http.on("/osc",   HTTP_OPTIONS, httpOsc);
     http.on("/state", HTTP_GET,     httpState);
     http.on("/hello", HTTP_GET,     httpHello);
@@ -347,6 +377,7 @@ void loop() {
 
   if (now - lastReport >= reportMs) {
     lastReport = now;
+    seq++;                                    // the one place seq advances
     buildState();                             // keeps /state fresh for HTTP
   }
 

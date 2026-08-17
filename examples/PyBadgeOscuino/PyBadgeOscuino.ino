@@ -258,7 +258,10 @@ void PDM_HANDLER(void) {
   if (++micDecim >= SCOPE_DECIM) {
     micDecim = 0;
     if (micScopeN < SCOPE_POINTS)
-      micScope[micScopeN++] = (int8_t) constrain(v >> 8, -127, 127);
+      // Full-scale, matching the declaration: sendMic() normalises the
+      // window to ITS OWN peak, so a pre-shrunk (v>>8) store made a quiet
+      // room's +-2 counts normalise up to a full-amplitude square wave.
+      micScope[micScopeN++] = (int16_t) v;
   }
 }
 
@@ -441,31 +444,45 @@ void setup() {
   sendHello();          // nearly always lost; the page asks again
 }
 
+// Non-blocking receive, the extras/webserial/template.ino pattern. Two rules,
+// both learned the hard way there: endofPacket() must be called BEFORE
+// available() on every pass (available() drives the SLIP state machine and can
+// eat a packet boundary if it runs first), and the pump must RETURN rather
+// than block when the buffer runs dry -- an unplug mid-frame, or one lost
+// byte, would otherwise wedge loop() forever, taking the outbound reports
+// with it. The message is filled across several loop() passes, which is why
+// it lives at file scope instead of inside loop().
+static OSCMessage inMsg;
+
+static bool pollOSC() {
+  while (!SLIPSerial.endofPacket()) {
+    int size = SLIPSerial.available();
+    if (size <= 0) return false;              // nothing buffered -- try later
+    while (size--) {
+      int c = SLIPSerial.read();
+      if (c >= 0) inMsg.fill((uint8_t) c);    // read() returns -1 on SLIP error
+    }
+  }
+  return true;
+}
+
 void loop() {
   static uint32_t last = 0;
 
-  if (SLIPSerial.available()) {
-    OSCMessage in;
-    unsigned long lastByte = millis();
-    while (!SLIPSerial.endofPacket()) {
-      if (SLIPSerial.available()) {
-        int c = SLIPSerial.read();      // int, -1 for "no byte"
-        if (c >= 0) in.fill((uint8_t) c);
-        lastByte = millis();
-      } else if (millis() - lastByte > 200) break;
+  if (pollOSC()) {
+    if (!inMsg.hasError()) {
+      inMsg.dispatch("/screen/text",      routeText);
+      inMsg.dispatch("/screen/fill",      routeFill);
+      inMsg.dispatch("/screen/backlight", routeBacklight);
+      inMsg.dispatch("/screen/box",       routeBox);
+      inMsg.dispatch("/tone",             routeTone);
+      inMsg.dispatch("/pixels",           routePixels);
+      inMsg.dispatch("/pixel",            routePixel);
+      inMsg.dispatch("/led",              routeLed);
+      inMsg.dispatch("/rate",             routeRate);
+      inMsg.dispatch("/hello",       routeHello);
     }
-    if (!in.hasError()) {
-      in.dispatch("/screen/text",      routeText);
-      in.dispatch("/screen/fill",      routeFill);
-      in.dispatch("/screen/backlight", routeBacklight);
-      in.dispatch("/screen/box",       routeBox);
-      in.dispatch("/tone",             routeTone);
-      in.dispatch("/pixels",           routePixels);
-      in.dispatch("/pixel",            routePixel);
-      in.dispatch("/led",              routeLed);
-      in.dispatch("/rate",             routeRate);
-      in.dispatch("/hello",       routeHello);
-    }
+    inMsg.empty();
   }
 
 #if BADGE_HAS_PDM_MIC

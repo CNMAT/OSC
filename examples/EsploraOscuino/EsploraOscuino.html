@@ -244,6 +244,7 @@ function decodeMessage(bytes) {
         if (t === "i") args.push(r.int32());
         else if (t === "f") args.push(r.float32());
         else if (t === "s") args.push(r.string());
+        else if (t === "b") args.push(r.blob());
         else if (t === "T") args.push(true);
         else if (t === "F") args.push(false);
         else return { address, args };   // unknown tag: payload size unknown
@@ -321,7 +322,8 @@ async function readLoop() {
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
-      onFrame(value);
+      // contain render throws so one bad frame cannot stop reception
+      try { onFrame(value); } catch (e) { logLine("!", "render: " + e); }
     }
   } catch (e) { logLine("warn", "read error: " + e.message); }
 }
@@ -361,8 +363,12 @@ function padAwayZLP(frame) {
 }
 
 async function send(address, ints) {
-  if (!writer) return;
-  await writer.write(padAwayZLP(slipEncode(encodeMessage(address, ints))));
+  // After an unplug, writer.write rejects; without this guard every
+  // control click surfaced an unhandled rejection.
+  try {
+    if (!writer) return;
+    await writer.write(padAwayZLP(slipEncode(encodeMessage(address, ints))));
+  } catch (e) { logLine("!", "send: " + e); }
 }
 
 /* ============================================================
@@ -537,6 +543,14 @@ $("d11").oninput = e => { $("d11v").textContent = e.target.value;
   send("/d/11", [+e.target.value]); };
 
 markStale();
+
+// The OS-level unplug event: without it the page read "connected" forever
+// after the board vanished, and only a manual click reset the UI.
+if ("serial" in navigator) {
+  navigator.serial.addEventListener("disconnect", e => {
+    if (port && e.target === port) $("disconnect").onclick();
+  });
+}
 </script>
 </body>
 </html>

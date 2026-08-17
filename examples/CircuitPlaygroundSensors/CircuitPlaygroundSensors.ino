@@ -69,10 +69,16 @@
  *    /heartbeat <ms>              report at least this often, 0 disables
  *    /deadband  <counts>          analog change needed to trigger, 0..64
  *
- * LIBRARIES. Adafruit NeoPixel and Adafruit FreeTouch, both from the Library
- * Manager. The accelerometer is read directly over Wire1 rather than through a
- * driver — it is one register write and one six-byte burst, and it keeps the
- * install list to two.
+ * LIBRARIES. Adafruit NeoPixel, Adafruit FreeTouch and Adafruit LIS3DH, all
+ * from the Library Manager. An earlier revision read the accelerometer
+ * directly over Wire1 "to keep the install list to two" — but two sibling
+ * examples in this repo (PyBadge, HalloWing) already depend on Adafruit
+ * LIS3DH, so for anyone using this example set the saving was imaginary, and
+ * the hand-rolled register driver duplicated a maintained one. (The honest
+ * cost of the library: it pulls in Adafruit Unified Sensor and BusIO too.)
+ * The thermistor and cap-touch maths remain hand-rolled deliberately: the
+ * only library covering those is the full Adafruit Circuit Playground
+ * package, which drags in six further dependencies for two formulas.
  *
  * THE MICROPHONE IS OPT-IN. The Express carries a PDM MEMS microphone, not the
  * Classic's analog one, so it cannot be reached with analogRead and the core's
@@ -218,61 +224,40 @@ static bool havePrev = false;
  * The accelerometer hangs off the SAMD21's second I2C bus, which is private to
  * it — the alligator pads' I2C is the separate Wire, so nothing a user clips on
  * can disturb this. Adafruit's own boards have shipped at both 0x19 and 0x18,
- * so probe for the one that answers and confirm it with WHO_AM_I rather than
- * hard-coding an address that may not be this board's.
+ * so probe both; the driver's begin() returns false on a WHO_AM_I mismatch,
+ * which reproduces the old hand-rolled probe exactly. Settings match too:
+ * begin() writes CTRL4 = 0x88 (block data update + high resolution, +-2 g)
+ * and the 100 Hz data rate gives the same CTRL1 = 0x57.
  */
-static const uint8_t LIS3DH_WHO_AM_I = 0x0F, LIS3DH_CTRL1 = 0x20,
-                     LIS3DH_CTRL4 = 0x23, LIS3DH_OUT_X_L = 0x28;
-static uint8_t accelAddr = 0;             // 0 until a device answers
+#include <Adafruit_LIS3DH.h>
 
-static bool accelWrite(uint8_t reg, uint8_t val) {
-  Wire1.beginTransmission(accelAddr);
-  Wire1.write(reg);
-  Wire1.write(val);
-  return Wire1.endTransmission() == 0;
-}
-
-static int accelRegister(uint8_t reg) {
-  Wire1.beginTransmission(accelAddr);
-  Wire1.write(reg);
-  if (Wire1.endTransmission() != 0) return -1;
-  if (Wire1.requestFrom(accelAddr, (uint8_t) 1) != 1) return -1;
-  return Wire1.read();
-}
+static Adafruit_LIS3DH lis(&Wire1);
+static bool accelOK = false;
+static uint8_t accelAddr = 0;   // /hello reports which address answered
 
 static bool accelBegin() {
   Wire1.begin();
-  const uint8_t candidates[2] = { 0x19, 0x18 };
-  for (uint8_t i = 0; i < 2; i++) {
-    accelAddr = candidates[i];
-    if (accelRegister(LIS3DH_WHO_AM_I) != 0x33) continue;
-    // CTRL_REG1 0x57: 100 Hz output, X/Y/Z enabled, low-power off.
-    // CTRL_REG4 0x88: block data update on (so the low and high bytes of a
-    // reading always belong to the same sample), high resolution, +-2 g.
-    // High resolution at +-2 g is 1 mg per count, left-justified in 16 bits.
-    if (!accelWrite(LIS3DH_CTRL1, 0x57)) continue;
-    if (!accelWrite(LIS3DH_CTRL4, 0x88)) continue;
-    return true;
+  if      (lis.begin(0x19)) { accelOK = true; accelAddr = 0x19; }
+  else if (lis.begin(0x18)) { accelOK = true; accelAddr = 0x18; }
+  if (accelOK) {
+    lis.setDataRate(LIS3DH_DATARATE_100_HZ);
+    lis.setRange(LIS3DH_RANGE_2_G);
   }
-  accelAddr = 0;
-  return false;
+  return accelOK;
 }
 
-// Raw 12-bit counts, 1 mg each. Zero on every axis when no device answered,
-// which is also a physically impossible reading (gravity is always somewhere),
-// so a receiver can tell a missing accelerometer from a still one.
+// Raw 12-bit counts, 1 mg each — lis.x/y/z are left-justified 16-bit, so >>4
+// is bit-identical to the old manual conversion and the wire format is
+// unchanged. Zero on every axis when no device answered, which is also a
+// physically impossible reading (gravity is always somewhere), so a receiver
+// can tell a missing accelerometer from a still one.
 static void accelRead(int16_t &x, int16_t &y, int16_t &z) {
   x = y = z = 0;
-  if (!accelAddr) return;
-  Wire1.beginTransmission(accelAddr);
-  Wire1.write(LIS3DH_OUT_X_L | 0x80);        // 0x80 = auto-increment the address
-  if (Wire1.endTransmission() != 0) return;
-  if (Wire1.requestFrom(accelAddr, (uint8_t) 6) != 6) return;
-  uint8_t b[6];
-  for (uint8_t i = 0; i < 6; i++) b[i] = Wire1.read();
-  x = (int16_t)((uint16_t) b[0] | ((uint16_t) b[1] << 8)) >> 4;
-  y = (int16_t)((uint16_t) b[2] | ((uint16_t) b[3] << 8)) >> 4;
-  z = (int16_t)((uint16_t) b[4] | ((uint16_t) b[5] << 8)) >> 4;
+  if (!accelOK) return;
+  lis.read();
+  x = lis.x >> 4;
+  y = lis.y >> 4;
+  z = lis.z >> 4;
 }
 
 /* ------------------------------------------------------------ microphone */

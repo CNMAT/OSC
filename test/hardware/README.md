@@ -360,21 +360,25 @@ Re-measured 2026-08-11 on an ESP32-C6 with `OscBench` under the Method
 rules, which sharpened the picture four ways:
 
 * **The ceiling is bytes, not frames — cross-checked at two frame sizes.**
-  The bench's 22-byte frames pin at 12 received, `firstGap@11`, for every
-  burst from 330 to 1100 bytes: 12 × 22 = 264 bytes, against the original
-  19 × 14 = 266. Different frame size, same byte boundary.
-* **The cliff moves with the queue — twice.** Built with
-  `-DOSC_BENCH_RXBUF=4096` (the flag `OscBench` carries for exactly this
-  A/B), the same 50-frame burst goes 15-16/50 → 50/50 ×3 and the ring map
-  runs clean through 1100 bytes; a 4400-byte burst then loses ~5 frames at
-  the *tail* (`firstGap@194` of 200) — the ceiling scaled from ~264 to
-  ~4.3 KB with the configured size, which is the falsification test the
-  adversarial review asked for, passed in the direction that convicts the
-  queue.
-* **A tight-drain application is not safe, only a paced host is.** The
-  losses above are with `OscBench`'s drain loop running flat out — not the
-  lazy-reader mode. On this stack the burst outruns even an attentive
-  sketch.
+  Against the 20 ms/loop lazy reader, the bench's 22-byte frames pin at 12
+  received, `firstGap@11`, for every burst from 330 to 1100 bytes:
+  12 × 22 = 264 bytes, against the original 19 × 14 = 266. Different frame
+  size, same byte boundary.
+* **The cliff moves with the queue — twice.** With the receive queue at
+  4096 — a bench-local build flag at the time; since then the library's own
+  default, with `-DOSC_SLIP_RX_BUFFER=0` reproducing the stock 256 — the
+  same 50-frame burst goes 15-16/50 → 50/50 ×3 and the ring map runs clean
+  through 1100 bytes; a 4400-byte burst then loses ~5 frames at the *tail*
+  (`firstGap@194` of 200) — the ceiling scaled from ~264 to ~4.3 KB with
+  the configured size, which is the falsification test the adversarial
+  review asked for, passed in the direction that convicts the queue.
+* **A tight-drain application is not safe either, only a paced host is.**
+  Those are two distinct measurements, not one: the 12-frame pin above is
+  the *lazy* reader mapping the bare ring, while a burst against the drain
+  loop running *flat out* still lost most of it — 15-16 of 50 received,
+  with `crcErrs` and `decodeErrs` from mid-frame byte drops. On this stack
+  the burst outruns even an attentive sketch; only pacing or the bigger
+  queue helps.
 * **The corruption fingerprint separates it from the Teensy case.** The
   drops come with `crcErrs`/`decodeErrs`: bytes vanish mid-frame and the
   SLIP decoder merges adjacent frames into garbage. A byte-ring drop
@@ -547,6 +551,7 @@ does not share the loss. The gradient is now bounded at both ends:
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | not re-measured |
 | Adafruit Feather M4 Express (SAMD51) | 22/22 | 11/11, int=4 long=4 ll=8 double=8 | — | not re-measured |
 | Adafruit PyBadge (SAMD51) | — | — | — | bench 2026-08-13: gate + in 50 ×3 (8333 f/s) + out ×3 + compound ×3 + 1100 B lazy-reader ring all clean |
+| Adafruit Feather ESP32-S3 no PSRAM | — | — | — | bench 2026-08-16: TinyUSB default all clean (5000-6250 f/s); `:USBMode=hwcdc` + stock queue truncates at 12 frames / `firstGap@11` (the C6 signature); HWCDC + library default clean — the two-chip A/B |
 | Adafruit EdgeBadge (SAMD51) | — | — | — | not re-measured |
 | UNO R4 WiFi (RA4M1, bridged UART) | 22/22 | 11/11 | — | bench 2026-08-12: gate + in/out/compound ×3 all clean (~530 f/s); lazy-reader ring pins at 25 frames / `firstGap@24` ×3 → the 512 B UART ring, see burst section |
 | Seeed XIAO RA4M1 (RA4M1, native USB) | 22/22 | 11/11 | — | bench 2026-08-13: gate + in 50/200 one-write ×3 (2173 f/s, 4.4 KB) + out ×3 + compound ×3 + 1100 B lazy-reader ring **all clean** — the native control against the bridged R4's 512 B ceiling |

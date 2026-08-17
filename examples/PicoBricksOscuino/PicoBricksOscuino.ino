@@ -194,29 +194,44 @@ void setup() {
   sendHello();          // usually lost; the page asks again
 }
 
+// Non-blocking receive, the extras/webserial/template.ino pattern. Two rules,
+// both learned the hard way there: endofPacket() must be called BEFORE
+// available() on every pass (available() drives the SLIP state machine and can
+// eat a packet boundary if it runs first), and the pump must RETURN rather
+// than block when the buffer runs dry -- an unplug mid-frame, or one lost
+// byte, would otherwise wedge loop() forever, taking the outbound reports
+// with it. The message is filled across several loop() passes, which is why
+// it lives at file scope instead of inside loop().
+static OSCMessage inMsg;
+
+static bool pollOSC() {
+  while (!SLIPSerial.endofPacket()) {
+    int size = SLIPSerial.available();
+    if (size <= 0) return false;              // nothing buffered -- try later
+    while (size--) {
+      int c = SLIPSerial.read();
+      if (c >= 0) inMsg.fill((uint8_t) c);    // read() returns -1 on SLIP error
+    }
+  }
+  return true;
+}
+
 void loop() {
   static uint32_t last = 0;
 
-  if (SLIPSerial.available()) {
-    static OSCMessage in;
-    in.empty();
-    while (!SLIPSerial.endofPacket()) {
-      if (SLIPSerial.available()) {
-        int c = SLIPSerial.read();
-        if (c >= 0) in.fill((uint8_t) c);
-      }
+  if (pollOSC()) {
+    if (!inMsg.hasError()) {
+      inMsg.dispatch("/pb/led",   routeLed);
+      inMsg.dispatch("/pb/rgb",   routeRgb);
+      inMsg.dispatch("/pb/buzz",  routeBuzz);
+      inMsg.dispatch("/pb/relay", routeRelay);
+      inMsg.dispatch("/pb/oled",  routeOled);
+      inMsg.dispatch("/pb/motor", routeMotor);
+      inMsg.dispatch("/pb/servo", routeServo);
+      inMsg.dispatch("/pb/rate",  routeRate);
+      inMsg.dispatch("/hello",    routeHello);
     }
-    if (!in.hasError()) {
-      in.dispatch("/pb/led",   routeLed);
-      in.dispatch("/pb/rgb",   routeRgb);
-      in.dispatch("/pb/buzz",  routeBuzz);
-      in.dispatch("/pb/relay", routeRelay);
-      in.dispatch("/pb/oled",  routeOled);
-      in.dispatch("/pb/motor", routeMotor);
-      in.dispatch("/pb/servo", routeServo);
-      in.dispatch("/pb/rate",  routeRate);
-      in.dispatch("/hello",    routeHello);
-    }
+    inMsg.empty();
   }
 
   const uint32_t now = millis();
@@ -224,8 +239,19 @@ void loop() {
   if (now - last < reportMs) return;
   last = now;
 
-  float tempC = 0, humid = 0;
-  if (shtOK) { tempC = shtc.readTemperature(); humid = shtc.readHumidity(); }
+  // Each SHTC3 read runs a full conversion with a blocking delay(100)
+  // inside the PicoBricks library, so reading both per report cost 200 ms
+  // and silently tripled the 50 ms report period. Room temperature does not
+  // move at 20 Hz: sample once a second, alternating the two conversions so
+  // no single pass blocks more than ~100 ms, and reuse the cache between.
+  static float tempC = 0, humid = 0;
+  static uint32_t lastSht = 0;
+  static bool whichSht = false;
+  if (shtOK && now - lastSht >= 500) {
+    lastSht = now;
+    if (whichSht) tempC = shtc.readTemperature(); else humid = shtc.readHumidity();
+    whichSht = !whichSht;
+  }
 
   OSCMessage m("/pb");
   m.add((intOSC_t) seq++)

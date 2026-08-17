@@ -1,0 +1,310 @@
+<meta charset="utf-8">
+<title>M5Stack Atom JoyStick — sticks, buttons and screen over OSC</title>
+<style>
+  :root{
+    --bg:#0b0c10; --panel:#15171e; --line:#2a2e3a; --text:#e9edf5; --dim:#8d95a6;
+    --acc:#ff7a1a; --live:#7ee787; --warn:#ff6b6b;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:22px;background:radial-gradient(1000px 600px at 50% -10%,#181b23,var(--bg) 70%);
+       color:var(--text);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif}
+  h1{font-size:19px;margin:0 0 3px}
+  p.lede{color:var(--dim);margin:0 0 16px;max-width:78ch;font-size:14px}
+  code{font-family:var(--mono);font-size:.9em;color:var(--acc)}
+  .bar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+  button{background:#1d2029;color:var(--text);border:1px solid var(--line);border-radius:7px;
+         padding:8px 14px;font-size:14px;cursor:pointer}
+  button:hover:not(:disabled){border-color:var(--acc)}
+  button:disabled{opacity:.4;cursor:default}
+  button.primary{background:var(--acc);color:#200e00;border-color:var(--acc);font-weight:650}
+  .dot{width:9px;height:9px;border-radius:50%;background:#333b48;display:inline-block;
+       margin-right:7px;vertical-align:middle}
+  .dot.on{background:var(--live);box-shadow:0 0 8px var(--live)}
+
+  /* The controller, laid out as the object: screen in the middle, a stick
+     each side, shoulder buttons above them. */
+  .pad{max-width:760px;margin:0 auto;background:linear-gradient(180deg,#20232d,#171a21);
+       border:1px solid var(--line);border-radius:22px;padding:20px;
+       box-shadow:0 18px 50px #0009, inset 0 1px 0 #ffffff0a}
+  .shoulders{display:flex;justify-content:space-between;margin:0 6px 12px}
+  .shoulder{width:120px;text-align:center;background:#242835;border:1px solid var(--line);
+            border-radius:10px 10px 4px 4px;padding:7px 0;font:600 12px var(--mono);
+            color:var(--dim);transition:all .06s}
+  .shoulder.hot{background:var(--acc);color:#200e00;border-color:var(--acc);
+                box-shadow:0 0 14px #ff7a1a66}
+  .deck{display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:center}
+  .stickbox{aspect-ratio:1;background:#101218;border:1px solid var(--line);
+            border-radius:14px;position:relative;min-width:150px}
+  .stickbox canvas{position:absolute;inset:0;width:100%;height:100%}
+  .stickbox .lab{position:absolute;left:8px;top:6px;font:600 9.5px var(--mono);
+                 color:var(--dim);letter-spacing:.06em}
+  .stickbox .val{position:absolute;right:8px;bottom:6px;font:600 10px var(--mono);
+                 color:var(--dim)}
+  .stickbox.click{outline:2px solid var(--acc)}
+  /* 128x128 screen, scaled up 1.6x */
+  .lcdwrap{width:205px}
+  #lcd{width:205px;height:205px;background:#000;border:6px solid #2c303c;
+       border-radius:10px;display:block}
+  #glass{margin-top:8px;background:#04121a;color:#7fe3ff;font:11px/13px var(--mono);
+         border-radius:6px;padding:6px 8px;min-height:70px;outline:none;
+         border:1px solid #0c2733;white-space:pre-wrap;cursor:text}
+  #glass:focus{border-color:var(--acc)}
+  .below{display:flex;justify-content:space-between;align-items:center;margin-top:14px;
+         gap:12px;flex-wrap:wrap}
+  .batt{font:600 11px var(--mono);color:var(--dim)}
+  .front{width:60px;height:26px;border-radius:13px;background:#242835;
+         border:1px solid var(--line);font:600 10px var(--mono);color:var(--dim);
+         display:flex;align-items:center;justify-content:center}
+  .front.hot{background:var(--acc);color:#200e00}
+  table{border-collapse:collapse;font-size:12px}
+  td{padding:2px 8px 2px 0} td.k{color:var(--dim)} td.v{font-family:var(--mono)}
+  #log{font-family:var(--mono);font-size:11px;color:var(--dim);white-space:pre-wrap;
+       max-height:76px;overflow:auto;margin-top:12px}
+</style>
+
+<h1>M5Stack Atom JoyStick — sticks, buttons and screen over OSC</h1>
+<p class="lede">
+  Both Hall sticks, the shoulder buttons, the stick clicks, the AtomS3's front
+  button and its 128&times;128 screen, in one <code>/joy</code> message per
+  instant. The sticks live behind an STM32 co-processor at I²C
+  <code>0x59</code>, not on the ESP32's ADC. Type on the emulated glass and it
+  goes to the real LCD. Web Serial needs <code>http://localhost</code>.
+</p>
+
+<div class="bar">
+  <button id="connect" class="primary">Connect</button>
+  <button id="disconnect" disabled>Disconnect</button>
+  <span><span class="dot" id="rxdot"></span><span id="status">not connected</span></span>
+  <span style="margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--dim)">
+    <span id="hz">–</span> · seq <span id="seq">–</span> · dropped <span id="drop">0</span>
+  </span>
+</div>
+
+<div class="pad">
+  <div class="shoulders">
+    <div class="shoulder" id="btnL">L</div>
+    <div class="shoulder" id="btnR">R</div>
+  </div>
+  <div class="deck">
+    <div class="stickbox" id="boxL">
+      <canvas id="stickL" width="220" height="220"></canvas>
+      <span class="lab">LEFT · click = press</span><span class="val" id="valL">–</span>
+    </div>
+    <div class="lcdwrap">
+      <canvas id="lcd" width="128" height="128"></canvas>
+      <div id="glass" contenteditable="true" spellcheck="false"
+           title="type here — five lines go to the real screen"></div>
+    </div>
+    <div class="stickbox" id="boxR">
+      <canvas id="stickR" width="220" height="220"></canvas>
+      <span class="lab">RIGHT</span><span class="val" id="valR">–</span>
+    </div>
+  </div>
+  <div class="below">
+    <span class="batt">bat1 <span id="b1">–</span> mV · bat2 <span id="b2">–</span> mV</span>
+    <div class="front" id="front">FRONT</div>
+    <table><tr>
+      <td class="k">sketch</td><td class="v" id="name">–</td>
+      <td class="k">joystick MCU</td><td class="v" id="jok">–</td>
+      <td class="k">display</td><td class="v" id="dok">–</td>
+    </tr></table>
+  </div>
+  <div id="log">idle</div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const enc = new TextEncoder(), dec = new TextDecoder();
+
+/* ------------------------------------------------------------------- OSC */
+class Reader{
+  constructor(b){this.b=b;this.pos=0;this.dv=new DataView(b.buffer,b.byteOffset,b.byteLength);}
+  get left(){return this.b.length-this.pos;}
+  int32(){const v=this.dv.getInt32(this.pos);this.pos+=4;return v;}
+  float32(){const v=this.dv.getFloat32(this.pos);this.pos+=4;return v;}
+  float64(){const v=this.dv.getFloat64(this.pos);this.pos+=8;return v;}
+  int64(){const v=this.dv.getBigInt64(this.pos);this.pos+=8;return v;}
+  string(){let e=this.pos;while(e<this.b.length&&this.b[e]!==0)e++;
+    const s=dec.decode(this.b.subarray(this.pos,e));this.pos=(e+4)&~3;return s;}
+  blob(){const n=this.int32();
+    if(n<0||n>this.left){this.pos=this.b.length;return new Uint8Array(0);}
+    const v=this.b.subarray(this.pos,this.pos+n);this.pos+=(n+3)&~3;return v;}
+}
+// The complete tag set: an unknown tag has no known width, so the decoder
+// must stop rather than misparse everything after it.
+function decodeMessage(bytes){
+  const r=new Reader(bytes),address=r.string(),args=[];
+  if(r.left>0){const tags=r.string();
+    if(tags.startsWith(","))for(const t of tags.slice(1)){
+      if(t==="i")args.push(r.int32());
+      else if(t==="f")args.push(r.float32());
+      else if(t==="s")args.push(r.string());
+      else if(t==="b")args.push(r.blob());
+      else if(t==="h")args.push(r.int64());
+      else if(t==="d")args.push(r.float64());
+      else if(t==="T")args.push(true);
+      else if(t==="F")args.push(false);
+      else if(t==="N")args.push(null);
+      else if(t==="I")args.push("impulse");
+      else return {address,args};
+    }}
+  return {address,args};
+}
+const pad4=b=>{const n=(b.length+3)&~3,o=new Uint8Array(n);o.set(b);return o;};
+function encodeMessage(address,args){
+  const parts=[pad4(enc.encode(address+"\0"))];
+  let tags=",";for(const a of args)tags+=(typeof a==="string")?"s":"i";
+  parts.push(pad4(enc.encode(tags+"\0")));
+  for(const a of args){
+    if(typeof a==="string")parts.push(pad4(enc.encode(a+"\0")));
+    else{const b=new Uint8Array(4);new DataView(b.buffer).setInt32(0,a|0);parts.push(b);}}
+  const out=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));
+  let o=0;for(const p of parts){out.set(p,o);o+=p.length;}
+  return out;
+}
+/* ------------------------------------------------------------------ SLIP */
+const END=0xC0,ESC=0xDB,ESC_END=0xDC,ESC_ESC=0xDD;
+function slipEncode(p){const o=[END];
+  for(const b of p){if(b===END)o.push(ESC,ESC_END);else if(b===ESC)o.push(ESC,ESC_ESC);else o.push(b);}
+  o.push(END);return new Uint8Array(o);}
+class SlipDecoder{
+  constructor(cb){this.cur=[];this.esc=false;this.cb=cb;}
+  push(c){for(const b of c){
+    if(this.esc){this.cur.push(b===ESC_END?END:b===ESC_ESC?ESC:b);this.esc=false;}
+    else if(b===ESC)this.esc=true;
+    else if(b===END){if(this.cur.length){this.cb(new Uint8Array(this.cur));this.cur=[];}}
+    else this.cur.push(b);}}
+}
+// keep frames off 64-byte multiples; free insurance for 32U4 hosts
+function padAwayZLP(b){if(b.length%64!==0)return b;
+  const o=new Uint8Array(b.length+1);o.set(b);o[b.length]=END;return o;}
+
+/* ---------------------------------------------------------------- render */
+let frames=0,t0=0,lastSeq=null,dropped=0;
+const logLine=(t,s)=>{const e=$("log");
+  e.textContent=(t?t+" ":"")+s+"\n"+e.textContent;
+  if(e.textContent.length>900)e.textContent=e.textContent.slice(0,900);};
+
+function drawStick(cv, x, y){
+  // 12-bit axes; centre and range are UNMEASURED (M5 publish no calibration),
+  // so this plots the raw counts against the nominal 0..4095 square.
+  const c=$(cv),ctx=c.getContext("2d"),W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle="#2a2e3a";ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(W/2,0);ctx.lineTo(W/2,H);ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
+  ctx.strokeStyle="#3a3f4e";ctx.strokeRect(6,6,W-12,H-12);
+  const px=6+(x/4095)*(W-12), py=6+(1-y/4095)*(H-12);
+  ctx.beginPath();ctx.arc(px,py,9,0,7);ctx.fillStyle="#ff7a1a";ctx.fill();
+  ctx.beginPath();ctx.arc(px,py,3.5,0,7);ctx.fillStyle="#fff";ctx.fill();
+}
+
+let lcdLines=["AtomJoyOscuino","OSC over USB","","",""];
+function drawLCD(){
+  const c=$("lcd"),ctx=c.getContext("2d");
+  ctx.fillStyle="#000";ctx.fillRect(0,0,128,128);
+  ctx.fillStyle="#e9edf5";ctx.font="10px ui-monospace,monospace";ctx.textBaseline="top";
+  lcdLines.forEach((t,i)=>ctx.fillText(t,3,5+i*12));
+}
+
+function onFrame(payload){
+  let m;try{m=decodeMessage(payload);}catch{return;}
+
+  if(m.address==="/joy"){
+    const [seq,lx,ly,rx,ry,btn,b1,b2,front]=m.args;
+    if(lastSeq!==null&&seq>lastSeq+1)dropped+=seq-lastSeq-1;
+    lastSeq=seq;
+    $("seq").textContent=seq;$("drop").textContent=dropped;
+    frames++;if(!t0)t0=performance.now();
+    const secs=(performance.now()-t0)/1000;
+    if(secs>0.5)$("hz").textContent=(frames/secs).toFixed(1)+" Hz";
+
+    drawStick("stickL",lx,ly);drawStick("stickR",rx,ry);
+    $("valL").textContent=lx+","+ly;$("valR").textContent=rx+","+ry;
+    // bitmask: 0 L shoulder, 1 R shoulder, 2 left click, 3 right click --
+    // the mapping M5's NEW_ATOM_JOY build uses; the sketch header says to
+    // verify it on the bench before trusting it
+    $("btnL").classList.toggle("hot",!!(btn&1));
+    $("btnR").classList.toggle("hot",!!(btn&2));
+    $("boxL").classList.toggle("click",!!(btn&4));
+    $("boxR").classList.toggle("click",!!(btn&8));
+    $("front").classList.toggle("hot",!!front);
+    $("b1").textContent=b1;$("b2").textContent=b2;
+    return;
+  }
+
+  if(m.address==="/hello"){
+    const [name,joy,disp]=m.args;
+    $("name").textContent=name??"–";
+    $("jok").textContent=joy?"0x59 found":"absent";
+    $("jok").style.color=joy?"var(--live)":"var(--warn)";
+    $("dok").textContent=disp?"present":"absent";
+    logLine("","board: "+m.args.join(" "));
+    return;
+  }
+}
+
+/* ---------------------------------------------------------------- serial */
+let port=null,writer=null,reader=null,keep=false;
+async function send(a,args){
+  // writer.write rejects after an unplug; contain it
+  try{ if(writer) await writer.write(padAwayZLP(slipEncode(encodeMessage(a,args)))); }
+  catch(e){ logLine("!","send: "+e); }
+}
+async function readLoop(){
+  const slip=new SlipDecoder(p=>{
+    // contain render throws so one bad frame cannot stop reception
+    try{ onFrame(p); }catch(e){ logLine("!","render: "+e); }
+  });
+  while(keep){
+    try{
+      const {value,done}=await reader.read();
+      if(done)break;
+      if(value&&value.length){slip.push(value);
+        $("rxdot").classList.add("on");clearTimeout(window._t);
+        window._t=setTimeout(()=>$("rxdot").classList.remove("on"),140);}
+    }catch(e){logLine("!",String(e));break;}
+  }
+}
+$("connect").onclick=async()=>{
+  if(!("serial" in navigator)){logLine("!","Web Serial needs Chrome/Edge on http://localhost");return;}
+  try{
+    port=await navigator.serial.requestPort();
+    await port.open({baudRate:115200});
+    writer=port.writable.getWriter();reader=port.readable.getReader();
+    keep=true;readLoop();
+    $("status").textContent="connected";
+    $("connect").disabled=true;$("disconnect").disabled=false;
+    frames=0;t0=0;lastSeq=null;dropped=0;
+    // ask for /hello: the boot one is lost to USB re-enumeration
+    setTimeout(()=>send("/hello",[]),150);
+  }catch(e){logLine("!",String(e));}
+};
+$("disconnect").onclick=async()=>{
+  keep=false;
+  try{await reader?.cancel();reader?.releaseLock();}catch{}
+  try{writer?.releaseLock();}catch{}
+  try{await port?.close();}catch{}
+  port=writer=reader=null;
+  $("status").textContent="not connected";
+  $("connect").disabled=false;$("disconnect").disabled=true;
+};
+if("serial" in navigator){
+  navigator.serial.addEventListener("disconnect",e=>{
+    if(port&&e.target===port)$("disconnect").onclick();
+  });
+}
+
+/* -------------------------------------------------------------- controls */
+let glassT=null;
+const pushGlass=()=>{
+  const rows=$("glass").innerText.replace(/ /g," ").split("\n").slice(0,5);
+  lcdLines=rows.concat(["","","","",""]).slice(0,5);
+  drawLCD();
+  send("/joy/screen",lcdLines.map(r=>r.slice(0,21)));
+};
+$("glass").addEventListener("input",()=>{clearTimeout(glassT);glassT=setTimeout(pushGlass,260);});
+$("glass").innerText="AtomJoyOscuino\nOSC over USB";
+
+drawLCD();drawStick("stickL",2048,2048);drawStick("stickR",2048,2048);
+</script>

@@ -268,8 +268,12 @@ function logLine(tag,s){
 }
 
 async function send(address,args){
-  if(!writer) return;
-  await writer.write(padAwayZLP(slipEncode(encodeMessage(address,args))));
+  // After an unplug, writer.write rejects; without this guard every
+  // control click surfaced an unhandled rejection.
+  try {
+    if(!writer) return;
+    await writer.write(padAwayZLP(slipEncode(encodeMessage(address,args))));
+  } catch (e) { logLine("!", "send: " + e); }
 }
 
 function onFrame(payload){
@@ -304,7 +308,12 @@ function onFrame(payload){
 }
 
 async function readLoop(){
-  const slip=new SlipDecoder(onFrame);
+  const slip=new SlipDecoder(p => {
+    // A throw inside the render path used to propagate into the read loop's
+    // catch, which broke out of it -- one bad frame permanently stopped all
+    // reception while the UI still said "connected". Contain it per frame.
+    try { onFrame(p); } catch (e) { logLine("!", "render: " + e); }
+  });
   while(keepReading){
     try{
       const {value,done}=await reader.read();
@@ -394,4 +403,12 @@ $("led0").onclick = () => send("/led",[0]);
 
 oledLines=["OSC over USB","XIAO ESP32-C6","expansion board",""];
 drawOled();
+
+// The OS-level unplug event: without it the page read "connected" forever
+// after the board vanished, and only a manual click reset the UI.
+if ("serial" in navigator) {
+  navigator.serial.addEventListener("disconnect", e => {
+    if (port && e.target === port) $("disconnect").onclick();
+  });
+}
 </script>

@@ -203,27 +203,42 @@ void setup() {
   sendHello();          // nearly always lost; the page asks again
 }
 
+// Non-blocking receive, the extras/webserial/template.ino pattern. Two rules,
+// both learned the hard way there: endofPacket() must be called BEFORE
+// available() on every pass (available() drives the SLIP state machine and can
+// eat a packet boundary if it runs first), and the pump must RETURN rather
+// than block when the buffer runs dry -- an unplug mid-frame, or one lost
+// byte, would otherwise wedge loop() forever, taking the outbound reports
+// with it. The message is filled across several loop() passes, which is why
+// it lives at file scope instead of inside loop().
+static OSCMessage inMsg;
+
+static bool pollOSC() {
+  while (!SLIPSerial.endofPacket()) {
+    int size = SLIPSerial.available();
+    if (size <= 0) return false;              // nothing buffered -- try later
+    while (size--) {
+      int c = SLIPSerial.read();
+      if (c >= 0) inMsg.fill((uint8_t) c);    // read() returns -1 on SLIP error
+    }
+  }
+  return true;
+}
+
 void loop() {
   static uint32_t lastStep = 0, lastState = 0;
 
   // inbound first: a /matrix/text should land before the next scroll step
-  if (SLIPSerial.available()) {
-    static OSCMessage msg;
-    msg.empty();
-    while (!SLIPSerial.endofPacket()) {
-      if (SLIPSerial.available()) {
-        int c = SLIPSerial.read();           // int, -1 for "no byte"
-        if (c >= 0) msg.fill((uint8_t) c);
-      }
+  if (pollOSC()) {
+    if (!inMsg.hasError()) {
+      inMsg.dispatch("/matrix/text",   routeText);
+      inMsg.dispatch("/matrix/rate",   routeRate);
+      inMsg.dispatch("/matrix/bright", routeBright);
+      inMsg.dispatch("/matrix/pause",  routePause);
+      inMsg.dispatch("/matrix/pixels", routePixels);
+      inMsg.dispatch("/hello",         routeHello);
     }
-    if (!msg.hasError()) {
-      msg.dispatch("/matrix/text",   routeText);
-      msg.dispatch("/matrix/rate",   routeRate);
-      msg.dispatch("/matrix/bright", routeBright);
-      msg.dispatch("/matrix/pause",  routePause);
-      msg.dispatch("/matrix/pixels", routePixels);
-      msg.dispatch("/hello",         routeHello);
-    }
+    inMsg.empty();
   }
 
   const uint32_t now = millis();

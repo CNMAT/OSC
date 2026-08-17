@@ -248,29 +248,43 @@ void setup() {
   sendHello();          // nearly always lost; the page asks again
 }
 
+// Non-blocking receive, the extras/webserial/template.ino pattern. Two rules,
+// both learned the hard way there: endofPacket() must be called BEFORE
+// available() on every pass (available() drives the SLIP state machine and can
+// eat a packet boundary if it runs first), and the pump must RETURN rather
+// than block when the buffer runs dry -- an unplug mid-frame, or one lost
+// byte, would otherwise wedge loop() forever, taking the outbound reports
+// with it. The message is filled across several loop() passes, which is why
+// it lives at file scope instead of inside loop().
+static OSCMessage inMsg;
+
+static bool pollOSC() {
+  while (!SLIPSerial.endofPacket()) {
+    int size = SLIPSerial.available();
+    if (size <= 0) return false;              // nothing buffered -- try later
+    while (size--) {
+      int c = SLIPSerial.read();
+      if (c >= 0) inMsg.fill((uint8_t) c);    // read() returns -1 on SLIP error
+    }
+  }
+  return true;
+}
+
 void loop() {
   static uint32_t lastSensors = 0, lastFrame = 0, lastMic = 0;
 
   // inbound first, so a /stream 0 takes effect before the next capture
-  if (SLIPSerial.available()) {
-    OSCMessage in;
-    unsigned long lastByte = millis();
-    while (!SLIPSerial.endofPacket()) {
-      if (SLIPSerial.available()) {
-        int c = SLIPSerial.read();          // int, -1 for "no byte"
-        if (c >= 0) in.fill((uint8_t) c);
-        lastByte = millis();
-      } else if (millis() - lastByte > 200) break;
+  if (pollOSC()) {
+    if (!inMsg.hasError()) {
+      inMsg.dispatch("/led",         routeLed);
+      inMsg.dispatch("/stream",      routeStream);
+      inMsg.dispatch("/cam/rate",    routeRate);
+      inMsg.dispatch("/cam/quality", routeQuality);
+      inMsg.dispatch("/cam/size",    routeSize);
+      inMsg.dispatch("/mic/rate",    routeMicRate);
+      inMsg.dispatch("/hello",       routeHello);
     }
-    if (!in.hasError()) {
-      in.dispatch("/led",         routeLed);
-      in.dispatch("/stream",      routeStream);
-      in.dispatch("/cam/rate",    routeRate);
-      in.dispatch("/cam/quality", routeQuality);
-      in.dispatch("/cam/size",    routeSize);
-      in.dispatch("/mic/rate",    routeMicRate);
-      in.dispatch("/hello",       routeHello);
-    }
+    inMsg.empty();
   }
 
   uint32_t now = millis();

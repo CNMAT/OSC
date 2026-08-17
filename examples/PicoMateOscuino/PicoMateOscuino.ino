@@ -31,7 +31,7 @@
 // Outbound
 //   /hello ,siiiiii name + a found flag per sensor, so the page hides
 //                   panels for anything absent instead of drawing zeros
-//   /pm ,iiii ffffff fff ff iiiii
+//   /pm ,iiii ffffff fff ff iiiiiii
 //        seq, button, pir, encoder,
 //        ax ay az (g), gx gy gz (dps),
 //        mx my mz (uT),
@@ -252,25 +252,40 @@ void setup() {
   sendHello();          // nearly always lost -- the page asks again
 }
 
+// Non-blocking receive, the extras/webserial/template.ino pattern. Two rules,
+// both learned the hard way there: endofPacket() must be called BEFORE
+// available() on every pass (available() drives the SLIP state machine and can
+// eat a packet boundary if it runs first), and the pump must RETURN rather
+// than block when the buffer runs dry -- an unplug mid-frame, or one lost
+// byte, would otherwise wedge loop() forever, taking the outbound reports
+// with it. The message is filled across several loop() passes, which is why
+// it lives at file scope instead of inside loop().
+static OSCMessage inMsg;
+
+static bool pollOSC() {
+  while (!SLIPSerial.endofPacket()) {
+    int size = SLIPSerial.available();
+    if (size <= 0) return false;              // nothing buffered -- try later
+    while (size--) {
+      int c = SLIPSerial.read();
+      if (c >= 0) inMsg.fill((uint8_t) c);    // read() returns -1 on SLIP error
+    }
+  }
+  return true;
+}
+
 void loop() {
   static uint32_t last = 0;
 
-  if (SLIPSerial.available()) {
-    static OSCMessage in;
-    in.empty();
-    while (!SLIPSerial.endofPacket()) {
-      if (SLIPSerial.available()) {
-        int c = SLIPSerial.read();
-        if (c >= 0) in.fill((uint8_t) c);
-      }
+  if (pollOSC()) {
+    if (!inMsg.hasError()) {
+      inMsg.dispatch("/pm/rgb",  routeRgb);
+      inMsg.dispatch("/pm/buzz", routeBuzz);
+      inMsg.dispatch("/pm/oled", routeOled);
+      inMsg.dispatch("/pm/rate", routeRate);
+      inMsg.dispatch("/hello",   routeHello);
     }
-    if (!in.hasError()) {
-      in.dispatch("/pm/rgb",  routeRgb);
-      in.dispatch("/pm/buzz", routeBuzz);
-      in.dispatch("/pm/oled", routeOled);
-      in.dispatch("/pm/rate", routeRate);
-      in.dispatch("/hello",   routeHello);
-    }
+    inMsg.empty();
   }
 
   const uint32_t now = millis();
@@ -300,8 +315,18 @@ void loop() {
   float tempC = 0, humid = 0;
   if (shtOK) { tempC = sht.readTemperature(); humid = sht.readHumidity(); }
 
-  int ir = 0, gr = 0, rd = 0, bl = 0, rawlux = 0, lux = 0;
-  if (ltrOK) ltr.readAllSensors(rd, gr, bl, rawlux, lux, ir);
+  // readAllSensors() polls the LTR-381's status register with delay(50)
+  // loops inside the library -- around 100 ms, 200 worst case -- which
+  // blocked every report and quietly stretched a 50 ms /pm/rate to 150+.
+  // Light changes slowly; read it on its own 500 ms cadence and reuse the
+  // cached values in between, so the report period is honest again.
+  static int ir = 0, gr = 0, rd = 0, bl = 0, lux = 0;
+  static uint32_t lastLtr = 0;
+  if (ltrOK && now - lastLtr >= 500) {
+    lastLtr = now;
+    int rawlux = 0;
+    ltr.readAllSensors(rd, gr, bl, rawlux, lux, ir);
+  }
 
   if (micReady) {
     const int n = micSamples;

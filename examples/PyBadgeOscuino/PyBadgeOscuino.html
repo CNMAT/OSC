@@ -381,7 +381,7 @@ async function connect(){
 }
 
 async function readLoop(){
-  try { for(;;){ const {value,done}=await reader.read(); if(done) break; onFrame(value); } }
+  try { for(;;){ const {value,done}=await reader.read(); if(done) break; try { onFrame(value); } catch (e) { logLine("!", "render: " + e); } } }
   catch(e){ logLine("warn","read error: "+e.message); }
 }
 
@@ -674,6 +674,14 @@ for(let i=0;i<5;i++){
 
 let led=false;
 $("led").onclick = () => { led=!led; send("/led",[led?1:0]); };
+
+// The OS-level unplug event: without it the page read "connected" forever
+// after the board vanished, and only a manual click reset the UI.
+if ("serial" in navigator) {
+  navigator.serial.addEventListener("disconnect", e => {
+    if (port && e.target === port) $("disconnect").onclick();
+  });
+}
 </script>
 </body>
 </html>

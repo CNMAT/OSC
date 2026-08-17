@@ -95,5 +95,54 @@ for (const board of BOARDS) {
   ok(`pin clamp ${board.pinClamp ? "present" : "absent"}`, clamped === !!board.pinClamp);
 }
 
+/* ------------------------------------------------------------------------
+   Hand-written pages. Everything above is bounded by boards.json, which left
+   the hand-written demos -- more of them than the generated ones by now --
+   with no automated check at all: a page whose blob decoder was missing, or
+   whose script had stopped parsing, passed `make test` in silence. This pass
+   applies the checks that need no knowledge of the board:
+     - <meta charset> is declared (em dashes render as mojibake without it)
+     - every <script> parses
+     - every id the script asks for exists in the markup
+     - the OSC decoder handles blobs, whose absence once cost a waveform
+       display that had never drawn
+   ------------------------------------------------------------------------ */
+import { readdirSync, statSync } from "node:fs";
+
+const generated = new Set(BOARDS.map(sketchName));
+const examplesRoot = new URL(".", EXAMPLES_DIR);
+const handwritten = readdirSync(examplesRoot).filter(d => {
+  if (generated.has(d)) return false;
+  try { return existsSync(new URL(`${d}/${d}.html`, examplesRoot)); }
+  catch { return false; }
+});
+
+for (const name of handwritten) {
+  console.log(`\n${name} (hand-written)`);
+  const html = readFileSync(new URL(`${name}/${name}.html`, examplesRoot), "utf8");
+
+  ok("declares a charset", /<meta[^>]+charset/i.test(html));
+
+  const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+  let parsed = true, why = "";
+  for (const src of scripts) {
+    try { new Function(src); } catch (e) { parsed = false; why = String(e); }
+  }
+  ok("scripts parse", parsed, why);
+
+  // ids: every literal getElementById / $("...") target must exist
+  const script = scripts.join("\n");
+  const wanted = new Set(
+    [...script.matchAll(/getElementById\(["']([\w-]+)["']\)/g),
+     ...script.matchAll(/\$\(["']([\w-]+)["']\)/g)].map(m => m[1]));
+  const have = new Set([...html.matchAll(/id=["']([\w-]+)["']/g)].map(m => m[1]));
+  const missing = [...wanted].filter(id => !have.has(id));
+  ok("every requested id exists", missing.length === 0, missing.join(", "));
+
+  // decoder handles blobs, if the page decodes OSC at all
+  if (/decodeMessage|function decode/.test(script))
+    ok("decoder has a blob case", /['"]b['"]/.test(script));
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

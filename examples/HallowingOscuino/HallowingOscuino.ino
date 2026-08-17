@@ -100,8 +100,13 @@ static void routeFill(OSCMessage &m) {          // /screen/fill r g b
   redraw(tft.color565(r, g, b));
 }
 static void routeBacklight(OSCMessage &m) {     // /screen/backlight 0..255
-  if (m.size() >= 1 && m.isInt(0))
-    analogWrite(TFT_LITE, constrain(m.getInt(0), 0, 255));
+  if (m.size() >= 1 && m.isInt(0)) {
+    // analogWriteResolution(10) in setup() is GLOBAL on SAMD, not per-pin:
+    // it rescales this PWM write too, so an unscaled 0-255 here topped out
+    // at 255/1023 -- about a quarter of full brightness. Map to 10 bits.
+    const int v = constrain(m.getInt(0), 0, 255);
+    analogWrite(TFT_LITE, (v << 2) | (v >> 6));   // 255 -> 1023
+  }
 }
 static void routeTone(OSCMessage &m) {          // /tone freq [ms] [vol]
   if (m.size() < 1 || !m.isInt(0)) return;
@@ -145,7 +150,7 @@ void setup() {
 
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(TFT_LITE, OUTPUT);
-  analogWrite(TFT_LITE, 255);
+  analogWrite(TFT_LITE, 255);           // still 8-bit here; resolution(10) is below
 
   analogWriteResolution(10);            // the DAC is 10-bit
   analogWrite(SPKR_PIN, 512);           // idle at mid-scale so it does not click
@@ -164,29 +169,43 @@ void setup() {
   sendHello();          // nearly always lost; the page asks again
 }
 
+// Non-blocking receive, the extras/webserial/template.ino pattern. Two rules,
+// both learned the hard way there: endofPacket() must be called BEFORE
+// available() on every pass (available() drives the SLIP state machine and can
+// eat a packet boundary if it runs first), and the pump must RETURN rather
+// than block when the buffer runs dry -- an unplug mid-frame, or one lost
+// byte, would otherwise wedge loop() forever, taking the outbound reports
+// with it. The message is filled across several loop() passes, which is why
+// it lives at file scope instead of inside loop().
+static OSCMessage inMsg;
+
+static bool pollOSC() {
+  while (!SLIPSerial.endofPacket()) {
+    int size = SLIPSerial.available();
+    if (size <= 0) return false;              // nothing buffered -- try later
+    while (size--) {
+      int c = SLIPSerial.read();
+      if (c >= 0) inMsg.fill((uint8_t) c);    // read() returns -1 on SLIP error
+    }
+  }
+  return true;
+}
+
 void loop() {
   static uint32_t last = 0;
 
-  if (SLIPSerial.available()) {
-    OSCMessage in;
-    unsigned long lastByte = millis();
-    while (!SLIPSerial.endofPacket()) {
-      if (SLIPSerial.available()) {
-        int c = SLIPSerial.read();        // int, -1 for "no byte"
-        if (c >= 0) in.fill((uint8_t) c);
-        lastByte = millis();
-      } else if (millis() - lastByte > 200) break;
+  if (pollOSC()) {
+    if (!inMsg.hasError()) {
+      inMsg.dispatch("/screen/text",      routeText);
+      inMsg.dispatch("/screen/fill",      routeFill);
+      inMsg.dispatch("/screen/backlight", routeBacklight);
+      inMsg.dispatch("/tone",             routeTone);
+      inMsg.dispatch("/pixel",            routePixel);
+      inMsg.dispatch("/led",              routeLed);
+      inMsg.dispatch("/rate",             routeRate);
+      inMsg.dispatch("/hello",       routeHello);
     }
-    if (!in.hasError()) {
-      in.dispatch("/screen/text",      routeText);
-      in.dispatch("/screen/fill",      routeFill);
-      in.dispatch("/screen/backlight", routeBacklight);
-      in.dispatch("/tone",             routeTone);
-      in.dispatch("/pixel",            routePixel);
-      in.dispatch("/led",              routeLed);
-      in.dispatch("/rate",             routeRate);
-      in.dispatch("/hello",       routeHello);
-    }
+    inMsg.empty();
   }
 
   const uint32_t now = millis();

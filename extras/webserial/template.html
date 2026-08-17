@@ -190,6 +190,8 @@ class Reader {
   get left() { return this.b.length - this.pos; }
   int32()    { const v = this.view.getInt32(this.pos, false);   this.pos += 4; return v; }
   float32()  { const v = this.view.getFloat32(this.pos, false); this.pos += 4; return v; }
+  int64()    { const v = this.view.getBigInt64(this.pos, false); this.pos += 8; return v; }
+  float64()  { const v = this.view.getFloat64(this.pos, false);  this.pos += 8; return v; }
   raw(n)     { const v = this.b.slice(this.pos, this.pos + n);  this.pos += n; return v; }
   string() {
     const start = this.pos;
@@ -279,6 +281,11 @@ function decodeMessage(bytes) {
           case "F": args.push({ type: "F", value: false }); break;
           case "N": args.push({ type: "N", value: null }); break;
           case "I": args.push({ type: "I", value: Infinity }); break;
+          // h and d are 8-byte payloads this library can emit (int64 via
+          // add(int64_t), double via add(double)); skipping them silently
+          // dropped every argument that followed.
+          case "h": args.push({ type: "h", value: r.int64() }); break;
+          case "d": args.push({ type: "d", value: r.float64() }); break;
           // Unknown tag: payload size is unknown, so stop rather than misparse.
           default: args.push({ type: t, value: "<unhandled>" }); return { address, args };
         }

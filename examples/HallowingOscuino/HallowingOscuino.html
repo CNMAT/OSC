@@ -201,6 +201,7 @@ function decodeMessage(bytes) {
         if (t === "i") args.push(r.int32());
         else if (t === "f") args.push(r.float32());
         else if (t === "s") args.push(r.string());
+        else if (t === "b") args.push(r.blob());
         else if (t === "T") args.push(true);
         else if (t === "F") args.push(false);
         else return { address, args };
@@ -280,7 +281,8 @@ async function readLoop() {
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
-      onFrame(value);
+      // contain render throws so one bad frame cannot stop reception
+      try { onFrame(value); } catch (e) { logLine("!", "render: " + e); }
     }
   } catch (e) { logLine("warn", "read error: " + e.message); }
 }
@@ -354,7 +356,12 @@ function onFrame(payload) {
     [t0, t1, t2, t3].forEach((v, i) => {
       if (typeof v !== "number") return;
       $("p" + i + "v").textContent = v;
-      if (v < padFloor[i]) padFloor[i] = v;
+      // The floor must LEAK UPWARD as well as fall: a running minimum that
+      // only falls latches a pad permanently "hit" after one low sample.
+      // Half a count per frame (~10/s at the 20 Hz default) re-adapts to a
+      // genuinely higher resting level in a few seconds without tracking a
+      // real touch, which lasts well under that.
+      padFloor[i] = v < padFloor[i] ? v : padFloor[i] + 0.5;
       $("p" + i).classList.toggle("hit", v > padFloor[i] * 1.6);
     });
     if (typeof ax === "number") { $("ax").textContent = ax; tiltX = ax; }
@@ -400,6 +407,14 @@ $("px").oninput         = e => send("/pixel", hex2rgb(e.target.value));
 $("pxoff").onclick      = () => send("/pixel", [0, 0, 0]);
 let led = false;
 $("led").onclick        = () => { led = !led; send("/led", [led ? 1 : 0]); };
+
+// The OS-level unplug event: without it the page read "connected" forever
+// after the board vanished, and only a manual click reset the UI.
+if ("serial" in navigator) {
+  navigator.serial.addEventListener("disconnect", e => {
+    if (port && e.target === port) $("disconnect").onclick();
+  });
+}
 </script>
 </body>
 </html>

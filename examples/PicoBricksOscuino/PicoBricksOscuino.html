@@ -310,10 +310,19 @@ function onFrame(payload){
 
 /* ---------------------------------------------------------------- serial */
 let port=null,writer=null,reader=null,keep=false;
-async function send(a,args){ if(writer) await writer.write(padAwayZLP(slipEncode(encodeMessage(a,args)))); }
+async function send(a,args){
+  // writer.write rejects after an unplug; without this every click threw
+  try { if(writer) await writer.write(padAwayZLP(slipEncode(encodeMessage(a,args)))); }
+  catch (e) { logLine("!", "send: " + e); }
+}
 
 async function readLoop(){
-  const slip=new SlipDecoder(onFrame);
+  const slip=new SlipDecoder(p => {
+    // A throw inside the render path used to propagate into the read loop's
+    // catch, which broke out of it -- one bad frame permanently stopped all
+    // reception while the UI still said "connected". Contain it per frame.
+    try { onFrame(p); } catch (e) { logLine("!", "render: " + e); }
+  });
   while(keep){
     try{
       const {value,done}=await reader.read();
@@ -406,4 +415,12 @@ const pushOled=()=>{
 $("glass").addEventListener("input",()=>{clearTimeout(oledT);oledT=setTimeout(pushOled,260);});
 $("h-oled").onclick=()=>{$("glass").scrollIntoView({block:"center",behavior:"smooth"});$("glass").focus();};
 $("glass").innerText="PicoBricks\nOSC over USB";
+
+// The OS-level unplug event: without it the page read "connected" forever
+// after the board vanished, and only a manual click reset the UI.
+if ("serial" in navigator) {
+  navigator.serial.addEventListener("disconnect", e => {
+    if (port && e.target === port) $("disconnect").onclick();
+  });
+}
 </script>
