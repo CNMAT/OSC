@@ -96,19 +96,61 @@
 //   /hello              ask again: the boot one is lost to USB
 //                       re-enumeration before the host opens the port
 //
-// STATUS: NOT YET RUN ON HARDWARE. The register map, the button assignment,
-// the little-endian byte order, the 12-bit range and the active-LOW sense are
-// all now read out of M5Stack's published STM32 firmware rather than guessed
-// -- that is source-verified, which is not the same as measured. Still open
-// until this runs on a bench: the sticks' actual rest value and travel (M5
-// publish NO centre, range or deadband anywhere; the 2048 that circulates is
-// an assumption in their StampFly application, not a device specification, so
-// the page must not pretend to a centre it has not seen), whether the second
-// battery register reads anything at all (the board has two charger circuits
-// but ships with one cell), and whether this unit is an AtomS3 or the newer
-// AtomS3R. M5GFX detects the panel at runtime, so the display should work
-// either way.
+// STATUS: RUN ON HARDWARE 2026-08-17, on an AtomS3 in a K137 base. What the
+// bench established, as opposed to what the firmware source promised:
+//
+//   0xFE firmware version reads 2, so the v2 button map above is the one that
+//   applies to this unit -- the check the header asks for, performed.
+//
+//   REST POSITION IS NOT 2048, and is not even the same on both sticks:
+//       left  X 2079   left  Y 2123
+//       right X 1973   right Y 2123
+//   measured over 83 samples with the sticks untouched; noise was +/-1.5 LSB
+//   peak to peak. So a client that assumes a 2048 centre draws every stick
+//   permanently off-centre, by up to 75 counts. Rest must be sampled at
+//   start-up, not assumed -- which is why nothing here or in the page hard
+//   codes a centre.
+//
+//   TRAVEL IS THE FULL 12-BIT RANGE: over a deliberate sweep of both sticks,
+//   lx 0..4082, ly 6..4092, rx 0..4087, ry 11..4092. No deadband, no clamped
+//   sub-range.
+//
+//   BOTH battery registers are live on this unit: 4165 mV and 4185 mV. M5's
+//   documentation describes one cell shipping, so a second reading near zero
+//   would also be normal -- do not treat 0 as a fault.
+//
+//   All four button bits and the front button were each seen to assert. Which
+//   physical control drives which bit is STILL NOT CONFIRMED BY PRESS: the one
+//   run that produced an order was contaminated by stick clicks triggered
+//   while sweeping. The mapping above is the firmware's, and the firmware is a
+//   good source, but this comment does not claim a measurement it does not
+//   have.
+//
+//   Not established: whether this unit is an AtomS3 or an AtomS3R -- it
+//   answered on SDA 38, which is the AtomS3 bus, and esptool reports
+//   ESP32-S3 (QFN56) with no PSRAM, which is also AtomS3 rather than the
+//   PICO-package AtomS3R.
+//
+// M5Unified is OPT-IN, and off by default, because of a measurement:
+// 2026-08-17, on an AtomS3 seated in the Atom JoyStick base, M5.begin() DOES
+// NOT RETURN. setup() never reaches loop() and the board is silent on USB
+// forever. A stripped sketch containing nothing but SLIPSerial.begin() and
+// M5.begin() reproduced it exactly, so it is not this sketch's joystick code;
+// the same binary streams happily on an M5Dial. Out of the base the same
+// AtomS3 completes M5.begin() but reports M5.Display.width() == 0, so the
+// panel never initialises on this unit either way -- consistent with the
+// display, not the base, being the thing M5GFX is stuck on.
+//
+// Nothing here needs M5Unified: the joystick is plain I2C and the front
+// button is a GPIO. So the default build talks to the hardware directly and
+// always runs. Define ATOMJOY_USE_M5 to 1 to drive the on-board LCD on a unit
+// where M5GFX behaves -- the HTML panel draws the screen regardless.
+#ifndef ATOMJOY_USE_M5
+#define ATOMJOY_USE_M5 0
+#endif
+#if ATOMJOY_USE_M5
 #include <M5Unified.h>
+#endif
 #include <Wire.h>
 
 #include <OSCBundle.h>
@@ -137,6 +179,8 @@ SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 #define REG_BTN     0x70       // 4 bytes: L fn, R fn, L stick, R stick
 #define REG_FW      0xFE       // 1 byte, 2 on shipping hardware
 
+#define BTN_FRONT  41          // the AtomS3's screen doubles as a button,
+                               // active LOW; M5.BtnA is just this pin
 static bool     joyOK = false, dispOK = false;
 static uint8_t  joyFw = 0;     // STM32 firmware version from 0xFE; 2 ships
 static int8_t   joySda = -1;   // which internal bus answered: 38=S3, 45=S3R
@@ -189,6 +233,7 @@ static uint8_t joyButtons() {
 }
 
 static void redraw() {
+#if ATOMJOY_USE_M5
   if (!dispOK) return;
   M5.Display.fillScreen(TFT_BLACK);
   M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
@@ -197,6 +242,7 @@ static void redraw() {
     M5.Display.setCursor(2, (int)(4 + i * 12));
     M5.Display.print(lines[i]);
   }
+#endif
 }
 
 /* ----------------------------------------------------------------- inbound */
@@ -222,11 +268,18 @@ static void sendHello() {
 static void routeHello(OSCMessage &) { sendHello(); }
 
 void setup() {
-  auto cfg = M5.config();
-  M5.begin(cfg);                       // display + the GPIO41 front button
-  dispOK = (M5.Display.width() > 0);
-
+  // USB FIRST. A sketch that cannot report its own failure is undebuggable on
+  // a board with no other output, and that is exactly the hole the M5.begin()
+  // hang fell into.
   SLIPSerial.begin(115200);
+
+  pinMode(BTN_FRONT, INPUT_PULLUP);
+
+#if ATOMJOY_USE_M5
+  auto cfg = M5.config();
+  M5.begin(cfg);                       // may not return on some units -- see top
+  dispOK = (M5.Display.width() > 0);
+#endif
 
   // Probe for the part, not for the board: this base is sold with an Atom as
   // a unit, but the module pulls out, and a driver reading an absent device
@@ -270,7 +323,9 @@ static bool pollOSC() {
 void loop() {
   static uint32_t last = 0;
 
-  M5.update();                         // services the front button
+#if ATOMJOY_USE_M5
+  M5.update();                       // services M5's own button state
+#endif
 
   if (pollOSC()) {
     if (!inMsg.hasError()) {
@@ -300,6 +355,6 @@ void loop() {
    .add((intOSC_t) rx).add((intOSC_t) ry)
    .add((intOSC_t) btn)
    .add((intOSC_t) b1).add((intOSC_t) b2)
-   .add((intOSC_t) (M5.BtnA.isPressed() ? 1 : 0));
+   .add((intOSC_t) (digitalRead(BTN_FRONT) == LOW ? 1 : 0));
   SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
 }
