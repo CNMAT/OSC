@@ -511,6 +511,7 @@ does not share the loss. The gradient is now bounded at both ends:
 | QT Py ESP32-S3 (Xtensa, HWCDC) | 22/22 | 11/11 | — | not re-measured |
 | Seeed XIAO ESP32S3 Sense (Xtensa, 8 MB PSRAM) | 22/22 | 11/11 | — | not re-measured |
 | Gemma M0 (SAMD21) | — | — | 7/7 | not re-measured |
+| SparkFun SAMD21 Mini | — | — | — | bench 2026-08-13: gate + in 50/200 one-write ×3 (2272 f/s) + out ×3 + compound ×3 + 1100 B lazy-reader ring all clean — after a detection-ladder fix, see below |
 | moddo pinch (SAMD11) | 22/22 | 11/11 | — | bench clean 2026-08-11: in/out 200×3, 4.4 KB one-write, 1100 B burst vs 20 ms/loop lazy reader all 0 loss, ~1830 f/s on-board — NAK stack, no drop site |
 | ESP32-C6 (RISC-V) | 22/22 | 11/11 | — | bench 2026-08-11: byte ceiling ~264 B confirmed (12×22 B, firstGap@11); ×16 queue → ceiling ~4.3 KB; out + compound clean on enlarged build; remedy since baked into `begin()` |
 | M5Stack StampS3 (Xtensa) | 22/22 | 11/11 | 7/7 | not re-measured |

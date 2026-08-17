@@ -412,7 +412,23 @@ using SLIPEncodedSerial =  _SLIPSerial<HardwareSerial> ;
 // Selecting SERIAL_PORT_USBVIRTUAL for them would move an existing sketch's
 // output from the programming-port UART to native USB -- a behaviour change,
 // not a compile fix, so it is deliberately left alone here.
-#if defined(_SAMD21_) && defined(ARDUINO_SAMD_ZERO)
+// Zero-derived boards: ask the variant which port it means rather than
+// assuming Serial. SERIAL_PORT_MONITOR is "the port which normally prints to
+// the Serial Monitor", which is exactly the intent here, and it keeps a real
+// Arduino Zero on its programming-port UART (that variant defines it as
+// Serial) so nothing existing moves.
+//
+// The assumption was wrong for boards that borrow build.board=SAMD_ZERO
+// without having a programming port. Measured on a SparkFun SAMD21 Mini: its
+// variant defines SERIAL_PORT_MONITOR and SERIAL_PORT_USBVIRTUAL both as
+// SerialUSB and has no Serial-as-USB at all, so binding to Serial sent every
+// packet to a UART. The board enumerated, accepted writes, and answered
+// nothing -- which looks exactly like a dead sketch.
+#if defined(_SAMD21_) && defined(ARDUINO_SAMD_ZERO) && defined(SERIAL_PORT_MONITOR)
+#define thisBoardsSerialUSB SERIAL_PORT_MONITOR
+typedef decltype(SERIAL_PORT_MONITOR) actualUSBtype;
+
+#elif defined(_SAMD21_) && defined(ARDUINO_SAMD_ZERO)
 #define thisBoardsSerialUSB Serial
 typedef decltype(Serial) actualUSBtype;
 
