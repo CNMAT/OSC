@@ -7,17 +7,30 @@
 //
 //   arduino-cli compile -b Seeeduino:samd:seeed_XIAO_m0 examples/BaudotXiaoOscuino
 //
-// NO SOUND ON THIS BOARD, and it is not an oversight. The original XIAO breaks
-// out exactly ELEVEN GPIO (D0..D10), and a 6-row by 5-column array needs
-// exactly eleven. The RP2350 build drives a speaker from two PWM channels of
-// one slice; there is no twelfth pin here to do it with. If you want the
-// melody on a XIAO, either drop to five symbols and free D0 -- which is also
-// the DAC, so it can drive a speaker properly rather than with a square wave --
-// or use a XIAO with more pins.
+// NO SOUND ON THIS BOARD. The array uses eleven pins and D7 is the only one
+// left free, which is not enough for the differential pair the RP2350 build
+// uses on GPIO 28/29. A single-ended speaker on D7 would work at reduced
+// volume; the DAC is on D0, which this wiring spends on a row. /hello reports
+// 0 in the speaker field so a client can tell the two builds apart.
 //
-// WIRING, unchanged from the RP2350 build:
-//   COLUMNS are the five code bits, LSB first:  D6 D7 D8 D9 D10
-//   ROWS are the six symbol positions:          D0 D1 D2 D3 D4 D5
+// WIRING, as actually built on the XIAO (different from the RP2350 board):
+//   COLUMNS are the five code bits, LSB first:  D2 D3 D4 D5 D6
+//   ROWS are the six symbol positions:          D0 D1 D11 D10 D9 D8
+//
+//
+// PRINTING ORDER. The wiring list above runs LSB first because that is the bit
+// numbering, but the array reads LEFT TO RIGHT as MSB to LSB -- the leftmost
+// column on the board is bit 5. Anything that displays a row's bits should
+// therefore print bit 5 first, matching what you see, not the order the pins
+// are listed in here. Printing them in pin order shows every symbol mirrored.
+// Note the row order: it is NOT ascending. Rows three to six run 11, 10, 9, 8
+// -- descending -- and D7 is not used at all. That is the wiring, not a typo,
+// and getting it "tidy" would scramble the symbols.
+//
+// One thing to know about this core: on the Seeeduino XIAO, digital 11, 12 and
+// 13 are also the onboard RGB LED channels (11 is the TX LED). Driving 11 as a
+// matrix row therefore blinks an onboard LED alongside the external one. It
+// works, but if a row looks like it has an extra indicator, that is why.
 //   Every LED has its ANODE on its ROW and its CATHODE on its COLUMN, so a
 //   cell lights when its row is HIGH and its column is LOW: the data is
 //   ACTIVE LOW.
@@ -92,8 +105,8 @@ SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 #define NCOLS 5
 
 // Rows: first symbol to last. Columns: code bit 1 (LSB) to bit 5 (MSB).
-static const uint8_t ROW_PIN[NROWS] = { 0, 1, 2, 3, 4, 5 };
-static const uint8_t COL_PIN[NCOLS] = { 6, 7, 8, 9, 10 };
+static const uint8_t ROW_PIN[NROWS] = { 0, 1, 11, 10, 9, 8 };
+static const uint8_t COL_PIN[NCOLS] = { 2, 3, 4, 5, 6 };
 
 // ITA1 Continental letters, bit 1 in the least significant position so the
 // value can be written straight to the columns.
@@ -134,62 +147,67 @@ static void lightCell(uint8_t r, uint8_t c) {
 
 /* -------------------------------------------------------- reading the array */
 
-#define CHG_TRIALS 90
-#define CHG_LIMIT  20000
+// READ IT WITH THE ADC. On the RP2350 the ADC lives on four pins and none of
+// them were in the array, which forced the whole precharge-and-time-a-pull-up
+// approach. On this SAMD21 every column pin has an ADC channel -- D2, D3, D4,
+// D5, D6 are AIN 4, 18, 19, 16, 17 -- so the node can simply be MEASURED, and
+// the yellow LED's forward drop stops being a problem and becomes the signal.
+//
+// Per cell: ground everything, release the column, drive the row HIGH, and
+// read the column. A fitted cell charges through its diode and settles at
+// 3.3 - Vf, roughly 1.0-1.3 V; an empty cell has no path and sits at 0. That
+// is more than a volt of separation against a few millivolts of noise -- no
+// threshold sits anywhere near the logic levels that defeated every digital
+// method, and no timing ratio has to be teased out of a one-microsecond ramp.
+//
+// The capacitive method is kept in the RP2350 sketch, where it is the only
+// option. Here it would be strictly worse.
+#define ADC_BITS      12
+#define ADC_FULL      4095
+#define PRESENT_COUNT 500          // ~0.4 V: far above noise, far below 1.0 V
+#define ADC_AVG       16
 
-static uint32_t chargeOnce(uint8_t r, uint8_t c, bool precharge) {
-  uint32_t total = 0;
-  for (uint16_t t = 0; t < CHG_TRIALS; t++) {
-    for (uint8_t i = 0; i < NROWS; i++) { pinMode(ROW_PIN[i], OUTPUT); digitalWrite(ROW_PIN[i], LOW); }
-    for (uint8_t k = 0; k < NCOLS; k++) { pinMode(COL_PIN[k], OUTPUT); digitalWrite(COL_PIN[k], LOW); }
-    delayMicroseconds(250);                  // drain: the junctions hold charge
+static uint16_t senseCell(uint8_t r, uint8_t c) {
+  for (uint8_t i = 0; i < NROWS; i++) { pinMode(ROW_PIN[i], OUTPUT); digitalWrite(ROW_PIN[i], LOW); }
+  for (uint8_t k = 0; k < NCOLS; k++) { pinMode(COL_PIN[k], OUTPUT); digitalWrite(COL_PIN[k], LOW); }
+  delayMicroseconds(400);                    // drain to a known zero
 
-    pinMode(COL_PIN[c], INPUT);              // float the node being measured
-    if (precharge) digitalWrite(ROW_PIN[r], HIGH);
-    delayMicroseconds(300);                  // matched to the drain -- shortening
-                                             // this alone kills the sensitivity
-    pinMode(ROW_PIN[r], INPUT);              // isolate: charge is trapped
+  pinMode(COL_PIN[c], INPUT);                // release the node being measured
+  digitalWrite(ROW_PIN[r], HIGH);            // forward-bias this one cell
+  delayMicroseconds(600);                    // let it settle
 
-    pinMode(COL_PIN[c], INPUT_PULLUP);       // race the pull-up to the threshold
-    uint32_t n = 0;
-    while (n < CHG_LIMIT && !digitalRead(COL_PIN[c])) n++;
-    total += n;
-  }
-  return total;
+  uint32_t acc = 0;
+  for (uint8_t k = 0; k < ADC_AVG; k++) acc += analogRead(COL_PIN[c]);
+  return (uint16_t)(acc / ADC_AVG);
 }
+
+static uint16_t cellmV[NROWS][NCOLS];
 
 static void readAll() {
   lightNone();
-  delay(400);                                // settle: lit cells bias the read
-
-  uint8_t votes[NROWS][NCOLS];
-  int32_t last[NROWS][NCOLS];
-  for (uint8_t r = 0; r < NROWS; r++)
-    for (uint8_t c = 0; c < NCOLS; c++) votes[r][c] = 0;
-
-  for (uint8_t pass = 0; pass < 3; pass++)   // best of three
-    for (uint8_t r = 0; r < NROWS; r++)
-      for (uint8_t c = 0; c < NCOLS; c++) {
-        const int32_t d = (int32_t) chargeOnce(r, c, false) - (int32_t) chargeOnce(r, c, true);
-        last[r][c] = d;
-        if (d > 100) votes[r][c]++;
-      }
+  delay(300);                                // settle: lit cells bias the read
+  analogReadResolution(ADC_BITS);
 
   for (uint8_t r = 0; r < NROWS; r++) {
     bootCode[r] = 0;
     for (uint8_t c = 0; c < NCOLS; c++) {
-      present[r][c] = (votes[r][c] >= 2) ? 1 : 0;
-      if (present[r][c]) bootCode[r] |= (uint8_t)(1u << c);
+      const uint16_t raw = senseCell(r, c);
+      cellmV[r][c] = (uint16_t)((uint32_t) raw * 3300UL / ADC_FULL);
+      present[r][c] = (raw > PRESENT_COUNT) ? 1 : 0;
+      if (present[r][c]) bootCode[r] |= (uint8_t)(1u << c);   // bit 1 = LSB
     }
     code[r] = bootCode[r];
   }
   lightNone();
 }
 
+// Reports the measured millivolts per cell, not just a verdict, so the margin
+// is visible and a threshold argument can be had with the data rather than
+// with the firmware.
 static void reportPresent() {
   OSCMessage m("/present");
   for (uint8_t r = 0; r < NROWS; r++)
-    for (uint8_t c = 0; c < NCOLS; c++) m.add((intOSC_t) present[r][c]);
+    for (uint8_t c = 0; c < NCOLS; c++) m.add((intOSC_t) cellmV[r][c]);
   for (uint8_t r = 0; r < NROWS; r++) m.add((intOSC_t) bootCode[r]);
   SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
 }

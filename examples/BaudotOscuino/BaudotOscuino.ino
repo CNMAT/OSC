@@ -26,6 +26,12 @@
 //   ROWS are the six symbol positions, first to last:
 //       GPIO 0, 1, 2, 3, 4, 5
 //
+//
+// PRINTING ORDER. The wiring list above runs LSB first because that is the bit
+// numbering, but the array reads LEFT TO RIGHT as MSB to LSB -- the leftmost
+// column on the board is bit 5. Anything that displays a row's bits should
+// therefore print bit 5 first, matching what you see, not the order the pins
+// are listed in here. Printing them in pin order shows every symbol mirrored.
 //   Every LED has its ANODE (+) on its ROW and its CATHODE (-) on its COLUMN.
 //   So a diode conducts only when its row is driven HIGH and its column is
 //   pulled LOW: row HIGH selects the symbol, column LOW lights the bits that
@@ -47,15 +53,28 @@
 // driven from loop() off micros(), never from delay(), because loop() also has
 // to pump OSC; a blocking scan would trade the display against the transport.
 //
-// THE CODE IS ITA2 (International Telegraph Alphabet No. 2), which is what
-// "Baudot" almost always means in practice -- the real Baudot code of 1870 had
-// a different assignment and is not what teleprinters used. ITA2 is a SHIFTED
-// code: the same five bits mean a letter after a LTRS (11111) shift and a
-// figure after FIGS (11011). This display shows six symbols at once rather
-// than a stream, so there is no shift state on the wire; instead each symbol
-// is resolved to its code when the text is set, digits resolving through the
-// FIGS table. The bit numbering below is the usual one, bit 1 as the LSB, so
-// E = 10000 written out is bit 1 alone = 1, and T = 00001 is bit 5 alone = 16.
+// THE CODE IS ITA1 -- the ORIGINAL Baudot alphabet of 1870, not the ITA2
+// (Baudot-Murray) code that teleprinters later used. They are not compatible:
+// the same five bits spell different letters, and reading this array with an
+// ITA2 table returns confident nonsense. This sketch first shipped with ITA2
+// because that is what "Baudot" usually means in practice; the array in front
+// of it is ITA1, so the table below is the ITA1 Continental assignment,
+// transcribed from the published table rather than recalled.
+//
+// THERE IS NO G IN ITA1 CONTINENTAL. E-acute occupies the code point that ITA2
+// later gave to G, so the G entry below is 0 and charToCode('G') blanks that
+// symbol rather than inventing a code. Digits are not mapped either: the ITA1
+// figures case is national-variant soup, and /baudot/raw takes raw 0..31 codes
+// for anything the letter table does not cover.
+//
+// READER CALIBRATED 2026-08-18, which is the only reason the read above is
+// trusted at all. With exactly ONE LED fitted, of known position, the
+// measurement found that cell and only that cell -- 1 true positive, 29 true
+// negatives -- and reproduced across two independent runs. Confirmed against
+// the hardware by lighting the detected cell and checking it was the physical
+// one. An unvalidated reader on this array previously produced a stable,
+// repeatable and entirely fictional message, so a ground-truth check like this
+// is the difference between a measurement and a plausible story.
 //
 // Inbound
 //   /baudot/text ,s     up to six characters; shorter pads with blanks
@@ -92,28 +111,16 @@ static uint8_t  code[NROWS] = { 0, 0, 0, 0, 0, 0 };   // 5-bit code per symbol
 static uint32_t rowUs = 1500;
 static int32_t  seq = 0;
 
-/* ------------------------------------------------------------------- ITA2 */
-// Letters shift. Index is 'A'..'Z'. Values are the five bits with bit 1 as the
-// LSB, so they can be written straight to the columns.
-static const uint8_t ITA2_LTRS[26] = {
-  0x03, 0x19, 0x0E, 0x09, 0x01, 0x0D, 0x1A, 0x14, 0x06, 0x0B, 0x0F, 0x12, 0x1C,
-  0x0C, 0x18, 0x16, 0x17, 0x0A, 0x05, 0x10, 0x07, 0x1E, 0x13, 0x1D, 0x15, 0x11
-};
-// Figures shift, digits only: '0'..'9'. The rest of the FIGS row is
-// national-variant soup and is deliberately not guessed at here; use
-// /baudot/raw for anything else.
-static const uint8_t ITA2_FIGS_DIGIT[10] = {
-  0x16, 0x17, 0x13, 0x01, 0x0A, 0x10, 0x15, 0x07, 0x06, 0x18
-};
-#define ITA2_SPACE 0x04
-#define ITA2_LTRS_SHIFT 0x1F
-#define ITA2_FIGS_SHIFT 0x1B
+/* ------------------------------------------------------------------- ITA1 */
+// ITA1 Continental letters, bit 1 in the least significant position so a value
+// can be written straight to the columns. Index is 'A'..'Z'; G is 0 (absent).
+static const uint8_t ITA1_LTRS[26] = { 0x01, 0x0C, 0x0D, 0x0F, 0x02, 0x0E, 0x00, 0x0B, 0x06, 0x09, 0x19, 0x1B, 0x1A, 0x1E, 0x07, 0x1F, 0x1D, 0x1C, 0x14, 0x15, 0x05, 0x17, 0x16, 0x12, 0x04, 0x13 };
+#define ITA1_BLANK 0x00
 
 static uint8_t charToCode(char c) {
   if (c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A');
-  if (c >= 'A' && c <= 'Z') return ITA2_LTRS[c - 'A'];
-  if (c >= '0' && c <= '9') return ITA2_FIGS_DIGIT[c - '0'];
-  return ITA2_SPACE;                     // blank rather than invent a code
+  if (c >= 'A' && c <= 'Z') return ITA1_LTRS[c - 'A'];
+  return ITA1_BLANK;                     // blank rather than invent a code
 }
 
 /* --------------------------------------------------------------- the scan */
@@ -824,7 +831,7 @@ static void routeText(OSCMessage &m) {
   char buf[NROWS + 1];
   m.getString(0, buf, sizeof buf);
   for (uint8_t r = 0; r < NROWS; r++)
-    code[r] = buf[r] ? charToCode(buf[r]) : ITA2_SPACE;
+    code[r] = buf[r] ? charToCode(buf[r]) : ITA1_BLANK;
 }
 
 static void routeRaw(OSCMessage &m) {
