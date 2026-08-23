@@ -71,8 +71,8 @@
     <div class="under">
       <span>touch: <span id="tx">–</span>,<span id="ty">–</span> <span id="tdown">up</span></span>
       <span class="chk"><input type="checkbox" id="swap" checked>swap</span>
-      <span class="chk"><input type="checkbox" id="mirx" checked>mirror X</span>
-      <span class="chk"><input type="checkbox" id="miry">mirror Y</span>
+      <span class="chk"><input type="checkbox" id="mirx">mirror X</span>
+      <span class="chk"><input type="checkbox" id="miry" checked>mirror Y</span>
     </div>
   </div>
 
@@ -220,7 +220,7 @@ function onFrame(m){
 }
 
 /* ----------------------------------------------------------------- serial */
-let port=null,writer=null,reading=false;
+let port=null,writer=null,reader=null,reading=false;
 
 async function send(a,args){
   // a failed write must not take the page down with it
@@ -236,10 +236,10 @@ async function readLoop(){
     try{ onFrame(m); }
     catch(e){ logLine("!","render: "+e); }
   });
-  const r=port.readable.getReader();
-  try{ while(reading){const {value,done}=await r.read();if(done)break;if(value)slip.push(value);} }
+  reader=port.readable.getReader();
+  try{ while(reading){const {value,done}=await reader.read();if(done)break;if(value)slip.push(value);} }
   catch(e){ logLine("!","read: "+e); }
-  finally{ r.releaseLock(); }
+  finally{ reader.releaseLock(); reader=null; }
 }
 
 $("connect").onclick=async()=>{
@@ -258,6 +258,10 @@ $("connect").onclick=async()=>{
 };
 $("disconnect").onclick=async()=>{
   reading=false;
+  // cancel() is what actually unblocks the pending read() and releases the
+  // stream lock -- without it port.close() throws on the locked stream and
+  // the browser keeps the port open forever, which blocks every later flash.
+  try{ if(reader) await reader.cancel(); }catch(e){}
   try{ if(writer){writer.releaseLock();writer=null;} if(port){await port.close();port=null;} }
   catch(e){ logLine("!",String(e)); }
   $("connect").disabled=false;$("disconnect").disabled=true;

@@ -142,6 +142,14 @@ for (const name of handwritten) {
   // decoder handles blobs, if the page decodes OSC at all
   if (/decodeMessage|function decode/.test(script))
     ok("decoder has a blob case", /['"]b['"]/.test(script));
+
+  // a page that opens a serial port must cancel its reader on disconnect:
+  // a pending read() holds the stream lock, port.close() throws on a locked
+  // stream, and the browser then keeps the port open forever -- which blocks
+  // every later flash of the board. Found the hard way on TDisplayS3Oscuino,
+  // the one page that had dropped the cancel from the shared boilerplate.
+  if (script.includes("requestPort"))
+    ok("disconnect cancels the reader", script.includes(".cancel()"));
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

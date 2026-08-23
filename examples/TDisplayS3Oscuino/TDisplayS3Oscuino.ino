@@ -45,8 +45,9 @@
 //
 // TOUCH COORDINATES arrive in portrait (x 0..169, y 0..319). LilyGO's own
 // examples disagree with each other about the landscape transform, so it is
-// settable at runtime instead of baked in: /touch/map swap mirX mirY, default
-// swap+mirror-X, which is their newest example's choice. The sketch draws a
+// settable at runtime instead of baked in: /touch/map swap mirX mirY. The
+// default is swap+mirror-Y, MEASURED on this unit -- LilyGO's newest example
+// says swap+mirror-X, which landed the dot at 180 degrees from the finger. The sketch draws a
 // dot on the LCD where it believes the touch is -- if the dot tracks your
 // finger the map is right, and that check takes one second instead of an
 // argument with documentation.
@@ -122,7 +123,11 @@ static uint8_t  touchChip = 0;            // 0xA7 chip id, 0x1A for CST328, 0
 static bool     touchIs328 = false;
 static int32_t  seq = 0;
 static uint32_t reportMs = 30;
-static bool     mapSwap = true, mapMirX = true, mapMirY = false;
+// Default measured on this unit 2026-08-18, confirmed by the dot tracking
+// the finger: swap + mirror-Y. LilyGO's newest example says swap+mirror-X,
+// which put the dot at 180 degrees from the finger on this glass -- their
+// examples disagree with each other, which is why this is runtime-settable.
+static bool     mapSwap = true, mapMirX = false, mapMirY = true;
 static char     lines[5][30] = { "TDisplayS3Oscuino", "OSC over USB", "", "", "" };
 static char     bigLine[16] = "";
 static bool     bigMode = false;
