@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>T-Display-S3 — draw by OSC, touch back</title>
+<style>
+  :root{--bg:#0d0f14;--panel:#151823;--edge:#252a38;--fg:#e8eaf2;--dim:#8b92a8;
+        --acc:#ff7a1a;--live:#39d353;--warn:#f85149;
+        --mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg);color:var(--fg);
+       font:15px/1.5 system-ui,-apple-system,sans-serif;padding:22px;max-width:980px;margin:0 auto}
+  h1{font-size:21px;margin-bottom:6px}
+  p.intro{color:var(--dim);margin-bottom:14px;max-width:70ch}
+  code{font-family:var(--mono);color:var(--acc);font-size:13px}
+  button{background:var(--acc);color:#200e00;border:0;border-radius:8px;
+         padding:9px 16px;font:600 14px system-ui;cursor:pointer}
+  button:disabled{background:#2a2e3a;color:#5a6070;cursor:default}
+  button.ghost{background:#242835;color:var(--fg)}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+  .stat{display:inline-flex;align-items:center;gap:7px;color:var(--dim)}
+  .dot{width:10px;height:10px;border-radius:50%;background:#3a4052}
+  .dot.on{background:var(--live)}
+  .tele{font-family:var(--mono);font-size:12px;color:var(--dim);text-align:right;flex:1}
+  .deck{display:flex;gap:16px;margin-top:12px;flex-wrap:wrap}
+  .lcdwrap{background:var(--panel);border:1px solid var(--edge);border-radius:14px;padding:14px}
+  #screen{display:block;background:#000;border-radius:4px;cursor:crosshair;touch-action:none}
+  .under{display:flex;gap:12px;align-items:center;margin-top:10px;flex-wrap:wrap;
+         font-family:var(--mono);font-size:12px;color:var(--dim)}
+  .tools{background:var(--panel);border:1px solid var(--edge);border-radius:14px;
+         padding:14px;min-width:250px;flex:1;display:flex;flex-direction:column;gap:11px}
+  .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+  .row label{color:var(--dim);font-size:13px;min-width:74px}
+  input[type=range]{flex:1;accent-color:var(--acc)}
+  input[type=color]{width:44px;height:30px;border:0;background:none;padding:0;cursor:pointer}
+  input[type=text],textarea{background:#04121a;color:#7fe3ff;border:1px solid var(--edge);
+         border-radius:7px;font:13px/1.5 var(--mono);padding:7px;width:100%}
+  textarea{resize:none;height:106px}
+  input[type=text]:focus,textarea:focus{border-color:var(--acc);outline:0}
+  .chk{display:inline-flex;gap:5px;align-items:center;color:var(--dim);font-size:13px}
+  table{border-collapse:collapse;font-size:13px}
+  td{padding:2px 12px 2px 0}
+  td.k{color:var(--dim)}td.v{font-family:var(--mono)}
+  #log{margin-top:14px;background:#0a0c11;border:1px solid var(--edge);border-radius:10px;
+       padding:10px;font:11px/1.6 var(--mono);color:var(--dim);
+       height:96px;overflow:hidden;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<h1>T-Display-S3 — draw by OSC, touch back</h1>
+<p class="intro">
+  The board's 320×170 screen, mirrored below at 2×. Draw on the mirror and the
+  strokes go to the real panel as <code>/disp</code> messages; touch the real
+  glass and <code>/touch</code> events light up here in green. The dot the
+  board draws under your finger is the map check — if it tracks, the landscape
+  transform is right; if not, flip the toggles. Web Serial needs
+  <code>http://localhost</code>, Chrome or Edge.
+</p>
+
+<div class="bar">
+  <button id="connect">Connect</button>
+  <button id="disconnect" class="ghost" disabled>Disconnect</button>
+  <span class="stat"><span class="dot" id="dot"></span><span id="status">not connected</span></span>
+  <span class="tele"><span id="hz">–</span> · seq <span id="seq">–</span> · dropped <span id="drop">0</span></span>
+</div>
+
+<div class="deck">
+  <div class="lcdwrap">
+    <canvas id="screen" width="640" height="340"></canvas>
+    <div class="under">
+      <span>touch: <span id="tx">–</span>,<span id="ty">–</span> <span id="tdown">up</span></span>
+      <span class="chk"><input type="checkbox" id="swap" checked>swap</span>
+      <span class="chk"><input type="checkbox" id="mirx" checked>mirror X</span>
+      <span class="chk"><input type="checkbox" id="miry">mirror Y</span>
+    </div>
+  </div>
+
+  <div class="tools">
+    <div class="row"><label>brush</label>
+      <input type="color" id="color" value="#ff7a1a">
+      <input type="range" id="brush" min="1" max="24" value="6">
+      <button id="clear" class="ghost">clear</button>
+      <button id="fillbtn" class="ghost">fill</button>
+    </div>
+    <div class="row"><label>backlight</label>
+      <input type="range" id="bl" min="0" max="255" value="180"><span id="blv" class="v">180</span></div>
+    <div class="row"><label>touch rate</label>
+      <input type="range" id="rate" min="10" max="200" value="30"><span id="ratev" class="v">30</span> ms</div>
+    <div class="row" style="align-items:flex-start"><label>text</label>
+      <textarea id="tlines" spellcheck="false" title="up to five lines, sent as /disp/text">TDisplayS3Oscuino
+OSC over USB</textarea></div>
+    <div class="row"><label>big</label>
+      <input type="text" id="big" maxlength="12" placeholder="one big centred line"></div>
+    <table><tr>
+      <td class="k">sketch</td><td class="v" id="name">–</td>
+      <td class="k">display</td><td class="v" id="dok">–</td>
+    </tr><tr>
+      <td class="k">touch</td><td class="v" id="tok">–</td>
+      <td class="k">size</td><td class="v" id="size">–</td>
+    </tr></table>
+  </div>
+</div>
+
+<div id="log">idle</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const enc = new TextEncoder(), dec = new TextDecoder();
+
+/* ------------------------------------------------------------------- OSC */
+class Reader{
+  constructor(b){this.b=b;this.pos=0;this.dv=new DataView(b.buffer,b.byteOffset,b.byteLength);}
+  get left(){return this.b.length-this.pos;}
+  int32(){const v=this.dv.getInt32(this.pos);this.pos+=4;return v;}
+  float32(){const v=this.dv.getFloat32(this.pos);this.pos+=4;return v;}
+  float64(){const v=this.dv.getFloat64(this.pos);this.pos+=8;return v;}
+  int64(){const v=this.dv.getBigInt64(this.pos);this.pos+=8;return v;}
+  string(){let e=this.pos;while(e<this.b.length&&this.b[e]!==0)e++;
+    const s=dec.decode(this.b.subarray(this.pos,e));this.pos=(e+4)&~3;return s;}
+  blob(){const n=this.int32();
+    if(n<0||n>this.left){this.pos=this.b.length;return new Uint8Array(0);}
+    const v=this.b.subarray(this.pos,this.pos+n);this.pos+=(n+3)&~3;return v;}
+}
+// The complete tag set: an unknown tag has no known width, so the decoder
+// must stop rather than misparse everything after it.
+function decodeMessage(bytes){
+  const r=new Reader(bytes),address=r.string(),args=[];
+  if(r.left>0){const tags=r.string();
+    if(tags.startsWith(","))for(const t of tags.slice(1)){
+      if(t==="i")args.push(r.int32());
+      else if(t==="f")args.push(r.float32());
+      else if(t==="s")args.push(r.string());
+      else if(t==="b")args.push(r.blob());
+      else if(t==="h")args.push(r.int64());
+      else if(t==="d")args.push(r.float64());
+      else if(t==="T")args.push(true);
+      else if(t==="F")args.push(false);
+      else if(t==="N")args.push(null);
+      else if(t==="I")args.push("impulse");
+      else return {address,args};
+    }}
+  return {address,args};
+}
+const pad4=b=>{const n=(b.length+3)&~3,o=new Uint8Array(n);o.set(b);return o;};
+function encodeMessage(address,args){
+  const parts=[pad4(enc.encode(address+"\0"))];
+  let tags=",";for(const a of args)tags+=(typeof a==="string")?"s":"i";
+  parts.push(pad4(enc.encode(tags+"\0")));
+  for(const a of args){
+    if(typeof a==="string")parts.push(pad4(enc.encode(a+"\0")));
+    else{const b=new Uint8Array(4);new DataView(b.buffer).setInt32(0,a|0);parts.push(b);}}
+  const out=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));
+  let o=0;for(const p of parts){out.set(p,o);o+=p.length;}
+  return out;
+}
+/* ------------------------------------------------------------------ SLIP */
+const END=0xC0,ESC=0xDB,ESC_END=0xDC,ESC_ESC=0xDD;
+function slipEncode(p){const o=[END];
+  for(const b of p){if(b===END)o.push(ESC,ESC_END);else if(b===ESC)o.push(ESC,ESC_ESC);else o.push(b);}
+  o.push(END);return new Uint8Array(o);}
+class SlipDecoder{
+  constructor(cb){this.cur=[];this.esc=false;this.cb=cb;}
+  push(c){for(const b of c){
+    if(this.esc){this.cur.push(b===ESC_END?END:b===ESC_ESC?ESC:b);this.esc=false;}
+    else if(b===ESC)this.esc=true;
+    else if(b===END){if(this.cur.length){this.cb(new Uint8Array(this.cur));this.cur=[];}}
+    else this.cur.push(b);}}
+}
+// keep frames off 64-byte multiples; free insurance for 32U4 hosts
+function padAwayZLP(b){if(b.length%64!==0)return b;
+  const o=new Uint8Array(b.length+1);o.set(b);o[b.length]=END;return o;}
+
+/* ---------------------------------------------------------------- render */
+const SW=320,SH=170,SCALE=2;
+const cv=$("screen"),ctx=cv.getContext("2d");
+let frames=0,t0=0,lastSeq=null,dropped=0;
+const logLine=(t,s)=>{const e=$("log");
+  e.textContent=(t?t+" ":"")+s+"\n"+e.textContent;
+  if(e.textContent.length>900)e.textContent=e.textContent.slice(0,900);};
+
+function mirrorText(){
+  // the local model of what /disp/text put on the panel
+  ctx.fillStyle="#000";ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle="#fff";ctx.font="26px ui-monospace,monospace";
+  const rows=$("tlines").value.split("\n").slice(0,5);
+  rows.forEach((s,i)=>ctx.fillText(s,8,(6+i*26)*SCALE+20));
+}
+function markTouch(x,y,down){
+  ctx.beginPath();ctx.arc(x*SCALE,y*SCALE,down?7:4,0,7);
+  ctx.fillStyle=down?"rgba(57,211,83,.9)":"rgba(57,211,83,.35)";ctx.fill();
+}
+
+function onFrame(m){
+  if(m.address==="/hello"){
+    const [name,disp,touch,w,h,chip]=m.args;
+    $("name").textContent=name??"–";
+    $("dok").textContent=disp?"OK":"absent";
+    $("dok").style.color=disp?"var(--live)":"var(--warn)";
+    const chips={0xB4:"CST816S",0xB5:"CST816T",0xB6:"CST816D",0xB7:"CST820",0x1A:"CST328",0x20:"CST716"};
+    $("tok").textContent=touch?(chips[chip]||("id 0x"+(chip??0).toString(16))):"absent";
+    $("tok").style.color=touch?"var(--live)":"var(--warn)";
+    $("size").textContent=w+"×"+h;
+    logLine("","board: "+m.args.join(" "));
+    return;
+  }
+  if(m.address!=="/touch")return;
+  const [s,down,x,y]=m.args;
+  frames++;
+  if(lastSeq!==null){const gap=(s-lastSeq)|0;if(gap>1)dropped+=gap-1;}
+  lastSeq=s;
+  $("seq").textContent=s;$("drop").textContent=dropped;
+  $("tx").textContent=x;$("ty").textContent=y;
+  $("tdown").textContent=down?"DOWN":"up";
+  $("tdown").style.color=down?"var(--live)":"var(--dim)";
+  markTouch(x,y,!!down);
+  const now=performance.now();
+  if(!t0)t0=now;
+  if(now-t0>=1000){$("hz").textContent=(frames*1000/(now-t0)).toFixed(0)+" ev/s";frames=0;t0=now;}
+}
+
+/* ----------------------------------------------------------------- serial */
+let port=null,writer=null,reading=false;
+
+async function send(a,args){
+  // a failed write must not take the page down with it
+  try{ if(writer) await writer.write(padAwayZLP(slipEncode(encodeMessage(a,args)))); }
+  catch(e){ logLine("!","send: "+e); }
+}
+
+async function readLoop(){
+  const slip=new SlipDecoder(p=>{
+    let m;
+    try{ m=decodeMessage(p); }
+    catch(e){ logLine("!","decode: "+e); return; }
+    try{ onFrame(m); }
+    catch(e){ logLine("!","render: "+e); }
+  });
+  const r=port.readable.getReader();
+  try{ while(reading){const {value,done}=await r.read();if(done)break;if(value)slip.push(value);} }
+  catch(e){ logLine("!","read: "+e); }
+  finally{ r.releaseLock(); }
+}
+
+$("connect").onclick=async()=>{
+  try{
+    port=await navigator.serial.requestPort();
+    await port.open({baudRate:115200});
+    writer=port.writable.getWriter();
+    reading=true;readLoop();
+    $("connect").disabled=true;$("disconnect").disabled=false;
+    $("dot").classList.add("on");$("status").textContent="connected";
+    logLine("","connected");
+    // ask for /hello: the boot one is lost to USB re-enumeration
+    setTimeout(()=>send("/hello",[]),150);
+    setTimeout(pushMap,300);
+  }catch(e){ logLine("!",String(e)); }
+};
+$("disconnect").onclick=async()=>{
+  reading=false;
+  try{ if(writer){writer.releaseLock();writer=null;} if(port){await port.close();port=null;} }
+  catch(e){ logLine("!",String(e)); }
+  $("connect").disabled=false;$("disconnect").disabled=true;
+  $("dot").classList.remove("on");$("status").textContent="not connected";
+  logLine("","disconnected");
+};
+navigator.serial&&navigator.serial.addEventListener("disconnect",e=>{
+  if(port&&e.target===port)$("disconnect").onclick();
+});
+
+/* ---------------------------------------------------------------- controls */
+const hex=c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];
+
+let drawing=false,lastDraw=0;
+function canvasXY(ev){
+  const r=cv.getBoundingClientRect();
+  return [Math.round((ev.clientX-r.left)*(SW/r.width)),
+          Math.round((ev.clientY-r.top)*(SH/r.height))];
+}
+function stroke(ev){
+  const now=performance.now();
+  if(now-lastDraw<25)return;              // ~40/s; the board repaints fine
+  lastDraw=now;
+  const [x,y]=canvasXY(ev),rad=+$("brush").value,[r,g,b]=hex($("color").value);
+  send("/disp/circle",[x,y,rad,r,g,b]);
+  ctx.beginPath();ctx.arc(x*SCALE,y*SCALE,rad*SCALE,0,7);
+  ctx.fillStyle=$("color").value;ctx.fill();
+}
+cv.addEventListener("pointerdown",ev=>{drawing=true;cv.setPointerCapture(ev.pointerId);stroke(ev);});
+cv.addEventListener("pointermove",ev=>{if(drawing)stroke(ev);});
+cv.addEventListener("pointerup",()=>{drawing=false;});
+
+$("clear").onclick=()=>{send("/disp/clear",[]);ctx.fillStyle="#000";ctx.fillRect(0,0,cv.width,cv.height);};
+$("fillbtn").onclick=()=>{const [r,g,b]=hex($("color").value);
+  send("/disp/fill",[r,g,b]);
+  ctx.fillStyle=$("color").value;ctx.fillRect(0,0,cv.width,cv.height);};
+
+$("bl").oninput=()=>{$("blv").textContent=$("bl").value;send("/disp/bl",[+$("bl").value]);};
+$("rate").oninput=()=>{$("ratev").textContent=$("rate").value;send("/rate",[+$("rate").value]);};
+
+function pushMap(){send("/touch/map",[$("swap").checked?1:0,$("mirx").checked?1:0,$("miry").checked?1:0]);}
+$("swap").onchange=pushMap;$("mirx").onchange=pushMap;$("miry").onchange=pushMap;
+
+let textT=null;
+$("tlines").addEventListener("input",()=>{clearTimeout(textT);
+  textT=setTimeout(()=>{send("/disp/text",$("tlines").value.split("\n").slice(0,5));mirrorText();},300);});
+$("big").addEventListener("input",()=>{clearTimeout(textT);
+  textT=setTimeout(()=>{send("/disp/big",[$("big").value]);},300);});
+
+mirrorText();
+</script>
+</body>
+</html>
