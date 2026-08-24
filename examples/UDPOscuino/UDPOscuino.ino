@@ -363,7 +363,7 @@ void loop(){
         bundleIN.route("/tone", routeTone);
 #endif
 
-#ifdef TOUCHSUPPORT
+#ifdef BOARD_HAS_CAPACITANCE_SENSING
         bundleIN.route("/c", routeTouch);
 #endif
 
