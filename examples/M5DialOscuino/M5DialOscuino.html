@@ -217,9 +217,16 @@ function onFrame(m){
     $("dok").style.color=disp?"var(--live)":"var(--warn)";
     $("tok").textContent=touch?"FT3267":"absent";
     $("tok").style.color=touch?"var(--live)":"var(--warn)";
-    $("rok").textContent=rfid?"present (unread)":"absent";
+    $("rok").textContent=rfid?"ready — present a tag":"absent";
     $("rok").style.color=rfid?"var(--live)":"var(--dim)";
     logLine("","board: "+m.args.join(" "));
+    return;
+  }
+  if(m.address==="/rfid"){
+    const [present,uid]=m.args;
+    $("rok").textContent=present?("tag "+uid):"no tag (last "+uid+")";
+    $("rok").style.color=present?"var(--acc)":"var(--dim)";
+    logLine("",(present?"tag arrived: ":"tag left: ")+uid);
     return;
   }
   if(m.address!=="/dial")return;

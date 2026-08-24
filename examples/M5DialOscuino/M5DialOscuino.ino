@@ -31,9 +31,22 @@
 // board_M5Dial). The encoder is not in M5Unified; it is read here with a plain
 // quadrature decoder on interrupts.
 //
-// RFID is NOT implemented -- the WS1850S needs its own driver -- but its
-// presence is probed at 0x28 and reported in /hello, so a client knows the
-// hardware is there even though this sketch does not read tags.
+// RFID: the WS1850S is register-compatible with the MFRC522, and it is driven
+// here through M5Unified's OWN I2C driver (M5.In_I2C) with a minimal RC522
+// transceiver -- about eighty lines -- rather than through an I2C library.
+// That is not taste, it is a repair: the first version used MFRC522_I2C over
+// the Arduino Wire object, and Wire.begin(11,12) put a SECOND driver on the
+// pins M5Unified's In_I2C was already running for touch and the RTC. Two
+// drivers arbitrating one bus made the whole sketch sluggish, starved the
+// touch reads, and corrupted enough RFID transceives that no tag ever read.
+// One bus, one driver, one lock.
+//
+// Tag presence is polled by cycling the RF field (field off resets every tag
+// in range to IDLE, so REQA answers again), then REQA + anticollision for the
+// UID. A tag arriving streams /rfid T with its UID; silence for two polls
+// streams /rfid F. The RC522's own timer bounds every transceive at ~7 ms, so
+// a no-tag poll costs ~12 ms every 250 ms -- invisible next to the 33 Hz
+// /dial stream, where the old version blocked for multiples of that.
 //
 // Inbound
 //   /disp/text ,s...      up to 4 lines, centred for the round face
@@ -49,12 +62,14 @@
 //   /hello
 // Outbound
 //   /hello ,sTTTii  name, dispOK, touchOK, rfidPresent, width, height
+//   /rfid ,Ts | ,Fs  present flag + UID as hex text: T "a1b2c3d4" when a
+//                    tag arrives, F with the same UID when it leaves. The
+//                    flag is an OSC boolean (tag T or F, no payload)
 //   /dial ,iiiiiii  seq, encPos, btn, touchDown, x, y, encDelta
 //                   -- one message, sampled in one pass; a state change
 //                   (press, release, touch edge, any encoder motion) always
 //                   sends, otherwise paced by /rate
 #include <M5Unified.h>
-#include <Wire.h>
 
 #include <OSCBundle.h>
 #include <OSCMessage.h>
@@ -63,9 +78,74 @@
 SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 
 #define PIN_HOLD  46
-#define PIN_ENC_A 41
-#define PIN_ENC_B 40
+// A/B swapped relative to M5's pin listing, deliberately: measured on the
+// bench, the listed order counts DOWN for a clockwise turn. Convention here
+// is clockwise = positive, and the swap is the whole fix.
+#define PIN_ENC_A 40
+#define PIN_ENC_B 41
 #define RFID_ADDR 0x28
+#define RFID_FREQ 400000
+
+// Minimal MFRC522-over-In_I2C. Register names per the NXP datasheet.
+enum { R_CMD=0x01, R_COMIRQ=0x04, R_ERROR=0x06, R_FIFODATA=0x09,
+       R_FIFOLEVEL=0x0A, R_BITFRAMING=0x0D, R_MODE=0x11, R_TXCONTROL=0x14,
+       R_TXASK=0x15, R_TMODE=0x2A, R_TPRESCALER=0x2B, R_TRELOADH=0x2C,
+       R_TRELOADL=0x2D, R_VERSION=0x37 };
+
+static uint8_t rr(uint8_t reg) { return M5.In_I2C.readRegister8(RFID_ADDR, reg, RFID_FREQ); }
+static void    wr(uint8_t reg, uint8_t v) { M5.In_I2C.writeRegister8(RFID_ADDR, reg, v, RFID_FREQ); }
+
+static void rfidInit() {
+  wr(R_CMD, 0x0F); delay(50);            // soft reset
+  wr(R_TMODE, 0x80);                     // timer auto-starts at TX end
+  wr(R_TPRESCALER, 0xA9);                // ~25 us tick
+  wr(R_TRELOADH, 0x01); wr(R_TRELOADL, 0x2C);   // 300 ticks = ~7.5 ms timeout
+  wr(R_TXASK, 0x40);                     // 100% ASK
+  wr(R_MODE, 0x3D);                      // CRC preset 0x6363
+  wr(R_TXCONTROL, rr(R_TXCONTROL) | 0x03);      // antenna on
+}
+
+// One transceive, bounded by the chip's own timer. Returns bytes read into
+// buf, or -1. txBits: 7 for REQA/WUPA short frames, 0 for full bytes.
+static int rfidXcv(const uint8_t *send, uint8_t n, uint8_t txBits,
+                   uint8_t *buf, uint8_t cap) {
+  wr(R_CMD, 0x00);                       // idle
+  wr(R_COMIRQ, 0x7F);                    // clear irqs
+  wr(R_FIFOLEVEL, 0x80);                 // flush FIFO
+  for (uint8_t i = 0; i < n; i++) wr(R_FIFODATA, send[i]);
+  wr(R_CMD, 0x0C);                       // transceive
+  wr(R_BITFRAMING, 0x80 | (txBits & 7)); // start send
+  const uint32_t t0 = millis();
+  for (;;) {
+    const uint8_t irq = rr(R_COMIRQ);
+    if (irq & 0x30) break;               // RxIRq or IdleIRq: done
+    if ((irq & 0x01) || millis() - t0 > 15) { wr(R_BITFRAMING, 0); return -1; }
+  }
+  wr(R_BITFRAMING, 0);
+  if (rr(R_ERROR) & 0x13) return -1;     // BufferOvfl | ParityErr | ProtocolErr
+  uint8_t got = rr(R_FIFOLEVEL);
+  if (got > cap) got = cap;
+  for (uint8_t i = 0; i < got; i++) buf[i] = rr(R_FIFODATA);
+  return got;
+}
+
+// Field-cycle, REQA, anticollision. Field off resets every tag in range to
+// IDLE, which is what lets the SAME tag answer again on the next poll --
+// without it a tag answers once and then sits silent in READY, which reads
+// exactly like a departure.
+static bool rfidReadUid(uint8_t *uid) {
+  wr(R_TXCONTROL, rr(R_TXCONTROL) & ~0x03); delay(5);
+  wr(R_TXCONTROL, rr(R_TXCONTROL) | 0x03);  delay(5);
+  uint8_t atqa[2];
+  const uint8_t reqa = 0x26;
+  if (rfidXcv(&reqa, 1, 7, atqa, 2) < 0) return false;
+  const uint8_t ac[2] = { 0x93, 0x20 };
+  uint8_t r[5];
+  if (rfidXcv(ac, 2, 0, r, 5) != 5) return false;
+  if ((uint8_t)(r[0] ^ r[1] ^ r[2] ^ r[3]) != r[4]) return false;   // BCC
+  memcpy(uid, r, 4);
+  return true;
+}
 
 static bool     dispOK = false, touchOK = false, rfidOK = false;
 static int32_t  seq = 0;
@@ -177,11 +257,11 @@ void setup() {
   touchOK = (M5.Touch.isEnabled());
   if (dispOK) { M5.Display.setBrightness(150); redraw(); }
 
-  // RFID: presence only. The WS1850S wants its own driver; a client at least
-  // learns the hardware exists.
-  Wire.begin(11, 12);
-  Wire.beginTransmission(RFID_ADDR);
-  rfidOK = (Wire.endTransmission() == 0);
+  // Presence by the version register, through M5Unified's own bus driver: a
+  // missing part reads 0x00 or 0xFF, a real one reads a chip version byte.
+  const uint8_t ver = rr(R_VERSION);
+  rfidOK = (ver != 0x00 && ver != 0xFF);
+  if (rfidOK) rfidInit();
 
   pinMode(PIN_ENC_A, INPUT_PULLUP);
   pinMode(PIN_ENC_B, INPUT_PULLUP);
@@ -208,12 +288,48 @@ static bool pollOSC() {
   return true;
 }
 
+// Tag watcher: 4 polls a second, each bounded by the RC522's timer. Arrival
+// sends /rfid T with the UID; two consecutive silent polls send /rfid F.
+static char     rfidUid[9] = "";
+static bool     rfidTag = false;
+static uint8_t  rfidMisses = 0;
+
+static void rfidSend(bool present) {
+  OSCMessage m("/rfid");
+  m.add(present).add(rfidUid);
+  SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
+}
+
+static void rfidPoll() {
+  if (!rfidOK) return;
+  static uint32_t last = 0;
+  const uint32_t now = millis();
+  if (now - last < 250) return;
+  last = now;
+
+  uint8_t uid[4];
+  if (rfidReadUid(uid)) {
+    char buf[9];
+    sprintf(buf, "%02x%02x%02x%02x", uid[0], uid[1], uid[2], uid[3]);
+    if (!rfidTag || strcmp(buf, rfidUid) != 0) {
+      strcpy(rfidUid, buf);
+      rfidTag = true;
+      rfidSend(true);
+    }
+    rfidMisses = 0;
+  } else if (rfidTag && ++rfidMisses >= 2) {
+    rfidTag = false;
+    rfidSend(false);
+  }
+}
+
 void loop() {
   static uint32_t lastSend = 0;
   static int32_t  lastPos = 0;
   static bool     wasDown = false, wasBtn = false;
 
   M5.update();                           // services BtnA and Touch
+  rfidPoll();
 
   if (pollOSC()) {
     if (!inMsg.hasError()) {
