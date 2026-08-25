@@ -32,6 +32,7 @@ families have been characterised on hardware:
 | PJRC teensy4 | NAK | clean | clean end to end, including compound; the bench's reference board |
 | TinyUSB (RP2040/RP2350 core) | NAK — refuses to re-arm the endpoint without FIFO space | clean | clean end to end, including compound |
 | ESP32 HWCDC (USB-Serial-JTAG) | **drops** — ISR drains the 64-byte FIFO into a 256-byte queue and discards overflow | clean | bursts past ~260 B truncate *with mid-frame corruption* even against a fast-draining sketch; `begin()` now enlarges the queue (`OSC_SLIP_RX_BUFFER`, default 4096) |
+| stm32duino CDC (STM32F4) | **drops with corruption** — the core's CDC receive queue is 3 × 64 B = **192 bytes** (`CDC_RECEIVE_QUEUE_BUFFER_PACKET_NUMBER`, `#ifndef`-guarded); burst overflow loses mid-frame bytes | clean | bursts past ~200 B truncate with `seqErrs`+`crcErrs` even against a fast drain; the flag at 64 packets (4096 B) makes everything clean — set it in **both** C and C++ flags, the queue lives in a C file. The test instruments carry it via stm32duino's sketch-dir `build_opt.h`, which other cores ignore |
 | Renesas RA4M1 **bridged UART** (UNO R4 WiFi) | **drops** — no USB at all on this path; the on-board ESP32-S3 bridge terminates flow control, so a full 512-byte UART ring simply overruns | clean | the only non-USB transport here; clean at ordinary rates and against a fast-draining sketch, but a slow reader loses the tail of any burst past its ring |
 
 ## Measured boards
@@ -98,6 +99,13 @@ numbers is not evidence that they differ.
 None of this is reachable with the library as shipped: `begin()` sets the
 queue to 4096 on ESP32 cores, and every HWCDC board here is clean on that
 default. It matters only if you compile the fix out.
+
+### STM32 (stm32duino)
+
+| board | chip | ran | found |
+|---|---|---|---|
+| EC Buying STM32F407VET6 core board | STM32F407VET6 (M4F, 168 MHz) | echo 22/22 · widths 11/11 (int=4 long=4 ll=8 double=8) · probe 7/7 · full bench 2026-08-24 clean with the queue remedy: in 50 ×3 (12,500 f/s), out 200 ×3, compound ×3, 1100 B lazy-reader ring — the library's FIRST STM32 | stm32duino's CDC receive queue is **192 bytes** and DROPS with mid-frame corruption on burst overflow — third drop-family stack after ESP32 HWCDC and the R4 WiFi bridge; see the family table. Board has no BOOT0 button — a header pin strapped to 3V3 enters ROM DFU, but a USB transition log showed the dupont contact failing on most attempts (every "strapped" reset came back in CDC), so the instruments carry an STM32-only `/dfu` OSC route that jumps to the ROM bootloader on command: one hard flash installs it, every reflash after is strapless. Hold the port open ~1 s after sending `/dfu`, or the message dies in the host buffer. |
+| Blue Pill clone (STM32F103C6T6) | STM32F103C6 (M3, 32 KB flash) | compile-fit only: OscEcho + CDC = 24,076 B (73%), RAM 46% | NOT run: the F103 ROM boots USART1 only (no USB DFU), the board is unflashed pending an ST-Link or serial adapter, and clone Blue Pills are notorious for a wrong D+ pull-up that breaks CDC enumeration even with correct firmware. Recorded so the gap is visible. |
 
 ### Renesas RA4M1
 
