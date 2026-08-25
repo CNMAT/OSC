@@ -85,6 +85,9 @@ static void handle(OSCMessage &m) {
     return;                            // otherwise counted, never answered
   }
 
+#ifdef ARDUINO_ARCH_STM32
+  if (m.fullMatch("/dfu")) jumpToBootloader();
+#endif
   if (m.fullMatch("/b/q")) {
     OSCMessage r("/b/r");
     r.add((int32_t) rxFrames).add((int32_t) rxBytes)
@@ -117,6 +120,30 @@ static void handle(OSCMessage &m) {
     return;
   }
 }
+
+#ifdef ARDUINO_ARCH_STM32
+// Strapless reflash: /dfu jumps to the ROM bootloader, exactly as if BOOT0
+// had been strapped high at reset. Earned on the bench: the F407 core
+// board's BOOT0 jumper made contact exactly once, and a USB transition log
+// showed every later "strapped" reset coming back in CDC -- the strap was
+// never electrically there. Software has no loose dupont pins. F4 system
+// memory is at 0x1FFF0000 (F1 would be 0x1FFF0000 too but with a different
+// layout; this route only compiles where stm32duino compiles).
+static void jumpToBootloader() {
+  delay(50);
+  HAL_RCC_DeInit();
+  HAL_DeInit();
+  SysTick->CTRL = 0; SysTick->LOAD = 0; SysTick->VAL = 0;
+  __disable_irq();
+  __HAL_SYSCFG_REMAPMEMORY_SYSTEMFLASH();
+  const uint32_t base = 0x1FFF0000UL;
+  void (*boot)(void) = *(void (**)(void))(base + 4);
+  __set_MSP(*(uint32_t *) base);
+  __enable_irq();
+  boot();
+  for (;;) {}
+}
+#endif
 
 void setup() {
   // On ESP32, SLIPSerial.begin() enlarges the core's receive ring to

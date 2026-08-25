@@ -14,14 +14,43 @@ SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 SLIPEncodedSerial SLIPSerial(Serial);
 #endif
 
+#ifdef ARDUINO_ARCH_STM32
+// Strapless reflash: /dfu jumps to the ROM bootloader, exactly as if BOOT0
+// had been strapped high at reset. Earned on the bench: the F407 core
+// board's BOOT0 jumper made contact exactly once, and a USB transition log
+// showed every later "strapped" reset coming back in CDC -- the strap was
+// never electrically there. Software has no loose dupont pins. F4 system
+// memory is at 0x1FFF0000 (F1 would be 0x1FFF0000 too but with a different
+// layout; this route only compiles where stm32duino compiles).
+static void jumpToBootloader() {
+  delay(50);
+  HAL_RCC_DeInit();
+  HAL_DeInit();
+  SysTick->CTRL = 0; SysTick->LOAD = 0; SysTick->VAL = 0;
+  __disable_irq();
+  __HAL_SYSCFG_REMAPMEMORY_SYSTEMFLASH();
+  const uint32_t base = 0x1FFF0000UL;
+  void (*boot)(void) = *(void (**)(void))(base + 4);
+  __set_MSP(*(uint32_t *) base);
+  __enable_irq();
+  boot();
+  for (;;) {}
+}
+#endif
+
 void setup(){ SLIPSerial.begin(115200); }
 
 void loop(){
-  while (!SLIPSerial.endofPacket()) {
-    int a = SLIPSerial.available();
+  static OSCMessage in;                     // parsed only so /dfu is visible;
+  while (!SLIPSerial.endofPacket()) {       // ANY other packet still triggers
+    int a = SLIPSerial.available();         // the report, errors included
     if (a <= 0) return;
-    while (a--) SLIPSerial.read();          // discard: any packet triggers a report
+    while (a--) { int c = SLIPSerial.read(); if (c >= 0) in.fill((uint8_t) c); }
   }
+#ifdef ARDUINO_ARCH_STM32
+  if (!in.hasError() && in.fullMatch("/dfu")) jumpToBootloader();
+#endif
+  in.empty();
   OSCMessage m("/w");
   m.add((signed char)-1)
    .add((unsigned char)255)
