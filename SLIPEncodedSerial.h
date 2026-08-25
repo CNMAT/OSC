@@ -15,7 +15,7 @@ Extends the Serial class to encode SLIP over serial
 
 
 
-#if (defined(TEENSYDUINO) && (defined(USB_SERIAL) || defined(USB_DUAL_SERIAL) || defined(USB_TRIPLE_SERIAL) || defined(USB_SERIAL_HID) || defined(USB_MIDI_SERIAL) || defined(USB_MIDI_AUDIO_DUAL_SERIAL) || defined(USB_MIDI4_SERIAL) || defined(USB_MIDI16_SERIAL) || defined(USB_MIDI_AUDIO_SERIAL) || defined(USB_MIDI16_AUDIO_SERIAL))) || (!defined(TEENSYDUINO) && defined(__AVR_ATmega32U4__)) || defined(ARDUINO_SAMD_ADAFRUIT)|| defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_))  || defined(_SAMD21_) || defined(__PIC32MX__) || defined(__PIC32MZ__) || defined(ARDUINO_USB_CDC_ON_BOOT) || defined(ARDUINO_ARCH_RP2040) || (defined(ARDUINO_NRF52_ADAFRUIT) && defined(SERIAL_PORT_USBVIRTUAL)) || defined(ARDUINO_UNO_Q) || defined(ARDUINO_MODDO_PINCH)
+#if (defined(TEENSYDUINO) && (defined(USB_SERIAL) || defined(USB_DUAL_SERIAL) || defined(USB_TRIPLE_SERIAL) || defined(USB_SERIAL_HID) || defined(USB_MIDI_SERIAL) || defined(USB_MIDI_AUDIO_DUAL_SERIAL) || defined(USB_MIDI4_SERIAL) || defined(USB_MIDI16_SERIAL) || defined(USB_MIDI_AUDIO_SERIAL) || defined(USB_MIDI16_AUDIO_SERIAL))) || (!defined(TEENSYDUINO) && defined(__AVR_ATmega32U4__)) || defined(ARDUINO_SAMD_ADAFRUIT)|| defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_))  || defined(_SAMD21_) || defined(__PIC32MX__) || defined(__PIC32MZ__) || defined(ARDUINO_USB_CDC_ON_BOOT) || defined(ARDUINO_ARCH_RP2040) || (defined(ARDUINO_NRF52_ADAFRUIT) && defined(SERIAL_PORT_USBVIRTUAL)) || defined(ARDUINO_UNO_Q) || defined(ARDUINO_MODDO_PINCH) || (defined(ARDUINO_ARCH_STM32) && defined(USBCON) && defined(USBD_USE_CDC))
 #define BOARD_HAS_USB_SERIAL
 
 
@@ -66,6 +66,11 @@ Extends the Serial class to encode SLIP over serial
 // moddo pinch (SAMD11): Serial is a BootloaderCDC, the core's own USB CDC
 // class. It derives from Stream and has begin(unsigned long), so the
 // template binds to it directly; the core's Arduino.h declares it.
+#elif defined(ARDUINO_ARCH_STM32)
+// stm32duino: with the USB menu set to CDC the core's own WSerial.h has
+// already declared SerialUSB (class USBSerial, a Stream with begin(uint32_t))
+// and made Serial a MACRO for it. Nothing further to include -- but the
+// macro is why the binding below names SerialUSB, not Serial.
 #else
 #error Unknown USB port
 #endif
@@ -431,6 +436,14 @@ typedef decltype(SERIAL_PORT_MONITOR) actualUSBtype;
 #elif defined(_SAMD21_) && defined(ARDUINO_SAMD_ZERO)
 #define thisBoardsSerialUSB Serial
 typedef decltype(Serial) actualUSBtype;
+
+#elif defined(ARDUINO_ARCH_STM32) && defined(USBCON) && defined(USBD_USE_CDC)
+// stm32duino does not define SERIAL_PORT_USBVIRTUAL at all (measured on core
+// 3.0.0), so the generic branch below never fires for it. Serial is a macro
+// for SerialUSB here; bind the object by its real name so the typedef gets
+// USBSerial rather than whatever the macro's expansion site produces.
+#define thisBoardsSerialUSB SerialUSB
+typedef decltype(SerialUSB) actualUSBtype;
 
 #elif defined(SERIAL_PORT_USBVIRTUAL)
 #define thisBoardsSerialUSB SERIAL_PORT_USBVIRTUAL

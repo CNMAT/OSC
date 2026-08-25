@@ -87,7 +87,7 @@ SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 #define RFID_FREQ 400000
 
 // Minimal MFRC522-over-In_I2C. Register names per the NXP datasheet.
-enum { R_CMD=0x01, R_COMIRQ=0x04, R_ERROR=0x06, R_FIFODATA=0x09,
+enum { R_CMD=0x01, R_COMIRQ=0x04, R_ERROR=0x06, R_COLL=0x0E, R_FIFODATA=0x09,
        R_FIFOLEVEL=0x0A, R_BITFRAMING=0x0D, R_MODE=0x11, R_TXCONTROL=0x14,
        R_TXASK=0x15, R_TMODE=0x2A, R_TPRESCALER=0x2B, R_TRELOADH=0x2C,
        R_TRELOADL=0x2D, R_VERSION=0x37 };
@@ -102,6 +102,8 @@ static void rfidInit() {
   wr(R_TRELOADH, 0x01); wr(R_TRELOADL, 0x2C);   // 300 ticks = ~7.5 ms timeout
   wr(R_TXASK, 0x40);                     // 100% ASK
   wr(R_MODE, 0x3D);                      // CRC preset 0x6363
+  wr(R_COLL, rr(R_COLL) & 0x7F);         // ValuesAfterColl: keep all bits
+  wr(0x26, 0x70);                        // RFCfgReg: max receiver gain, 48 dB
   wr(R_TXCONTROL, rr(R_TXCONTROL) | 0x03);      // antenna on
 }
 
@@ -135,10 +137,15 @@ static int rfidXcv(const uint8_t *send, uint8_t n, uint8_t txBits,
 // exactly like a departure.
 static bool rfidReadUid(uint8_t *uid) {
   wr(R_TXCONTROL, rr(R_TXCONTROL) & ~0x03); delay(5);
-  wr(R_TXCONTROL, rr(R_TXCONTROL) | 0x03);  delay(5);
+  wr(R_TXCONTROL, rr(R_TXCONTROL) | 0x03);  delay(10);   // ISO guard time is
+                                                         // ~5 ms; be generous
   uint8_t atqa[2];
-  const uint8_t reqa = 0x26;
-  if (rfidXcv(&reqa, 1, 7, atqa, 2) < 0) return false;
+  // REQA wakes IDLE tags; WUPA also wakes HALTed ones. A card that has been
+  // through a payment terminal can be sitting in HALT, so try both.
+  const uint8_t reqa = 0x26, wupa = 0x52;
+  int n = rfidXcv(&reqa, 1, 7, atqa, 2);
+  if (n < 2) n = rfidXcv(&wupa, 1, 7, atqa, 2);
+  if (n < 2) return false;
   const uint8_t ac[2] = { 0x93, 0x20 };
   uint8_t r[5];
   if (rfidXcv(ac, 2, 0, r, 5) != 5) return false;
@@ -300,6 +307,43 @@ static void rfidSend(bool present) {
   SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
 }
 
+// One instrumented attempt, reported as /diag with the verdict at each stage,
+// so "no tag ever reads" turns into WHICH step fails: version, antenna,
+// REQA/WUPA (no answer = nothing ISO14443-A in the field -- note a Type B
+// bank card can never answer an MFRC522, which speaks Type A only), or
+// anticollision (answered but UID failed = protocol bug on this side).
+static void routeRfidDiag(OSCMessage &) {
+  OSCMessage m("/diag");
+  if (!rfidOK) { m.add("no-chip"); }
+  else {
+    m.add("ver").add((intOSC_t) rr(R_VERSION));
+    m.add("txcontrol").add((intOSC_t) rr(R_TXCONTROL));
+    wr(R_TXCONTROL, rr(R_TXCONTROL) & ~0x03); delay(5);
+    wr(R_TXCONTROL, rr(R_TXCONTROL) | 0x03);  delay(10);
+    uint8_t atqa[2] = {0,0};
+    const uint8_t reqa = 0x26, wupa = 0x52;
+    int n = rfidXcv(&reqa, 1, 7, atqa, 2);
+    m.add("reqa").add((intOSC_t) n);
+    if (n < 2) { n = rfidXcv(&wupa, 1, 7, atqa, 2); m.add("wupa").add((intOSC_t) n); }
+    if (n >= 2) {
+      m.add("atqa").add((intOSC_t)((atqa[1] << 8) | atqa[0]));
+      const uint8_t ac[2] = { 0x93, 0x20 };
+      uint8_t r[5];
+      const int an = rfidXcv(ac, 2, 0, r, 5);
+      m.add("anticoll").add((intOSC_t) an);
+      if (an == 5) {
+        char buf[11];
+        sprintf(buf, "%02x%02x%02x%02x", r[0], r[1], r[2], r[3]);
+        m.add("uid").add(buf)
+         .add("bcc").add((intOSC_t)((uint8_t)(r[0]^r[1]^r[2]^r[3]) == r[4] ? 1 : 0));
+      } else {
+        m.add("err").add((intOSC_t) rr(R_ERROR));
+      }
+    }
+  }
+  SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
+}
+
 static void rfidPoll() {
   if (!rfidOK) return;
   static uint32_t last = 0;
@@ -342,6 +386,7 @@ void loop() {
       inMsg.dispatch("/disp/clear",  routeClear);
       inMsg.dispatch("/buzz",        routeBuzz);
       inMsg.dispatch("/enc/zero",    routeZero);
+      inMsg.dispatch("/rfid/diag",   routeRfidDiag);
       inMsg.dispatch("/rate",        routeRate);
       inMsg.dispatch("/hello",       routeHello);
     }

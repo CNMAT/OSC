@@ -35,7 +35,7 @@
 
 #include "OSCTiming.h"
 
-#if (defined(TEENSYDUINO) && defined(USB_SERIAL)) || (!defined(TEENSYDUINO) && defined(__AVR_ATmega32U4__)) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_)) || defined(BOARD_maple_mini)
+#if (defined(TEENSYDUINO) && defined(USB_SERIAL)) || (!defined(TEENSYDUINO) && defined(__AVR_ATmega32U4__)) || defined(__SAM3X8E__) || (defined(_USB) && defined(_USE_USB_FOR_SERIAL_)) || defined(BOARD_maple_mini) || (defined(ARDUINO_ARCH_STM32) && defined(USBCON) && defined(USBD_USE_CDC))
 
 #define BOARD_HAS_USB_SERIAL
 // Prefer the core's own declaration of which port is the USB CDC port.
