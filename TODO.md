@@ -3,8 +3,9 @@
 Everything in the tree that is deferred, unverified, or dead, assembled in one
 place. Each entry says what is actually outstanding and where the edit goes.
 
-Audited 2026-08-23 against `b55fcff`. Every claim below was checked against the
-tree rather than carried over from an older list.
+Audited 2026-08-25 against `af33522`, re-verified after PR #164 merged and the
+STM32 work landed. Every line reference below was re-checked against the tree
+rather than carried over from the previous pass.
 
 ---
 
@@ -129,7 +130,7 @@ stopped running any sketch part way through bringup (ROM bootloader still
 answers esptool, applications produce no output, under every FQBN tried
 including ones that had worked on it earlier). **Needs a second unit.**
 
-> Edit `boards.json`, not the sketch — see §5.
+> Edit `boards.json`, not the sketch — see §6.
 
 ### 3.3 XIAO ESP32-C6 WiFi — the whole radio path
 `examples/XiaoC6ExpWiFi/XiaoC6ExpWiFi.ino:37–42`
@@ -145,7 +146,7 @@ path dead (`XiaoC6ExpWiFi.ino:257`). Treat the remaining untested list as live
 risk, not paperwork.
 
 ### 3.4 The four stock WiFi examples — not run, one branch not even compiled
-`WiFiEcho.ino:14`, `WiFiSendMessage.ino:12`, `WiFiSendBundle.ino:15`,
+`WiFiEcho.ino:16`, `WiFiSendMessage.ino:12`, `WiFiSendBundle.ino:15`,
 `WiFiReceiveMessage.ino:14`
 
 Compiled with arduino-cli 1.5.1 for UNO R4 WiFi, Nano 33 IoT, Portenta C33 and
@@ -183,6 +184,18 @@ sensible. Treat the raw colour ratio as uncalibrated. Needs a gain sweep.
 Mic measured at −64 dBFS quiet floor, 26.6 dB range to speech, clipping at
 `MIC_GAIN` 16. The default was then changed to 8, and 8 has not been measured.
 
+### 3.8 M5Dial — RFID  ✅ DONE 2026-08-24 (`f101293`)
+
+Implemented after this list was written, so the entry that stood here is
+obsolete. The WS1850S turns out to be register-compatible with the MFRC522 and
+is driven over M5Unified's own internal bus. A tag arriving streams `/rfid T`
+with its UID; silence for two polls streams `/rfid F`. The RC522's own timer
+bounds every transceive at ~7 ms, so a missing tag cannot stall the loop, and
+`/hello` gained an `rfidPresent` flag. Encoder direction was measured in the
+same commit.
+
+`M5DialOscuino.ino:34` now documents the driver rather than its absence.
+
 ### 3.9 `/c` cap-touch on Teensy — routed, never touched
 
 `examples/UDPOscuino/UDPOscuino.ino:366`
@@ -191,17 +204,53 @@ Enabled in 1.2 and confirmed present in the linked binary for Teensy 3.0, 3.2
 and 3.6, but no pad has been touched. Needs one Teensy 3.x with a wire on a
 touch pin: send `/c/<pin>` and confirm the returned count rises on contact.
 
-### 3.8 M5Dial — RFID not implemented
-`examples/M5DialOscuino/M5DialOscuino.ino:34`
+### 3.10 STM32 Blue Pill (F103C6) — compile-fit only, never run
 
-The WS1850S needs its own driver. Presence is probed at 0x28 and reported in
-`/hello`, so a client can tell the hardware is there, but no tag is ever read.
-Scope decision: write the driver, or state in the README that the Dial example
-is display + encoder + touch only.
+`BOARDS.md:108`
+
+`OscEcho` + CDC fits at 24,076 B (73 % of the 32 KB part), RAM 46 %, and that is
+the whole of what is known. Not run: the F103 ROM boots USART1 only, so there is
+no USB DFU path, and the board is unflashed pending an ST-Link or serial
+adapter. Clone Blue Pills are also notorious for a wrong D+ pull-up that breaks
+CDC enumeration even with correct firmware, so a failure here would need that
+ruled out before it meant anything about the library.
+
+Landed in `dbff6dd`, after this list was first written.
+---
+
+## 4. The STM32 queue remedy is not in any example
+
+`test/hardware/{OscBench,OscEcho,IntWidths}/build_opt.h`
+
+stm32duino's CDC receive queue is 3 × 64 B = **192 bytes**, and it does not merely
+back-pressure on overflow — it **drops, with mid-frame corruption**. Measured on
+the F407: 110 B bursts clean, 220 B bursts truncate with `seqErrs` and `crcErrs`.
+The remedy is one line, `-DCDC_RECEIVE_QUEUE_BUFFER_PACKET_NUMBER=64`, and with it
+the whole bench runs clean.
+
+That line currently exists in exactly three places, all of them under
+`test/hardware/`. **No sketch in `examples/` carries it.** So the instruments
+prove the library is sound on STM32 while every example a user actually opens
+ships the stock 192-byte queue and will drop under burst — and drop silently,
+since corruption is what the failure looks like.
+
+Three ways out, in ascending order of how much they ask of the user:
+
+- a `build_opt.h` beside each example, which is per-sketch duplication Arduino
+  offers no way to share;
+- a note in the STM32 section of the README and in each affected example header,
+  which is honest but leaves the default broken;
+- treat it the way the HWCDC fix was treated and handle it in the library, if
+  the queue can be sized from `SLIPEncodedSerial` rather than from the sketch.
+
+Worth deciding before release rather than after the first STM32 bug report. This
+is the **third** member of the drop family — after ESP32 HWCDC and the R4 WiFi's
+bridged UART — and `BOARDS.md:31–37` now tabulates all three, so the pattern is
+documented even though the default is not fixed.
 
 ---
 
-## 4. Coverage gap behind all of the above
+## 5. Coverage gap behind all of the above
 
 CI compiles **12 of the 51 example sketches** (`.github/workflows/ci.yml:44–95`).
 The 39 outside it include every board-specific `*Oscuino`, all four WiFi
@@ -213,7 +262,7 @@ would stop this list growing while nobody is at the bench.
 
 ---
 
-## 5. Where to make the edit — 7 sketches are generated
+## 6. Where to make the edit — 7 sketches are generated
 
 These are written by `extras/webserial/generate.mjs` and will be overwritten;
 `make check` fails first, so a direct edit is caught rather than silently lost:
