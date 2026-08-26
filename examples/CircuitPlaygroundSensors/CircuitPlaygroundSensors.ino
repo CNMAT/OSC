@@ -121,7 +121,7 @@
  * The constants below are Adafruit's published values for this board, not
  * anything measured here.
  *
- * Written by Adrian Freed, CNMAT. Part of the CNMAT OSC library.
+ * Written by Adrian Freed.
  */
 
 // Uncomment after installing "Adafruit Zero PDM Library" to enable the microphone.

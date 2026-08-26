@@ -23,19 +23,6 @@ void servoControl(OSCMessage &msg)
       {
              myservo.write(msg.getInt(0));
        }
-#ifdef TEMPoraray
-        else  if (msg.isFloat(0))
-      {
-        //test if that pin is a PWM
-        if (digitalPinHasPWM(LED_BUILTIN)) 
-        {
-          pinMode(LED_BUILTIN, OUTPUT);
-          analogWrite(LED_BUILTIN, (int)(msg.getFloat(0)*127.0f));
-        }
-        else
-         SoftPWMSet(LED_BUILTIN, (int)(msg.getFloat(0)*127.0f));
-      }
-#endif
    
 }
 

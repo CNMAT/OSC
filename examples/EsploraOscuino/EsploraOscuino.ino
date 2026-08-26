@@ -65,7 +65,7 @@
  * slider, RGB LED and the four TinkerKit connectors light up where they
  * actually are rather than on a diagram of them.
  *
- * Written by Adrian Freed, CNMAT. Part of the CNMAT OSC library.
+ * Written by Adrian Freed.
  */
 
 #include <Esplora.h>
