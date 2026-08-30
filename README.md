@@ -66,6 +66,12 @@ The `Serial*` sketches and the various `*Oscuino` sketches carry OSC over USB or
 hardware serial, framed with SLIP (below). Several of the `*Oscuino` ones ship
 with a Web Serial page next to them that talks to the board from a browser.
 
+The same wire contract now has firmware for boards that run Python rather than
+compiled sketches — MicroPython on the BBC micro:bit, CircuitPython across
+Adafruit's boards — in [extras/python](extras/python/README.md), each with the
+same style of Web Serial page. The protocol is the product; this library is one
+implementation of it.
+
 A set of hand-written demos goes past the generic `/d/<pin>` and `/a/<pin>`
 addresses and speaks each board's own hardware, sending the whole board as a
 single message so that every reading in it belongs to the same instant. The
@@ -444,3 +450,9 @@ We welcome and appreciate your contributions and feedback.
 
 # New in this release
 ESPxx, M0, PIC32
+
+First firmware for non-Arduino runtimes: MicroPython (BBC micro:bit) and
+CircuitPython (Adafruit boards) speak the library's SLIP/OSC serial contract
+from `extras/python/`, generated and drift-checked by the same machinery as
+the Web Serial examples and cross-checked byte-for-byte against
+`test/hardware/oscprobe.py` and the `test/host` spec oracle.

@@ -22,6 +22,13 @@ compiling, and it travels with the sketch when someone copies the folder out of
 the library — which is exactly when a page that depended on a shared script two
 directories up would break.
 
+The generator also renders firmware for boards that run Python rather than
+compiled sketches — a `boards.json` entry with a `firmware` field pairs a page
+with `template-microbit.py` or `template-circuitpython.py` instead of
+`template.ino`, and lands in `extras/python/<Id>Oscuino/` so the Arduino IDE
+never lists a sketch-less folder. Same wire contract, same drift check, same
+page. See `extras/python/README.md`.
+
 ## Boards
 
 | Example | Board | FQBN | Build |
@@ -32,8 +39,13 @@ directories up would break.
 | `TeensyOscuino` | Teensy 4.0 / 4.1 | `teensy:avr:teensy40` | builds |
 | `RP2040Oscuino` | Raspberry Pi Pico | `rp2040:rp2040:rpipico` | 66236 B |
 | `ESP32S3Oscuino` | ESP32-S3 | `esp32:esp32:esp32s3` | 329121 B |
+| `MicrobitOscuino` | BBC micro:bit (MicroPython) | interpreted, `extras/python/` | n/a |
+| `CircuitPythonOscuino` | CircuitPython (Adafruit boards) | interpreted, `extras/python/` | n/a |
+| `FruitJamOscuino` | Adafruit Fruit Jam | both: CircuitPython in `extras/python/`, hand-written sketch in `examples/` | 97788 B |
 
-All six verified with `arduino-cli compile` against their listed FQBN.
+The six Arduino rows verified with `arduino-cli compile` against their listed
+FQBN. The python rows have no build: the interpreter is the build, and
+`extras/python/test_host.py` is what proves their codecs before hardware does.
 
 ## Address space
 
@@ -84,8 +96,9 @@ drop the filter rather than concluding the board is dead.
 
 ## Regenerating
 
-The twelve files in `examples/` are **generated**. Editing one directly will be
-overwritten and `make check` will fail first.
+Every `<Id>Oscuino` pair — in `examples/` and in `extras/python/` — is
+**generated**. Editing one directly will be overwritten and `make check` will
+fail first.
 
 ```bash
 cd extras/webserial
@@ -100,6 +113,9 @@ make all          # check + test
 | `boards.json` | the board table — the only file you edit to add a board |
 | `template.html` | the page, with `{{KEY}}` holes |
 | `template.ino` | the sketch, same |
+| `template-microbit.py` | MicroPython firmware for the micro:bit, same |
+| `template-circuitpython.py` | CircuitPython firmware, same |
+| `template-boot.py` | the boot.py that enables CircuitPython's data channel |
 | `render.mjs` | substitution, shared by generate and check so neither can disagree |
 | `generate.mjs` | writes the pairs |
 | `check.mjs` | re-renders in memory, diffs against disk, reports the first differing line |
@@ -121,7 +137,10 @@ Add an entry to `boards.json` and run `make generate`. Nothing else needs
 touching. Fields: `id` (becomes `<id>Oscuino`), `name`, `mcu`, `fqbn`,
 `nativeUSB`, `usbFilters`, `chips`, `note`; optional `pinClamp` for variants
 whose `NUM_*_PINS` macros overstate what is routed to pads, and `tone: false`
-for a core with no `tone()`.
+for a core with no `tone()`. A `firmware` field (`microbit` or
+`circuitpython`) renders the entry against the matching python template into
+`extras/python/` instead; `fqbn` stays empty and `usbProductId` may be
+omitted from a filter to match a whole vendor.
 
 ## The one non-obvious firmware detail
 

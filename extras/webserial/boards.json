@@ -6,9 +6,18 @@
     "usbFilters narrows the browser's port chooser to this board. Every page",
     "also offers a 'show all ports' checkbox, so a stale or wrong id here",
     "degrades to a longer list rather than a board that cannot be selected.",
+    "usbProductId may be omitted to match every product of a vendor, which is",
+    "how one CircuitPython entry covers Adafruit's whole catalogue.",
     "",
     "pinClamp is for variants whose NUM_*_PINS macros overstate what is",
-    "actually routed to a pad. Omit it to trust the core."
+    "actually routed to a pad. Omit it to trust the core.",
+    "",
+    "firmware selects the template pair. Absent means Arduino: template.ino,",
+    "written to examples/<id>Oscuino/. 'microbit' renders template-microbit.py",
+    "to main.py and 'circuitpython' renders template-circuitpython.py to",
+    "code.py (plus boot.py), written to extras/python/<id>Oscuino/ so the",
+    "Arduino IDE never mistakes them for sketches. fqbn stays empty: nothing",
+    "is compiled, the interpreter is the build."
   ],
 
   "boards": [
@@ -131,6 +140,71 @@
         { "label": "blue LED G7 on", "addr": "/d/7", "args": "1" }
       ],
       "note": "NOT YET VERIFIED ON HARDWARE - compiles only. The board used for testing stopped running any sketch part way through bringup (ROM bootloader still responds to esptool, applications produce no output, under every FQBN tried including ones that had worked on it earlier), so this example has never been seen to answer. RISC-V. Use the espressif core's esp32:esp32:m5stack_nanoc6, which sets USB CDC On Boot by default; the M5Stack core's m5stack:esp32:m5stack_nano_c6 defaults it OFF, which leaves Serial on UART0 and the page seeing nothing. Only G1 and G2 are brought out, on the HY2.0-4P Grove header; G7 is the blue LED, G9 the button (also the download-mode strap, so hold it while plugging in if auto-reset fails), G3 the IR LED. G19/G20 drive the RGB LED and its power enable -- do not repurpose them. No pinClamp: the pins above sit past any small clamp, and routeDigital only touches a pin when it is addressed."
+    },
+    {
+      "id": "Microbit",
+      "name": "BBC micro:bit (MicroPython)",
+      "mcu": "nRF51822 / nRF52833",
+      "fqbn": "",
+      "firmware": "microbit",
+      "nativeUSB": false,
+      "usbFilters": [
+        { "usbVendorId": "0x0D28", "usbProductId": "0x0204" }
+      ],
+      "chips": [
+        { "label": "read pin0", "addr": "/a/0", "args": "" },
+        { "label": "read pin1", "addr": "/a/1", "args": "" },
+        { "label": "buttons A B", "addr": "/mb/b", "args": "" },
+        { "label": "accelerometer", "addr": "/mb/a", "args": "" },
+        { "label": "scroll text", "addr": "/mb/t", "args": "s:hi" },
+        { "label": "display on", "addr": "/s/l", "args": "1" },
+        { "label": "tone pin0 440Hz", "addr": "/tone/0", "args": "440" }
+      ],
+      "note": "Runs MicroPython, not an Arduino sketch -- copy ALL FOUR files (main.py, slip.py, osce.py, oscd.py; see extras/python/ for why the V1's on-board compiler needs the split). Pin numbers are micro:bit pins, so /a/0 reads the pin0 alligator pad; analog exists on pins 0-4 and 10. /mb/a is the accelerometer, /mb/b the two buttons, /mb/t scrolls a string on the LED matrix, /s/l lights the whole matrix, /s/q exits to the REPL. The DAPLink bridge carries a real UART: leave the baud at 115200 to match uart.init() in main.py. Opening the port does not reset the board (measured), so press its reset button after connecting if you want to see /hello."
+    },
+    {
+      "id": "FruitJam",
+      "name": "Adafruit Fruit Jam",
+      "mcu": "RP2350B",
+      "fqbn": "",
+      "firmware": "fruitjam",
+      "inoTwin": true,
+      "nativeUSB": true,
+      "usbFilters": [
+        { "usbVendorId": "0x239A" },
+        { "usbVendorId": "0x2E8A" }
+      ],
+      "chips": [
+        { "label": "read buttons", "addr": "/fj/b", "args": "" },
+        { "label": "LEDs red", "addr": "/fj/led", "args": "255 0 0" },
+        { "label": "LEDs teal", "addr": "/fj/led", "args": "0 128 96" },
+        { "label": "LEDs off", "addr": "/fj/led", "args": "0 0 0" },
+        { "label": "beep 880Hz", "addr": "/fj/beep", "args": "880 400" },
+        { "label": "beep off", "addr": "/fj/beep", "args": "0" },
+        { "label": "DVI text", "addr": "/fj/t", "args": "s:hello-from-osc" },
+        { "label": "read A0", "addr": "/a/0", "args": "" }
+      ],
+      "note": "Two firmwares answer this page with the same address space: code.py under CircuitPython (extras/python/FruitJamOscuino/, copy boot.py + code.py to CIRCUITPY) and the hand-written examples/FruitJamOscuino sketch under arduino-pico (needs Adafruit NeoPixel, Adafruit TLV320 I2S and PicoDVI). /fj/b reads the three user buttons (1 = pressed), /fj/led drives the five NeoPixels (three ints = all, four = index first), /fj/beep plays a sine through the headphone/speaker codec, /fj/t puts text on the DVI output. The USB filter matches Adafruit's and Raspberry Pi's vendor ids to cover both firmwares' CDC identities."
+    },
+    {
+      "id": "CircuitPython",
+      "name": "CircuitPython (Adafruit boards)",
+      "mcu": "any with native USB",
+      "fqbn": "",
+      "firmware": "circuitpython",
+      "nativeUSB": true,
+      "usbFilters": [
+        { "usbVendorId": "0x239A" }
+      ],
+      "chips": [
+        { "label": "read A0", "addr": "/a/0", "args": "" },
+        { "label": "read A1", "addr": "/a/1", "args": "" },
+        { "label": "read D1", "addr": "/d/1", "args": "" },
+        { "label": "LED on", "addr": "/s/l", "args": "1" },
+        { "label": "LED off", "addr": "/s/l", "args": "0" },
+        { "label": "micros", "addr": "/s/m", "args": "" }
+      ],
+      "note": "Runs code.py under CircuitPython, not an Arduino sketch -- see extras/python/. One example covers every Adafruit CircuitPython board: pins resolve by name at runtime, so /d/13 is board.D13 and /a/0 is board.A0, and the port filter matches on Adafruit's vendor id alone. boot.py must be copied along with code.py -- it adds the second CDC port (the data channel) that SLIP runs on; pick that SECOND port in the browser chooser. Analog reads are 16-bit, 0..65535."
     }
   ]
 }

@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RP2040Oscuino &mdash; OSC over Web Serial</title>
+<title>MicrobitOscuino &mdash; OSC over Web Serial</title>
 <style>
   :root {
     --bg: #10131a;
@@ -75,11 +75,11 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>RP2040Oscuino</h1>
+  <h1>MicrobitOscuino</h1>
   <div class="sub">
-    OSC over Web Serial for <span class="board">Raspberry Pi Pico (RP2040)</span> (RP2040).
-    Browser &harr; SLIP &harr; USB serial &harr; the CNMAT OSC library.
-    Pair with <code>RP2040Oscuino.ino</code>. No server, no dependencies.
+    OSC over Web Serial for <span class="board">BBC micro:bit (MicroPython)</span> (nRF51822 / nRF52833).
+    Browser &harr; SLIP &harr; USB serial &harr; MicroPython.
+    Pair with <code>main.py</code>. No server, no dependencies.
   </div>
 
   <div class="panel" id="connPanel">
@@ -109,17 +109,21 @@
       <button id="send" disabled>Send</button>
     </div>
     <div class="chips">
-      <button data-a="/a/0" data-g="">read A0 (GP26)</button>
-      <button data-a="/a/1" data-g="">read A1 (GP27)</button>
-      <button data-a="/d/15" data-g="0.5">PWM GP15 50%</button>
+      <button data-a="/a/0" data-g="">read pin0</button>
+      <button data-a="/a/1" data-g="">read pin1</button>
+      <button data-a="/mb/b" data-g="">buttons A B</button>
+      <button data-a="/mb/a" data-g="">accelerometer</button>
+      <button data-a="/mb/t" data-g="s:hi">scroll text</button>
+      <button data-a="/s/l" data-g="1">display on</button>
+      <button data-a="/tone/0" data-g="440">tone pin0 440Hz</button>
     </div>
     <div class="note">
       Args are typed automatically: <code>1</code> &rarr; int, <code>0.5</code> &rarr; float, anything else &rarr; string.
       Force a type with <code>i:</code> <code>f:</code> <code>s:</code>, or use bare <code>T</code> <code>F</code> <code>N</code>.
-      <b>bundle</b> is ticked by default because <code>RP2040Oscuino.ino</code> reads bundles,
+      <b>bundle</b> is ticked by default because <code>main.py</code> reads bundles,
       as do the stock Oscuino examples and the CNMAT Max patches.
       <br><br>
-      <b>Raspberry Pi Pico (RP2040).</b> Three ADC channels: A0-A2 are GP26-GP28. Every digital pin can do PWM. Built for the Earle Philhower core.
+      <b>BBC micro:bit (MicroPython).</b> Runs MicroPython, not an Arduino sketch -- copy ALL FOUR files (main.py, slip.py, osce.py, oscd.py; see extras/python/ for why the V1's on-board compiler needs the split). Pin numbers are micro:bit pins, so /a/0 reads the pin0 alligator pad; analog exists on pins 0-4 and 10. /mb/a is the accelerometer, /mb/b the two buttons, /mb/t scrolls a string on the LED matrix, /s/l lights the whole matrix, /s/q exits to the REPL. The DAPLink bridge carries a real UART: leave the baud at 115200 to match uart.init() in main.py. Opening the port does not reset the board (measured), so press its reset button after connecting if you want to see /hello.
     </div>
   </div>
 
@@ -140,14 +144,13 @@
    0. Board identity — the only generated part of this script
    ============================================================ */
 
-const BOARD_NAME  = "Raspberry Pi Pico (RP2040)";
-const BOARD_FQBN  = "rp2040:rp2040:rpipico";
+const BOARD_NAME  = "BBC micro:bit (MicroPython)";
+const BOARD_FQBN  = "";
 const USB_FILTERS = [
-  { usbVendorId: 0x2E8A, usbProductId: 0x000A },
-  { usbVendorId: 0x2E8A, usbProductId: 0x010A },
+  { usbVendorId: 0x0D28, usbProductId: 0x0204 },
 ];
-const NATIVE_USB  = true;
-const SUPPORT_HTML = "<b>Raspberry Pi Pico (RP2040)</b> has native USB, so the baud rate above is ignored by the hardware &mdash; Web Serial still requires one. Build for <code>rp2040:rp2040:rpipico</code>.";
+const NATIVE_USB  = false;
+const SUPPORT_HTML = "<b>BBC micro:bit (MicroPython)</b> runs MicroPython — flash MicroPython, then copy <code>main.py</code> onto it. Leave the baud at 115200: the DAPLink bridge carries a real UART that must match <code>uart.init()</code> in <code>main.py</code>.";
 
 /* ============================================================
    1. OSC 1.0 codec  —  zero dependencies, Uint8Array in/out

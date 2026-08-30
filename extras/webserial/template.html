@@ -78,8 +78,8 @@
   <h1>{{ID}}Oscuino</h1>
   <div class="sub">
     OSC over Web Serial for <span class="board">{{BOARD_NAME}}</span> ({{MCU}}).
-    Browser &harr; SLIP &harr; USB serial &harr; the CNMAT OSC library.
-    Pair with <code>{{ID}}Oscuino.ino</code>. No server, no dependencies.
+    Browser &harr; SLIP &harr; USB serial &harr; {{FIRMWARE_NAME}}.
+    Pair with <code>{{PAIR_FILE}}</code>. No server, no dependencies.
   </div>
 
   <div class="panel" id="connPanel">
@@ -114,7 +114,7 @@
     <div class="note">
       Args are typed automatically: <code>1</code> &rarr; int, <code>0.5</code> &rarr; float, anything else &rarr; string.
       Force a type with <code>i:</code> <code>f:</code> <code>s:</code>, or use bare <code>T</code> <code>F</code> <code>N</code>.
-      <b>bundle</b> is ticked by default because <code>{{ID}}Oscuino.ino</code> reads with <code>OSCBundle</code>,
+      <b>bundle</b> is ticked by default because <code>{{PAIR_FILE}}</code> reads bundles,
       as do the stock Oscuino examples and the CNMAT Max patches.
       <br><br>
       <b>{{BOARD_NAME}}.</b> {{NOTE}}
@@ -142,6 +142,7 @@ const BOARD_NAME  = {{BOARD_NAME_JS}};
 const BOARD_FQBN  = {{FQBN_JS}};
 const USB_FILTERS = {{USB_FILTERS}};
 const NATIVE_USB  = {{NATIVE_USB}};
+const SUPPORT_HTML = {{SUPPORT_HTML_JS}};
 
 /* ============================================================
    1. OSC 1.0 codec  —  zero dependencies, Uint8Array in/out
@@ -527,11 +528,7 @@ if (!("serial" in navigator)) {
     "&mdash; opening the file directly with <code>file://</code> will not work.";
   $("connect").disabled = true;
 } else {
-  $("support").innerHTML = NATIVE_USB
-    ? "<b>" + BOARD_NAME + "</b> has native USB, so the baud rate above is ignored by the hardware " +
-      "&mdash; Web Serial still requires one. Build for <code>" + BOARD_FQBN + "</code>."
-    : "<b>" + BOARD_NAME + "</b> talks through a USB-serial bridge, so the baud rate must match " +
-      "<code>SLIPSerial.begin()</code> in the sketch exactly. Build for <code>" + BOARD_FQBN + "</code>.";
+  $("support").innerHTML = SUPPORT_HTML;
 }
 
 $("connect").onclick = async () => {

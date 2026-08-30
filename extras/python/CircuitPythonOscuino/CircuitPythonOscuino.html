@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RP2040Oscuino &mdash; OSC over Web Serial</title>
+<title>CircuitPythonOscuino &mdash; OSC over Web Serial</title>
 <style>
   :root {
     --bg: #10131a;
@@ -75,11 +75,11 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>RP2040Oscuino</h1>
+  <h1>CircuitPythonOscuino</h1>
   <div class="sub">
-    OSC over Web Serial for <span class="board">Raspberry Pi Pico (RP2040)</span> (RP2040).
-    Browser &harr; SLIP &harr; USB serial &harr; the CNMAT OSC library.
-    Pair with <code>RP2040Oscuino.ino</code>. No server, no dependencies.
+    OSC over Web Serial for <span class="board">CircuitPython (Adafruit boards)</span> (any with native USB).
+    Browser &harr; SLIP &harr; USB serial &harr; CircuitPython.
+    Pair with <code>code.py</code>. No server, no dependencies.
   </div>
 
   <div class="panel" id="connPanel">
@@ -109,17 +109,20 @@
       <button id="send" disabled>Send</button>
     </div>
     <div class="chips">
-      <button data-a="/a/0" data-g="">read A0 (GP26)</button>
-      <button data-a="/a/1" data-g="">read A1 (GP27)</button>
-      <button data-a="/d/15" data-g="0.5">PWM GP15 50%</button>
+      <button data-a="/a/0" data-g="">read A0</button>
+      <button data-a="/a/1" data-g="">read A1</button>
+      <button data-a="/d/1" data-g="">read D1</button>
+      <button data-a="/s/l" data-g="1">LED on</button>
+      <button data-a="/s/l" data-g="0">LED off</button>
+      <button data-a="/s/m" data-g="">micros</button>
     </div>
     <div class="note">
       Args are typed automatically: <code>1</code> &rarr; int, <code>0.5</code> &rarr; float, anything else &rarr; string.
       Force a type with <code>i:</code> <code>f:</code> <code>s:</code>, or use bare <code>T</code> <code>F</code> <code>N</code>.
-      <b>bundle</b> is ticked by default because <code>RP2040Oscuino.ino</code> reads bundles,
+      <b>bundle</b> is ticked by default because <code>code.py</code> reads bundles,
       as do the stock Oscuino examples and the CNMAT Max patches.
       <br><br>
-      <b>Raspberry Pi Pico (RP2040).</b> Three ADC channels: A0-A2 are GP26-GP28. Every digital pin can do PWM. Built for the Earle Philhower core.
+      <b>CircuitPython (Adafruit boards).</b> Runs code.py under CircuitPython, not an Arduino sketch -- see extras/python/. One example covers every Adafruit CircuitPython board: pins resolve by name at runtime, so /d/13 is board.D13 and /a/0 is board.A0, and the port filter matches on Adafruit's vendor id alone. boot.py must be copied along with code.py -- it adds the second CDC port (the data channel) that SLIP runs on; pick that SECOND port in the browser chooser. Analog reads are 16-bit, 0..65535.
     </div>
   </div>
 
@@ -140,14 +143,13 @@
    0. Board identity — the only generated part of this script
    ============================================================ */
 
-const BOARD_NAME  = "Raspberry Pi Pico (RP2040)";
-const BOARD_FQBN  = "rp2040:rp2040:rpipico";
+const BOARD_NAME  = "CircuitPython (Adafruit boards)";
+const BOARD_FQBN  = "";
 const USB_FILTERS = [
-  { usbVendorId: 0x2E8A, usbProductId: 0x000A },
-  { usbVendorId: 0x2E8A, usbProductId: 0x010A },
+  { usbVendorId: 0x239A },
 ];
 const NATIVE_USB  = true;
-const SUPPORT_HTML = "<b>Raspberry Pi Pico (RP2040)</b> has native USB, so the baud rate above is ignored by the hardware &mdash; Web Serial still requires one. Build for <code>rp2040:rp2040:rpipico</code>.";
+const SUPPORT_HTML = "<b>CircuitPython (Adafruit boards)</b>: native USB, so the baud rate is ignored. Copy <code>boot.py</code> and <code>code.py</code> to the CIRCUITPY drive and press reset, then pick the board's <i>second</i> serial port here — the data channel boot.py adds.";
 
 /* ============================================================
    1. OSC 1.0 codec  —  zero dependencies, Uint8Array in/out

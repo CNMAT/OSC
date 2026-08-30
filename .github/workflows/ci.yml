@@ -27,6 +27,8 @@ jobs:
           python-version: '3.x'
       - name: make asan
         run: make -C test/host asan
+      - name: python firmwares (codec cross-check vs oscprobe and the oracle)
+        run: python3 extras/python/test_host.py
 
   webserial:
     # The Web Serial pages are generated from a template; this fails if a
@@ -79,6 +81,12 @@ jobs:
             core: rp2040:rp2040
             url: https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
             sketches: SerialSendMessage SerialReceive SerialEcho PatternMatching
+          - name: rp2350 fruitjam
+            fqbn: rp2040:rp2040:adafruit_fruitjam
+            core: rp2040:rp2040
+            url: https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
+            libs: '"Adafruit NeoPXL8" "Adafruit GFX Library" "Adafruit BusIO" "Adafruit TLV320 I2S" "Adafruit DVI HSTX"'
+            sketches: FruitJamOscuino
     steps:
       - uses: actions/checkout@v4
       - uses: arduino/setup-arduino-cli@v1

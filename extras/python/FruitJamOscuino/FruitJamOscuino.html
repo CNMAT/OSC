@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RP2040Oscuino &mdash; OSC over Web Serial</title>
+<title>FruitJamOscuino &mdash; OSC over Web Serial</title>
 <style>
   :root {
     --bg: #10131a;
@@ -75,11 +75,11 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>RP2040Oscuino</h1>
+  <h1>FruitJamOscuino</h1>
   <div class="sub">
-    OSC over Web Serial for <span class="board">Raspberry Pi Pico (RP2040)</span> (RP2040).
-    Browser &harr; SLIP &harr; USB serial &harr; the CNMAT OSC library.
-    Pair with <code>RP2040Oscuino.ino</code>. No server, no dependencies.
+    OSC over Web Serial for <span class="board">Adafruit Fruit Jam</span> (RP2350B).
+    Browser &harr; SLIP &harr; USB serial &harr; CircuitPython.
+    Pair with <code>code.py</code>. No server, no dependencies.
   </div>
 
   <div class="panel" id="connPanel">
@@ -109,17 +109,22 @@
       <button id="send" disabled>Send</button>
     </div>
     <div class="chips">
-      <button data-a="/a/0" data-g="">read A0 (GP26)</button>
-      <button data-a="/a/1" data-g="">read A1 (GP27)</button>
-      <button data-a="/d/15" data-g="0.5">PWM GP15 50%</button>
+      <button data-a="/fj/b" data-g="">read buttons</button>
+      <button data-a="/fj/led" data-g="255 0 0">LEDs red</button>
+      <button data-a="/fj/led" data-g="0 128 96">LEDs teal</button>
+      <button data-a="/fj/led" data-g="0 0 0">LEDs off</button>
+      <button data-a="/fj/beep" data-g="880 400">beep 880Hz</button>
+      <button data-a="/fj/beep" data-g="0">beep off</button>
+      <button data-a="/fj/t" data-g="s:hello-from-osc">DVI text</button>
+      <button data-a="/a/0" data-g="">read A0</button>
     </div>
     <div class="note">
       Args are typed automatically: <code>1</code> &rarr; int, <code>0.5</code> &rarr; float, anything else &rarr; string.
       Force a type with <code>i:</code> <code>f:</code> <code>s:</code>, or use bare <code>T</code> <code>F</code> <code>N</code>.
-      <b>bundle</b> is ticked by default because <code>RP2040Oscuino.ino</code> reads bundles,
+      <b>bundle</b> is ticked by default because <code>code.py</code> reads bundles,
       as do the stock Oscuino examples and the CNMAT Max patches.
       <br><br>
-      <b>Raspberry Pi Pico (RP2040).</b> Three ADC channels: A0-A2 are GP26-GP28. Every digital pin can do PWM. Built for the Earle Philhower core.
+      <b>Adafruit Fruit Jam.</b> Two firmwares answer this page with the same address space: code.py under CircuitPython (extras/python/FruitJamOscuino/, copy boot.py + code.py to CIRCUITPY) and the hand-written examples/FruitJamOscuino sketch under arduino-pico (needs Adafruit NeoPixel, Adafruit TLV320 I2S and PicoDVI). /fj/b reads the three user buttons (1 = pressed), /fj/led drives the five NeoPixels (three ints = all, four = index first), /fj/beep plays a sine through the headphone/speaker codec, /fj/t puts text on the DVI output. The USB filter matches Adafruit's and Raspberry Pi's vendor ids to cover both firmwares' CDC identities.
     </div>
   </div>
 
@@ -140,14 +145,14 @@
    0. Board identity — the only generated part of this script
    ============================================================ */
 
-const BOARD_NAME  = "Raspberry Pi Pico (RP2040)";
-const BOARD_FQBN  = "rp2040:rp2040:rpipico";
+const BOARD_NAME  = "Adafruit Fruit Jam";
+const BOARD_FQBN  = "";
 const USB_FILTERS = [
-  { usbVendorId: 0x2E8A, usbProductId: 0x000A },
-  { usbVendorId: 0x2E8A, usbProductId: 0x010A },
+  { usbVendorId: 0x239A },
+  { usbVendorId: 0x2E8A },
 ];
 const NATIVE_USB  = true;
-const SUPPORT_HTML = "<b>Raspberry Pi Pico (RP2040)</b> has native USB, so the baud rate above is ignored by the hardware &mdash; Web Serial still requires one. Build for <code>rp2040:rp2040:rpipico</code>.";
+const SUPPORT_HTML = "<b>Adafruit Fruit Jam</b>: native USB, so the baud rate is ignored. Copy <code>boot.py</code> and <code>code.py</code> to the CIRCUITPY drive and press reset, then pick the board's <i>second</i> serial port here — the data channel boot.py adds.";
 
 /* ============================================================
    1. OSC 1.0 codec  —  zero dependencies, Uint8Array in/out

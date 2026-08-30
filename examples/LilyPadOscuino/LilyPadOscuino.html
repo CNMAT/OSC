@@ -116,7 +116,7 @@
     <div class="note">
       Args are typed automatically: <code>1</code> &rarr; int, <code>0.5</code> &rarr; float, anything else &rarr; string.
       Force a type with <code>i:</code> <code>f:</code> <code>s:</code>, or use bare <code>T</code> <code>F</code> <code>N</code>.
-      <b>bundle</b> is ticked by default because <code>LilyPadOscuino.ino</code> reads with <code>OSCBundle</code>,
+      <b>bundle</b> is ticked by default because <code>LilyPadOscuino.ino</code> reads bundles,
       as do the stock Oscuino examples and the CNMAT Max patches.
       <br><br>
       <b>LilyPad Arduino USB.</b> Sew tabs are A2-A5 and D2, D3, D9, D10, D11. D9/D10/D11 are the PWM-capable tabs — send a float to /d/&lt;pin&gt; for analogWrite.
@@ -147,6 +147,7 @@ const USB_FILTERS = [
   { usbVendorId: 0x1B4F, usbProductId: 0x9208 },
 ];
 const NATIVE_USB  = true;
+const SUPPORT_HTML = "<b>LilyPad Arduino USB</b> has native USB, so the baud rate above is ignored by the hardware &mdash; Web Serial still requires one. Build for <code>arduino:avr:LilyPadUSB</code>.";
 
 /* ============================================================
    1. OSC 1.0 codec  —  zero dependencies, Uint8Array in/out
@@ -532,11 +533,7 @@ if (!("serial" in navigator)) {
     "&mdash; opening the file directly with <code>file://</code> will not work.";
   $("connect").disabled = true;
 } else {
-  $("support").innerHTML = NATIVE_USB
-    ? "<b>" + BOARD_NAME + "</b> has native USB, so the baud rate above is ignored by the hardware " +
-      "&mdash; Web Serial still requires one. Build for <code>" + BOARD_FQBN + "</code>."
-    : "<b>" + BOARD_NAME + "</b> talks through a USB-serial bridge, so the baud rate must match " +
-      "<code>SLIPSerial.begin()</code> in the sketch exactly. Build for <code>" + BOARD_FQBN + "</code>.";
+  $("support").innerHTML = SUPPORT_HTML;
 }
 
 $("connect").onclick = async () => {

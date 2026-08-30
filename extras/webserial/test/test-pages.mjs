@@ -6,12 +6,14 @@
      - the port-filter logic picks the right requestPort() argument
 
    test-codec.mjs proves the OSC bytes are right; this proves the generated
-   wrapper around them is right, for all six boards rather than one.
+   wrapper around them is right, for every board rather than one. The python
+   firmware pairs get the same page checks; their .py side is only greppable
+   from here — extras/python/test_host.py is what actually imports and runs it.
 
    Run: node test/test-pages.mjs   (or `make test`). No dependencies. */
 
 import { readFileSync, existsSync } from "node:fs";
-import { BOARDS, EXAMPLES_DIR, sketchName } from "../render.mjs";
+import { BOARDS, EXAMPLES_DIR, sketchName, outputs } from "../render.mjs";
 
 let pass = 0, fail = 0;
 const ok = (label, cond, detail = "") => {
@@ -21,18 +23,21 @@ const ok = (label, cond, detail = "") => {
 
 for (const board of BOARDS) {
   const name = sketchName(board);
-  console.log(`\n${name}`);
+  console.log(`\n${name}${board.firmware ? ` (${board.firmware})` : ""}`);
 
-  const htmlPath = new URL(`${name}/${name}.html`, EXAMPLES_DIR);
-  const inoPath = new URL(`${name}/${name}.ino`, EXAMPLES_DIR);
-  if (!existsSync(htmlPath) || !existsSync(inoPath)) {
-    ok("both files exist", false, "run `make generate`");
+  const outs = outputs(board);
+  const missing = outs.filter(o => !existsSync(o.url));
+  if (missing.length) {
+    ok("all generated files exist", false,
+      "run `make generate` — missing: " + missing.map(o => o.rel).join(", "));
     continue;
   }
-  ok("both files exist", true);
+  ok(`all generated files exist (${outs.length})`, true);
 
-  const html = readFileSync(htmlPath, "utf8");
-  const ino = readFileSync(inoPath, "utf8");
+  const html = readFileSync(outs.find(o => o.file.endsWith(".html")).url, "utf8");
+  const codeOut = outs.find(o =>
+    o.file.endsWith(".ino") || o.file === "main.py" || o.file === "code.py");
+  const code = readFileSync(codeOut.url, "utf8");
   const script = html.split(/<script>/)[1].split(/<\/script>/)[0];
 
   // 1. The whole script must parse, UI section included. new Function compiles
@@ -41,11 +46,12 @@ for (const board of BOARDS) {
   try { new Function(script); } catch (e) { parsed = false; why = e.message; }
   ok("script parses", parsed, why);
 
-  // 2. No placeholder survived substitution, in either file.
-  ok("no unsubstituted {{...}} in html", !/\{\{\w+\}\}/.test(html),
-    (html.match(/\{\{\w+\}\}/g) || []).join(" "));
-  ok("no unsubstituted {{...}} in ino", !/\{\{\w+\}\}/.test(ino),
-    (ino.match(/\{\{\w+\}\}/g) || []).join(" "));
+  // 2. No placeholder survived substitution, in any generated file.
+  for (const o of outs) {
+    const body = readFileSync(o.url, "utf8");
+    ok(`no unsubstituted {{...}} in ${o.file}`, !/\{\{\w+\}\}/.test(body),
+      (body.match(/\{\{\w+\}\}/g) || []).join(" "));
+  }
 
   // 3. Board identity — evaluate just section 0 and compare against boards.json.
   const identity = new Function(
@@ -58,8 +64,13 @@ for (const board of BOARDS) {
     `${identity.BOARD_FQBN} != ${board.fqbn}`);
   ok("NATIVE_USB matches", identity.NATIVE_USB === !!board.nativeUSB);
 
-  const wantFilters = (board.usbFilters || []).map(f =>
-    ({ usbVendorId: Number(f.usbVendorId), usbProductId: Number(f.usbProductId) }));
+  // usbProductId is optional — a vendor-only filter matches the whole
+  // catalogue, which is how one CircuitPython entry covers every Adafruit id.
+  const wantFilters = (board.usbFilters || []).map(f => {
+    const o = { usbVendorId: Number(f.usbVendorId) };
+    if (f.usbProductId !== undefined) o.usbProductId = Number(f.usbProductId);
+    return o;
+  });
   ok(`USB filters (${wantFilters.length})`,
     JSON.stringify(identity.USB_FILTERS) === JSON.stringify(wantFilters),
     `${JSON.stringify(identity.USB_FILTERS)} != ${JSON.stringify(wantFilters)}`);
@@ -68,7 +79,8 @@ for (const board of BOARDS) {
   // id silently matches nothing and the board never appears in the chooser.
   ok("filter ids are numbers",
     identity.USB_FILTERS.every(f =>
-      typeof f.usbVendorId === "number" && typeof f.usbProductId === "number"));
+      typeof f.usbVendorId === "number" &&
+      (f.usbProductId === undefined || typeof f.usbProductId === "number")));
 
   // 4. requestPort() argument: filtered normally, unfiltered when "show all
   //    ports" is ticked. Mirrors the expression in connect().
@@ -86,13 +98,23 @@ for (const board of BOARDS) {
     JSON.stringify(chips) === JSON.stringify(board.chips.map(c => ({ addr: c.addr, args: c.args }))),
     JSON.stringify(chips));
 
-  // 6. The sketch names its own pair and reports the right hello address.
-  ok("ino references its own page", ino.includes(`${name}.html`));
-  ok("hello identifies the board", ino.includes(`.add("${name}")`));
+  // 6. The firmware names its own pair and reports the right hello address.
+  //    The V1 deployment strips comments to fit the on-board compiler, taking
+  //    the header's page reference with them — identity must still survive in
+  //    the title line and the /hello payload.
+  ok(`${codeOut.file} references its own page`, board.firmware === "microbit"
+    ? code.includes(name)
+    : code.includes(`${name}.html`));
+  ok("hello identifies the board", board.firmware
+    ? code.includes(`'/hello', '${name}'`)
+    : code.includes(`.add("${name}")`));
 
-  // 7. Pin clamp present exactly when boards.json asks for one.
-  const clamped = ino.includes("#define NUM_DIGITAL_PINS");
-  ok(`pin clamp ${board.pinClamp ? "present" : "absent"}`, clamped === !!board.pinClamp);
+  // 7. Pin clamp present exactly when boards.json asks for one (Arduino only:
+  //    the python firmwares resolve pins by name at runtime, nothing to clamp).
+  if (!board.firmware) {
+    const clamped = code.includes("#define NUM_DIGITAL_PINS");
+    ok(`pin clamp ${board.pinClamp ? "present" : "absent"}`, clamped === !!board.pinClamp);
+  }
 }
 
 /* ------------------------------------------------------------------------

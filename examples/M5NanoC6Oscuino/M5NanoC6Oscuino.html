@@ -117,7 +117,7 @@
     <div class="note">
       Args are typed automatically: <code>1</code> &rarr; int, <code>0.5</code> &rarr; float, anything else &rarr; string.
       Force a type with <code>i:</code> <code>f:</code> <code>s:</code>, or use bare <code>T</code> <code>F</code> <code>N</code>.
-      <b>bundle</b> is ticked by default because <code>M5NanoC6Oscuino.ino</code> reads with <code>OSCBundle</code>,
+      <b>bundle</b> is ticked by default because <code>M5NanoC6Oscuino.ino</code> reads bundles,
       as do the stock Oscuino examples and the CNMAT Max patches.
       <br><br>
       <b>M5Stack NanoC6.</b> NOT YET VERIFIED ON HARDWARE - compiles only. The board used for testing stopped running any sketch part way through bringup (ROM bootloader still responds to esptool, applications produce no output, under every FQBN tried including ones that had worked on it earlier), so this example has never been seen to answer. RISC-V. Use the espressif core's esp32:esp32:m5stack_nanoc6, which sets USB CDC On Boot by default; the M5Stack core's m5stack:esp32:m5stack_nano_c6 defaults it OFF, which leaves Serial on UART0 and the page seeing nothing. Only G1 and G2 are brought out, on the HY2.0-4P Grove header; G7 is the blue LED, G9 the button (also the download-mode strap, so hold it while plugging in if auto-reset fails), G3 the IR LED. G19/G20 drive the RGB LED and its power enable -- do not repurpose them. No pinClamp: the pins above sit past any small clamp, and routeDigital only touches a pin when it is addressed.
@@ -147,6 +147,7 @@ const USB_FILTERS = [
   { usbVendorId: 0x303A, usbProductId: 0x1001 },
 ];
 const NATIVE_USB  = true;
+const SUPPORT_HTML = "<b>M5Stack NanoC6</b> has native USB, so the baud rate above is ignored by the hardware &mdash; Web Serial still requires one. Build for <code>esp32:esp32:m5stack_nanoc6</code>.";
 
 /* ============================================================
    1. OSC 1.0 codec  —  zero dependencies, Uint8Array in/out
@@ -532,11 +533,7 @@ if (!("serial" in navigator)) {
     "&mdash; opening the file directly with <code>file://</code> will not work.";
   $("connect").disabled = true;
 } else {
-  $("support").innerHTML = NATIVE_USB
-    ? "<b>" + BOARD_NAME + "</b> has native USB, so the baud rate above is ignored by the hardware " +
-      "&mdash; Web Serial still requires one. Build for <code>" + BOARD_FQBN + "</code>."
-    : "<b>" + BOARD_NAME + "</b> talks through a USB-serial bridge, so the baud rate must match " +
-      "<code>SLIPSerial.begin()</code> in the sketch exactly. Build for <code>" + BOARD_FQBN + "</code>.";
+  $("support").innerHTML = SUPPORT_HTML;
 }
 
 $("connect").onclick = async () => {

@@ -116,7 +116,7 @@
     <div class="note">
       Args are typed automatically: <code>1</code> &rarr; int, <code>0.5</code> &rarr; float, anything else &rarr; string.
       Force a type with <code>i:</code> <code>f:</code> <code>s:</code>, or use bare <code>T</code> <code>F</code> <code>N</code>.
-      <b>bundle</b> is ticked by default because <code>GemmaOscuino.ino</code> reads with <code>OSCBundle</code>,
+      <b>bundle</b> is ticked by default because <code>GemmaOscuino.ino</code> reads bundles,
       as do the stock Oscuino examples and the CNMAT Max patches.
       <br><br>
       <b>Adafruit Gemma M0.</b> Three pads only: D0/A2, D1/A0, D2/A1. The variant declares more analog inputs than it routes, so the sketch clamps both counts to 3 — see the pin note in the sketch header.
@@ -147,6 +147,7 @@ const USB_FILTERS = [
   { usbVendorId: 0x239A, usbProductId: 0x001C },
 ];
 const NATIVE_USB  = true;
+const SUPPORT_HTML = "<b>Adafruit Gemma M0</b> has native USB, so the baud rate above is ignored by the hardware &mdash; Web Serial still requires one. Build for <code>adafruit:samd:adafruit_gemma_m0</code>.";
 
 /* ============================================================
    1. OSC 1.0 codec  —  zero dependencies, Uint8Array in/out
@@ -532,11 +533,7 @@ if (!("serial" in navigator)) {
     "&mdash; opening the file directly with <code>file://</code> will not work.";
   $("connect").disabled = true;
 } else {
-  $("support").innerHTML = NATIVE_USB
-    ? "<b>" + BOARD_NAME + "</b> has native USB, so the baud rate above is ignored by the hardware " +
-      "&mdash; Web Serial still requires one. Build for <code>" + BOARD_FQBN + "</code>."
-    : "<b>" + BOARD_NAME + "</b> talks through a USB-serial bridge, so the baud rate must match " +
-      "<code>SLIPSerial.begin()</code> in the sketch exactly. Build for <code>" + BOARD_FQBN + "</code>.";
+  $("support").innerHTML = SUPPORT_HTML;
 }
 
 $("connect").onclick = async () => {
