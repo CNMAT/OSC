@@ -94,22 +94,25 @@ EXPECT = {
  'bundle':('bundle',(0,1),[('msg','/x',[('i',1)]),('msg','/y',[('h',2)])]),
 }
 
-fails = 0; n = 0
-for line in sys.stdin:
-    line = line.strip()
-    if not line: continue
-    name, hexs = line.split()
-    raw = bytes.fromhex(hexs); n += 1
-    try:
-        got = decode(raw)
-    except Bad as e:
-        print("DECODE-FAIL %-16s %s" % (name, e)); fails += 1; continue
-    exp = EXPECT.get(name)
-    if exp is None:
-        print("NO-EXPECT   %-16s %r" % (name, got)); fails += 1
-    elif got != exp:
-        print("MISMATCH    %-16s\n   got %r\n   exp %r" % (name, got, exp)); fails += 1
-    else:
-        print("ok          %-16s %r" % (name, got))
-print("\n%d packets, %d failures" % (n, fails))
-sys.exit(1 if fails else 0)
+# Guarded so the decoder is importable (extras/python/test_host.py leans on
+# it); run as a script this still filters name/hex lines from stdin unchanged.
+if __name__ == '__main__':
+    fails = 0; n = 0
+    for line in sys.stdin:
+        line = line.strip()
+        if not line: continue
+        name, hexs = line.split()
+        raw = bytes.fromhex(hexs); n += 1
+        try:
+            got = decode(raw)
+        except Bad as e:
+            print("DECODE-FAIL %-16s %s" % (name, e)); fails += 1; continue
+        exp = EXPECT.get(name)
+        if exp is None:
+            print("NO-EXPECT   %-16s %r" % (name, got)); fails += 1
+        elif got != exp:
+            print("MISMATCH    %-16s\n   got %r\n   exp %r" % (name, got, exp)); fails += 1
+        else:
+            print("ok          %-16s %r" % (name, got))
+    print("\n%d packets, %d failures" % (n, fails))
+    sys.exit(1 if fails else 0)
