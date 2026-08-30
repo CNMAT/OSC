@@ -72,6 +72,57 @@
 #endif
 #endif
 
+// Onboard LEDs. No Arduino core defines a capability macro for these — checked
+// by grepping all 27 installed cores for anything shaped like ARDUINO_HAS_LED,
+// zero hits — so the presence of the pin macro itself is the only signal there
+// is. Established the same way as BOARD_HAS_TONE above: a #pragma message probe
+// compiled against 42 boards, every one of which built.
+//
+// Only defined() is safe here. LED_BUILTIN is NOT always a preprocessor
+// constant: esp32 variants declare it `static const uint8_t` and then write
+// `#define LED_BUILTIN LED_BUILTIN` purely so #ifdef works (it evaluates to 0
+// inside #if), and the Zephyr core builds it from the board's devicetree as a
+// ~70-term expression. Compare values in C++, never in #if.
+//
+// Three boards this library has run on define no LED_BUILTIN at all — M5Dial,
+// M5StampS3 and the LilyGO T-Display-S3 — which is what BOARD_HAS_LED is for.
+// Guessing a pin there is not harmless: GPIO 13, the obvious guess, is SDA on
+// the M5Dial and MISO on the T-Display-S3.
+#if defined(LED_BUILTIN) && !defined(OSC_NO_LED)
+#define BOARD_HAS_LED
+#endif
+
+// RGB onboard LEDs, in the four spellings the cores actually use. Ordered by
+// how much the core does for you: RGB_BUILTIN is the only one with a driver
+// behind it (esp32's rgbLedWrite(), which digitalWrite() also routes to), the
+// rest are bare pin numbers wanting Adafruit_NeoPixel or equivalent.
+//
+// Treat a negative as "no macro said so", not as "no RGB LED". The M5Stack
+// NanoC6 has a WS2812 whose pins its own variant names (RGB_LED_DATA_PIN 20,
+// RGB_LED_PWR_PIN 19) while defining none of these four. It can also read
+// positive on a board without one: m5stack_atoms3 declares RGB_BUILTIN = 48,
+// but that variant is shared with the AtomS3 Lite and 48 is the Lite's pixel.
+// OSC_NO_RGB forces it off; a sketch that knows its board should just say so.
+//
+// LED_RED/LED_GREEN/LED_BLUE are deliberately not consulted: on every UNO R4,
+// the RGB-less Minima included, they leak in from the Renesas FSP's generated
+// bsp_pin_cfg.h in FSP port-pin encoding, which is not an Arduino pin number.
+#if !defined(OSC_NO_RGB)
+#if defined(RGB_BUILTIN)
+#define BOARD_HAS_RGB
+#define BOARD_RGB_CORE_DRIVEN
+#elif defined(PIN_NEOPIXEL)
+#define BOARD_HAS_RGB
+#define BOARD_RGB_NEOPIXEL
+#elif defined(PIN_DOTSTAR_DATA) && (defined(PIN_DOTSTAR_CLOCK) || defined(PIN_DOTSTAR_CLK))
+#define BOARD_HAS_RGB
+#define BOARD_RGB_DOTSTAR
+#elif defined(LEDR) && defined(LEDG) && defined(LEDB)
+#define BOARD_HAS_RGB
+#define BOARD_RGB_DISCRETE
+#endif
+#endif
+
 
 #ifndef analogInputToDigitalPin
 int analogInputToDigitalPin(int i);
