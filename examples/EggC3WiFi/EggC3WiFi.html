@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<!--
+  Hand-written page for EggC3WiFi, on the XiaoC6ExpWiFi pattern: browsers
+  cannot send UDP, so OSC bytes travel as POST /osc and the latest /egg
+  state packet comes back from GET /state. Serve from localhost; the board
+  lives at whatever IP its OLED shows.
+  Checked by the hand-written-page pass in extras/webserial/test/test-pages.mjs.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EggC3WiFi &mdash; OSC over WiFi</title>
+<style>
+  :root {
+    --bg:#10131a; --panel:#171b24; --panel-2:#1e2430; --line:#2a3140;
+    --text:#dde3ec; --dim:#8b95a7; --accent:#5eead4; --err:#fca5a5;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px; background:var(--bg); color:var(--text);
+         font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size:18px; margin:0 0 2px; font-weight:600; }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:20px; }
+  .panel { background:var(--panel); border:1px solid var(--line);
+           border-radius:10px; padding:16px; margin-bottom:14px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  label { color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  input, button { font:inherit; color:var(--text); background:var(--panel-2);
+                  border:1px solid var(--line); border-radius:7px; padding:8px 10px; }
+  input[type=text] { font-family:var(--mono); font-size:13px; }
+  button { cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  button.primary { background:var(--accent); color:#06231f; border-color:var(--accent); font-weight:600; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#555e6e; display:inline-block; }
+  .dot.on { background:var(--accent); box-shadow:0 0 8px var(--accent); }
+  .k { color:var(--dim); padding-right:12px; }
+  .v { font-family:var(--mono); }
+  .note { color:var(--dim); font-size:12.5px; margin-top:10px; }
+  code { font-family:var(--mono); background:var(--panel-2); padding:1px 5px; border-radius:4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>EggC3WiFi</h1>
+  <div class="sub">
+    OSC to the EGG ESP32-C3 over WiFi. UDP port 8000 for OSC software;
+    this page uses the board's HTTP bridge because browsers cannot send UDP.
+    The board's OLED shows its IP.
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <label for="host">board IP</label>
+      <input type="text" id="host" value="192.168.0.192" style="width:170px;margin:0">
+      <button id="connect" class="primary">Connect</button>
+      <button id="disconnect" disabled>Stop</button>
+      <span><span class="dot" id="rxdot"></span> <span id="status">not connected</span></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row" style="align-items:flex-start">
+      <div>
+        <label>OLED mirror (72&times;40)</label><br>
+        <canvas id="oled" width="216" height="120"
+                style="background:#000;border:6px solid #222;border-radius:6px;margin-top:6px"></canvas>
+      </div>
+      <div style="flex:1;min-width:220px">
+        <label>OLED lines (sent with /egg/t)</label>
+        <input type="text" id="l0" value="hello from" maxlength="15" style="width:100%;margin-top:6px">
+        <input type="text" id="l1" value="the browser" maxlength="15" style="width:100%;margin-top:6px">
+        <input type="text" id="l2" value="" maxlength="15" style="width:100%;margin-top:6px">
+        <input type="text" id="l3" value="" maxlength="15" style="width:100%;margin-top:6px">
+        <input type="text" id="l4" value="" maxlength="15" style="width:100%;margin-top:6px">
+        <div class="row" style="margin-top:8px">
+          <button id="send" class="primary">Send</button>
+          <button id="net">Network panel</button>
+          <button id="ledon">LED on</button>
+          <button id="ledoff">LED off</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row" style="align-items:center;gap:24px">
+      <div style="text-align:center">
+        <label>BOOT button</label><br>
+        <div id="btn" style="width:56px;height:56px;border-radius:50%;border:2px solid var(--line);
+             background:var(--panel-2);margin-top:6px"></div>
+      </div>
+      <table style="border-collapse:collapse">
+        <tr><td class="k">sketch</td><td class="v" id="name">&ndash;</td></tr>
+        <tr><td class="k">OLED 0x3C</td><td class="v" id="dok">&ndash;</td></tr>
+        <tr><td class="k">RSSI</td><td class="v" id="rssi">&ndash;</td></tr>
+        <tr><td class="k">uptime</td><td class="v" id="up">&ndash;</td></tr>
+        <tr><td class="k">state seq</td><td class="v" id="seq">&ndash;</td></tr>
+      </table>
+    </div>
+    <div class="note">
+      Same vocabulary as the USB twin: <code>/egg/t</code> lines,
+      <code>/egg/net</code>, <code>/s/l</code> for the (active-low, GPIO8)
+      LED. The state packet <code>/egg &lt;seq&gt; &lt;button&gt; &lt;millis&gt;</code>
+      is polled from <code>GET /state</code>.
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* Minimal OSC 1.0 encode/decode — same wire rules as every page here. */
+const TE = new TextEncoder(), TD = new TextDecoder();
+
+function pad4(n) { return (4 - (n % 4)) % 4; }
+
+function encodeMessage(address, args = []) {
+  const parts = [];
+  const str = s => {
+    const b = TE.encode(s);
+    const out = new Uint8Array(b.length + 1 + pad4(b.length + 1));
+    out.set(b);
+    return out;
+  };
+  parts.push(str(address));
+  let tags = ",";
+  const payload = [];
+  for (const a of args) {
+    if (typeof a === "number" && Number.isInteger(a)) {
+      tags += "i";
+      const v = new DataView(new ArrayBuffer(4));
+      v.setInt32(0, a, false);
+      payload.push(new Uint8Array(v.buffer));
+    } else {
+      tags += "s";
+      payload.push(str(String(a)));
+    }
+  }
+  parts.push(str(tags));
+  for (const p of payload) parts.push(p);
+  let len = 0;
+  for (const p of parts) len += p.length;
+  const out = new Uint8Array(len);
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+
+function decodeMessage(bytes) {
+  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let pos = 0;
+  const str = () => {
+    let end = pos;
+    while (end < bytes.length && bytes[end] !== 0) end++;
+    const s = TD.decode(bytes.subarray(pos, end));
+    pos = end + 1 + pad4(end + 1 - pos);
+    return s;
+  };
+  const address = str();
+  const tags = str();
+  const args = [];
+  for (const t of tags.slice(1)) {
+    if (t === "i") { args.push(v.getInt32(pos, false)); pos += 4; }
+    else if (t === "f") { args.push(v.getFloat32(pos, false)); pos += 4; }
+    else if (t === "s") { args.push(str()); }
+    else if (t === "b") {                       // blob: length-prefixed bytes
+      const n = v.getInt32(pos, false); pos += 4;
+      args.push(bytes.slice(pos, pos + n)); pos += n + pad4(n);
+    }
+    else break;                                 // unknown width: stop
+  }
+  return { address, args };
+}
+
+/* ---------------------------------------------------------- transport */
+const $ = id => document.getElementById(id);
+let base = null, timer = null;
+
+async function postOSC(bytes) {
+  await fetch(base + "/osc", { method: "POST", body: bytes,
+                               headers: { "content-type": "application/octet-stream" } });
+}
+
+const oledLines = [];
+function drawOled() {
+  const c = $("oled").getContext("2d");
+  c.fillStyle = "#000";
+  c.fillRect(0, 0, 216, 120);
+  c.fillStyle = "#9fe8ff";
+  c.font = "17px ui-monospace, Menlo, monospace";
+  oledLines.forEach((s, i) => c.fillText(s, 3, 20 + i * 23));
+}
+
+async function sendLines() {
+  const lines = [0, 1, 2, 3, 4].map(i => $("l" + i).value).filter(s => s.length);
+  await postOSC(encodeMessage("/egg/t", lines));
+  oledLines.length = 0;
+  oledLines.push(...lines.map(s => s.slice(0, 15)));
+  drawOled();
+}
+
+async function poll() {
+  try {
+    const r = await fetch(base + "/state");
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    const m = decodeMessage(bytes);
+    if (m.address === "/egg") {
+      $("seq").textContent = m.args[0];
+      $("btn").style.background = m.args[1] ? "var(--accent)" : "var(--panel-2)";
+      $("up").textContent = (m.args[2] / 1000).toFixed(0) + " s";
+    }
+    $("rxdot").classList.add("on");
+  } catch (e) {
+    $("rxdot").classList.remove("on");
+    $("status").textContent = "lost: " + e.message;
+  }
+}
+
+$("connect").onclick = async () => {
+  base = "http://" + $("host").value.trim();
+  try {
+    const hello = await (await fetch(base + "/hello")).json();
+    $("name").textContent = hello.name;
+    $("dok").textContent = hello.display ? "present" : "absent";
+    $("rssi").textContent = hello.rssi + " dBm";
+    $("status").textContent = "connected to " + hello.ip;
+    $("connect").disabled = true;
+    $("disconnect").disabled = false;
+    timer = setInterval(poll, 250);
+  } catch (e) {
+    $("status").textContent = "connect failed: " + e.message;
+  }
+};
+
+$("disconnect").onclick = () => {
+  clearInterval(timer);
+  timer = null;
+  $("connect").disabled = false;
+  $("disconnect").disabled = true;
+  $("rxdot").classList.remove("on");
+  $("status").textContent = "not connected";
+};
+
+$("send").onclick = sendLines;
+$("net").onclick = () => postOSC(encodeMessage("/egg/net"));
+$("ledon").onclick = () => postOSC(encodeMessage("/s/l", [1]));
+$("ledoff").onclick = () => postOSC(encodeMessage("/s/l", [0]));
+
+drawOled();
+</script>
+</body>
+</html>

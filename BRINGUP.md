@@ -79,6 +79,64 @@ The per-family procedures that were learned the hard way are in
 * If uploads fail with "no device", check `lsof` — a Web Serial page in a
   browser holds the port exclusively.
 
+### Boot modes — know which one the chip is in before debugging anything
+
+A board is always in exactly one of these, and a large share of "dead
+board" hours in this repo's history were spent debugging an app while the
+chip was in a different mode entirely:
+
+1. **App mode** — the sketch runs.
+2. **ROM download / DFU mode** — a mask-ROM loader speaks a flashing
+   protocol. USB usually enumerates and looks perfectly healthy; nothing
+   you flashed runs. Fingerprint: the flasher always connects instantly,
+   the app is totally silent, and there is no bootloop spam.
+3. **UF2 / mass-storage bootloader** — a drive appears (`RPI-RP2`,
+   `RP2350`, `xxxBOOT`); the volume name identifies the *bootloader*, not
+   the board model.
+4. **Interface firmware**, on bridged boards — the interface chip has its
+   own app/bootloader split (micro:bit DAPLink's `MICROBIT` vs
+   `MAINTENANCE` drives), entirely independent of the target chip's state.
+
+Entry and exit gestures, per family, as measured here:
+
+* **RP2040 / RP2350** — BOOTSEL held through power-on → UF2 drive; the
+  1200-baud touch does the same *from a live CDC app* (arduino-pico,
+  CircuitPython, even a TinyUSB factory demo honoured it). A wedged app
+  that never brings up USB leaves only the button — which may be shared:
+  on the Fruit Jam, front button #1 doubles as BOOT. Exit: flash a UF2.
+* **ESP32 family** — GPIO0 (classic/S2/S3) or GPIO9 (C3/C6) strapped low
+  at reset → ROM download mode. esptool enters it with a DTR/RTS dance
+  where those lines actually reach reset and strap; on bare
+  USB-Serial-JTAG boards the post-flash "Hard resetting via RTS pin" can
+  be a no-op — **the chip stays parked in download mode and the freshly
+  flashed app never starts**. `esptool --port PORT run` after the upload
+  boots the app (measured — it turned every later flash cycle
+  autonomous); so does a physical replug. Some boards additionally want
+  BOOT held *while plugging in* to reach download mode for flashing
+  (measured on the EGG C3, GPIO9). Three "flashed, verified, says
+  nothing" C3 flash cycles here were this, not the firmware.
+* **ATmega32U4 Caterina** — 1200-baud touch → an 8-second bootloader
+  window on a *renamed* port; race avrdude against it (procedure in
+  BOARDS.md). Some boards ignore the touch (Circuit Playground Classic):
+  physical reset, then the same race.
+* **SAMD** — double-tap reset → UF2 bootloader, under a *different USB
+  PID* (record both in `usbFilters`).
+* **micro:bit** — target flashing via the `MICROBIT` drive or WebUSB both
+  fail with DAPLink's `type: target` error when the nRF51 arrived
+  flash-protected; recovery is a `pyocd erase --chip` over CMSIS-DAP,
+  which no drive or button reaches. Interface firmware updates go through
+  `MAINTENANCE` (reset held while plugging).
+* **MicroPython boards** — when the 1200-baud touch does nothing, ask the
+  REPL: `machine.bootloader()` (PicoBricks).
+* **STM32** — BOOT0 strap, or give the sketch a `/dfu` escape address so
+  no strap juggling is needed (F103/F407 rows).
+
+Identification is asking the chip, never reasoning from what you flashed:
+`esptool chip_id` connecting + silent app = download mode; a UF2 volume
+name = which bootloader; DAPLink's `DETAILS.TXT` = interface state; a
+port that echoes keystrokes is a REPL, not your sketch. And the phase-3
+trickle gate doubles as proof of *which* sketch is actually running.
+
 ## Phase 3 — verify the transport
 
 In this order; each stage assumes the previous one passed.

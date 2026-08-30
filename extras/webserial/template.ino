@@ -29,6 +29,8 @@
  *   /s/d                digital pin count      -> /s/d <int>
  *   /s/a                analog pin count       -> /s/a <int>
  *   /s/l <int>          set LED_BUILTIN        -> /s/l <int>
+ *                       (only on boards with one — see BOARD_HAS_LED
+ *                        in OSCBoards.h; absent, not faked, without)
  *
  * Everything travels as an OSCBundle in both directions, which is what the
  * stock Oscuino clients expect. Tick "bundle" in the companion page.
@@ -43,10 +45,6 @@
 {{PIN_CLAMP}}
 
 static const unsigned long BAUD = 115200;   // {{BAUD_NOTE}}
-
-#ifndef LED_BUILTIN
-#define LED_BUILTIN 13
-#endif
 
 static OSCBundle bundleOUT;
 
@@ -140,19 +138,23 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
   if (msg.fullMatch("/m", addrOffset)) bundleOUT.add("/s/m").add((intOSC_t)micros());
   if (msg.fullMatch("/d", addrOffset)) bundleOUT.add("/s/d").add((intOSC_t)NUM_DIGITAL_PINS);
   if (msg.fullMatch("/a", addrOffset)) bundleOUT.add("/s/a").add((intOSC_t)NUM_ANALOG_INPUTS);
+#ifdef BOARD_HAS_LED
   if (msg.fullMatch("/l", addrOffset) && msg.isInt(0)) {
     int v = msg.getInt(0);
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, v > 0 ? HIGH : LOW);
     bundleOUT.add("/s/l").add((intOSC_t)v);
   }
+#endif
 }
 
 // -----------------------------------------------------------------------------
 
 void setup() {
   SLIPSerial.begin(BAUD);
+#ifdef BOARD_HAS_LED
   pinMode(LED_BUILTIN, OUTPUT);
+#endif
 
   // Native-USB boards enumerate after begin(); give the host a moment, then say
   // hello so the browser log shows something the instant it connects.

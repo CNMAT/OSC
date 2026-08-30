@@ -81,6 +81,12 @@ jobs:
             core: rp2040:rp2040
             url: https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
             sketches: SerialSendMessage SerialReceive SerialEcho PatternMatching
+          - name: esp32c3 eggc3
+            fqbn: esp32:esp32:esp32c3:CDCOnBoot=cdc
+            core: esp32:esp32
+            url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+            libs: U8g2
+            sketches: EggC3Oscuino EggC3WiFi
           - name: rp2350 fruitjam
             fqbn: rp2040:rp2040:adafruit_fruitjam
             core: rp2040:rp2040
