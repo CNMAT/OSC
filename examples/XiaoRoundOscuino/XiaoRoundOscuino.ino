@@ -34,6 +34,16 @@
  * and draws a dot at the point, so the finger paints on the glass while
  * the page mirrors it.
  *
+ * THE TWO DIP SWITCHES (v1.1 boards, per the wiki changelog) connect or
+ * release two XIAO pins: one routes D6 to the backlight driver (ON = the
+ * sketch's digitalWrite controls it — /d/6 0 blanks the panel; OFF = dark
+ * regardless of software, and D6 is yours), the other routes the LiPo
+ * through a divider to A0 (ON = /a/0 reads battery voltage — measured
+ * ~940 counts floating vs ~630 with the switch on and no battery; OFF =
+ * A0 is yours). The empty coin-cell holder is the BM8563's backup supply:
+ * without a cell the RTC wakes with garbage (a 2110-00-01 date, measured)
+ * and loses the time when power is pulled.
+ *
  * /hello carries touchOK and rtcOK, probed by I2C ACK at 0x2E and 0x51.
  * touchOK deserves a caveat the hardware taught: the CHSC6X only answers
  * I2C while a finger is on the glass, so at boot it reads absent even when
