@@ -78,6 +78,11 @@ The per-family procedures that were learned the hard way are in
   phase 3 doubles as that check.
 * If uploads fail with "no device", check `lsof` — a Web Serial page in a
   browser holds the port exclusively.
+* A *compile* that succeeds and an *upload* that then cannot find its own
+  artifact usually means a packaging recipe failed quietly. The Seeed nRF52
+  platform shells out to `python`, which modern macOS does not ship: the
+  `.hex` appears, the `.zip` never does, and the upload's complaint names
+  only the missing file. Put a `python` → `python3` shim on PATH.
 
 ### Boot modes — know which one the chip is in before debugging anything
 

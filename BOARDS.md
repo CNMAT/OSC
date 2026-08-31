@@ -110,6 +110,42 @@ same generated page.
 |---|---|---|---|
 | Seeeduino XIAO on the Round Display (GC9A01 240×240, CHSC6X touch, BM8563 RTC) | ATSAMD21G18 | echo 22/22 · widths 11/11 · probe 7/7 · full bench clean: gate, in 50 ×3, compound ×3, ring 20 — no same-day reference board ran, noted per Method · display text and fills seen, touch streamed 41 events and follows a finger (eyes-confirmed), RTC set from host time and observed ticking, 2026-08-30 | Seeed's own wiki lists the XIAO SAMD21 as "may not be compatible … due to insufficient memory" — measured, that warning indicts their LVGL/Seeed_GFX stack, not the silicon: their TFT_eSPI fork lit the backlight and never a pixel on this host (its SAMD21 backend also demands their FS library), while **Adafruit's GC9A01A driver draws the panel fine from 32 KB, no framebuffer** — the example uses it, with the wiki's Setup501 pin map (SPI D8/D9/D10, CS=D1, DC=D3, BL=D6, INT=D7). Two more traps recorded in the sketch: the **CHSC6X touch controller only acknowledges I2C while a finger is on the glass**, so a boot-time presence probe reads absent-when-present and must never gate the touch poll (the INT line on D7 is the per-read gate, per Seeed's own driver); and the display's physical two-position switch vetoes the backlight no matter what software does. Touch protocol is a 5-byte read at 0x2E: byte0==0x01 marks a point, x=byte2, y=byte4. The v1.1 board's two DIP switches connect/release XIAO pins (wiki changelog: "Add a switch to A0 and D6"): the D6 one gates the backlight (both directions measured — dark-with-glow when off, and `/d/6 0` blanks the lit panel when on), the A0 one puts the LiPo divider on A0 (measured ~940 counts floating vs ~630 switched-in with no battery fitted). The empty coin-cell holder is the RTC's backup: unbacked, the BM8563 wakes with a garbage 2110-00-01 date — the fingerprint to recognise. |
 
+### Nordic nRF52840 — and the first radio transport that is not WiFi
+
+| board | chip | ran | found |
+|---|---|---|---|
+| Seeed XIAO nRF52840 Sense | nRF52840 (M4F, 64 MHz), Adafruit/Seeed TinyUSB stack | echo 22/22 · widths 11/11 (int=4 long=4 ll=8) · probe 7/7 · full bench clean: gate, in 50 ×3, out 200 ×3, compound ×3, ring 20 (1100 B lazy-reader burst 50/50) — no same-day reference board ran, noted per Method · `XiaoBLEOscuino` over USB: IMU, RGB and battery all answer, 2026-08-30 | First nRF52840 in this table, and it lands in the **TinyUSB NAK-clean family** on fingerprint — compound ×3 clean is the discriminator that separates it from the shared-pool stacks. No new rung was needed in `SLIPEncodedSerial.h`: the Seeed nRF52 core is an Adafruit fork and defines `ARDUINO_NRF52_ADAFRUIT` + `SERIAL_PORT_USBVIRTUAL`, so `BOARD_HAS_USB_SERIAL` resolves already (verified with a `#pragma message` probe). **Build trap:** the Seeed nRF52 platform's packaging recipe shells out to `python`, which a modern macOS does not have — the compile succeeds, produces the `.hex`, and then the *upload* fails hunting a `.zip` that was never built. A `python` → `python3` symlink on PATH is the whole fix. **IMU, by documentation not experiment:** the Sense's LSM6DS3TR-C is not on the `Wire` at D4/D5 — Seeed's own driver remaps `Wire` to `Wire1` behind `TARGET_SEEED_XIAO_NRF52840_SENSE`, a macro the *Bluetooth* core also defines, so the wiki's "use the mbed core for IMU" advice does not force a choice between BLE and motion; this example uses both. The driver also reconfigures the IMU power pin as a **high-drive** output (`NRF_P1->PIN_CNF[8]`, H0H1) before releasing the rail, which hand-rolled `pinMode`/`digitalWrite` register reads do not — those found no IMU at all. Readings sanity-check against physics: 0.99 g on Z with the board flat, gyro at zero when still. **Battery (BQ25101):** charge current is HICHG on D22/P0.13 — HIGH = 50 mA, LOW = 100 mA — and charge state is ~CHG on D23/P0.17, LOW while charging, open-drain so read with a pull-up; the variant names only the first, the second comes from its pin-map comments. Both are wired to `/xb/chg`, which reports the current as **-1 until set**, since at boot the pin is untouched and the board's default is in force. `/xb/bat`'s divider maths (`raw × 3600 × 2 / 1024`) is written to the documented divider but is **still unverified**: with no cell attached the pin floats and read 2496 mV and then 618 mV in successive runs — noise, not a measurement. Attach a LiPo to close that one. |
+
+**OSC over Bluetooth LE.** `examples/XiaoBLEOscuino` is the first non-serial,
+non-IP transport here, and it needed **no library change at all**: `_SLIPSerial<T>`
+was written for `HardwareSerial` and for TCP `Client`, and Bluefruit's `BLEUart`
+is an Arduino `Stream` with the same surface, so `_SLIPSerial<BLEUart>` is the
+entire BLE transport. The same SLIP-framed OSC 1.0 bytes ride the Nordic UART
+Service, and the sketch serves USB and BLE simultaneously, replying to whichever
+asked. `XiaoBLEOscuino.html` is the Web Bluetooth counterpart of the Web Serial
+pages. Verified over the air on 2026-08-30 from Chrome: advertising, connection,
+writes in, notifications out, SLIP frames spanning several notifications, and
+`/xb/imu` streaming at 50 ms with the display tracking the board as it moved.
+
+**Two bugs that had to be measured, both silent.** BLEUart sizes its TX
+characteristic with `setMaxLen(Bluefruit.getMaxMtu())`, which defaults to
+`BLE_GATT_ATT_MTU_DEFAULT` = **23 bytes**, and `BLECharacteristic::notify()`
+then does `min16(len, _max_len)` — it **truncates rather than fails**. An OSC
+bundle is ~76 bytes, so every reply left the board cut to 23 bytes: inbound
+writes worked perfectly (an LED obeyed), no frame ever completed on the
+central, and nothing anywhere reported an error.
+`Bluefruit.configPrphConn(BLE_GATT_ATT_MTU_MAX, …)` **before** `begin()` is
+the cure. The second: this board's RGB LED is **active LOW**, though the
+variant header declares `LED_STATE_ON = 1`. Trusting the macro inverted every
+channel, so a commanded red arrived as cyan — dim red plus green and blue
+driven fully on by their zeros. Settled by sending 255/255/255 (dark) against
+0/0/0 (white).
+
+**Host-side note:** macOS refuses CoreBluetooth to a CLI process without
+Bluetooth TCC permission — a `bleak` scan dies with SIGABRT and no message, and
+no prompt is ever offered — so BLE verification on this bench goes through
+Chrome, which holds the permission and asks the user.
+
 ### What the stock-queue overflow actually looks like
 
 The C6 and Feather rows above each quote a truncation count under
