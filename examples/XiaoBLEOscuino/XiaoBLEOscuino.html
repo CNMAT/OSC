@@ -90,6 +90,9 @@
       <button data-a="/xb/rgb" data-g="0 0 120">LED blue</button>
       <button data-a="/xb/rgb" data-g="0 0 0">LED off</button>
       <button data-a="/xb/rgb" data-g="200 120 0">LED amber</button>
+      <button data-a="/xb/mic" data-g="">mic level</button>
+      <button data-a="/xb/gain" data-g="50">gain 50</button>
+      <button data-a="/xb/gain" data-g="70">gain 70</button>
       <button data-a="/xb/bat" data-g="">battery</button>
       <button data-a="/xb/chg" data-g="">charge state</button>
       <button data-a="/xb/chg" data-g="50">charge 50 mA</button>
@@ -122,6 +125,10 @@
       <table>
         <tr><td style="color:var(--dim)">battery</td><td class="v" id="bat">&ndash;</td></tr>
         <tr><td style="color:var(--dim)">charging</td><td class="v" id="chg">&ndash;</td></tr>
+        <tr><td style="color:var(--dim)">mic</td><td class="v" id="mic">&ndash;</td></tr>
+        <tr><td colspan="2"><div class="bar" style="width:150px">
+            <i id="bmic" style="width:0%"></i></div>
+            <span class="v" id="micpk" style="font-size:11px;color:var(--dim)"></span></td></tr>
         <tr><td style="color:var(--dim)">packets</td><td class="v" id="pkts">0</td></tr>
         <tr><td style="color:var(--dim)">rate</td><td class="v" id="hz">&ndash;</td></tr>
       </table>
@@ -252,6 +259,7 @@ class SlipDecoder {
 /* ---- Web Bluetooth transport ---- */
 const $ = id => document.getElementById(id);
 let device = null, rxChar = null, txChar = null;
+let micPeakHold = 0;
 let pkts = 0, lastHz = performance.now(), hzCount = 0;
 
 const slip = new SlipDecoder(bytes => {
@@ -279,6 +287,20 @@ function showState(pkt) {
       });
       ["gx","gy","gz"].forEach((id, i) => $(id).textContent = v[i+3].toFixed(1) + " °/s");
     }
+    if (m.address === "/xb/mic" && m.args.length >= 2 && m.args[0].value >= 0) {
+      // dBFS, not a linear bar: a quiet room sits near -60 dBFS and a linear
+      // scale pins it at the left stop, showing nothing. Floor the display at
+      // -70 dB and hold the peak, with the clip lamp latched to the HELD peak.
+      const rms = m.args[0].value, peak = m.args[1].value;
+      const db = 20 * Math.log10(Math.max(rms, 1) / 32767);
+      $("mic").textContent = db.toFixed(1) + " dBFS";
+      $("bmic").style.width = Math.max(0, Math.min(100, (db + 70) / 70 * 100)) + "%";
+      micPeakHold = Math.max(micPeakHold * 0.97, peak);
+      const pdb = 20 * Math.log10(Math.max(micPeakHold, 1) / 32767);
+      $("micpk").textContent = " peak " + pdb.toFixed(1) +
+                               (micPeakHold >= 32700 ? "  CLIP" : "");
+    }
+    if (m.address === "/xb/gain" && m.args.length) $("mic").textContent = "gain " + m.args[0].value;
     if (m.address === "/xb/bat" && m.args.length) $("bat").textContent = m.args[0].value + " mV";
     if (m.address === "/xb/chg" && m.args.length >= 2) {
       // Second value is -1 until /xb/chg sets the current: the sketch does not

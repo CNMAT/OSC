@@ -31,6 +31,9 @@
  *                            floats: acceleration in g, rotation in deg/s
  *   /xb/rate <ms>         stream /xb/imu every <ms> (20..2000); 0 stops.
  *                            This is the motion-to-OSC case BLE is for.
+ *   /xb/mic               -> /xb/mic <rms> <peak>   full scale, 0..32767
+ *   /xb/gain <n>          PDM gain, 0..80 (40 = unity, 0.5 dB a step).
+ *                            The sketch's 50 is audible, not clip-calibrated.
  *   /xb/bat               -> /xb/bat <millivolts>
  *   /xb/chg               -> /xb/chg <charging> <mA>
  *   /xb/chg <50|100>      set the BQ25101 charge current, then report
@@ -84,6 +87,7 @@
 #include <Wire.h>
 #include <bluefruit.h>
 #include <LSM6DS3.h>
+#include <PDM.h>
 #include "transports.h"
 
 // ---- transports ------------------------------------------------------------
@@ -119,6 +123,77 @@ static void addIMU() {
       .add(myIMU.readFloatAccelZ())
       .add(myIMU.readFloatGyroX()).add(myIMU.readFloatGyroY())
       .add(myIMU.readFloatGyroZ());
+}
+
+// ---- PDM microphone --------------------------------------------------------
+// The core ships its own PDM library and its global instance is built from
+// this variant's PIN_PDM_DIN/CLK/PWR, so it powers and wires the mic itself —
+// no core switch, despite the wiki steering PDM users to the mbed core.
+#define MIC_RATE 16000
+
+// The library's DEFAULT_PDM_GAIN is 20, and on the nRF52 PDM 40 (0x28) is
+// unity with 0.5 dB per step — so the stock setting runs the microphone 10 dB
+// BELOW unity, which is why it barely reacts to a room. Measured here by
+// sweeping the gain and watching the quiet-room noise floor, which is an
+// instrument check that needs no sound source:
+//
+//     gain 20 -> rms  6      gain 60 -> rms  62  (+20.3 dB)
+//     gain 40 -> rms 29.5    gain 80 -> rms 167  (+28.9 dB)
+//
+// against +10 / +20 / +30 dB predicted by the 0.5 dB step, so the law holds.
+// 50 is chosen as an audible working point, NOT a calibrated one: finding the
+// clip point needs a known loud source, which this bench did not have. Change
+// it live with /xb/gain.
+#define MIC_GAIN 50
+static short micBuf[256];
+static volatile int micSamples = 0;
+static bool micOK = false;
+
+static void onPDMdata() {
+  int bytes = PDM.available();
+  if (bytes > (int)sizeof micBuf) bytes = sizeof micBuf;
+  PDM.read(micBuf, bytes);
+  micSamples = bytes / 2;
+}
+
+// RMS and peak over the latest block, at full scale. Squares accumulate in
+// uint64 and the divide is float: pre-shifting or integer division silently
+// zeroes a quiet room, which is a lesson this repo already paid for once.
+static void micLevel(uint16_t *rms, uint16_t *peak) {
+  const int n = micSamples;
+  micSamples = 0;
+  if (n <= 0) { *rms = 0; *peak = 0; return; }
+  uint64_t sumsq = 0;
+  int32_t pk = 0;
+  for (int i = 0; i < n; i++) {
+    int32_t v = micBuf[i];
+    sumsq += (uint64_t)(v * v);
+    if (v < 0) v = -v;
+    if (v > pk) pk = v;
+  }
+  *rms = (uint16_t)sqrt((double)sumsq / (double)n);
+  *peak = (uint16_t)pk;
+}
+
+// Probe by SIGNAL, not by begin(): the PDM peripheral exists whether or not a
+// microphone is attached to it, so require samples to arrive AND to vary.
+static bool micProbe() {
+  uint32_t t0 = millis();
+  int32_t lo = 32767, hi = -32768;
+  int got = 0;
+  while (millis() - t0 < 200) {
+    int n = micSamples;
+    if (n > 0) {
+      for (int i = 0; i < n; i++) {
+        int32_t v = micBuf[i];
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+      }
+      got += n;
+      micSamples = 0;
+    }
+  }
+  return got > 0 && (hi - lo) > 1;
 }
 
 // ---- addressing helpers (same shapes as the generated template) ------------
@@ -252,6 +327,19 @@ void routeXiaoBLE(OSCMessage &msg, int addrOffset) {
     bundleOUT.add("/xb/rate").add((intOSC_t)imuRateMs);
     return;
   }
+  if (msg.fullMatch("/mic", addrOffset)) {
+    if (!micOK) { bundleOUT.add("/xb/mic").add((intOSC_t)-1); return; }
+    uint16_t rms, peak;
+    micLevel(&rms, &peak);
+    bundleOUT.add("/xb/mic").add((intOSC_t)rms).add((intOSC_t)peak);
+    return;
+  }
+  if (msg.fullMatch("/gain", addrOffset) && msg.isInt(0)) {
+    int g = constrain(msg.getInt(0), 0, 80);
+    PDM.setGain(g);
+    bundleOUT.add("/xb/gain").add((intOSC_t)g);
+    return;
+  }
   if (msg.fullMatch("/chg", addrOffset)) {
     if (msg.isInt(0)) {
       chargeMilliamps = (msg.getInt(0) >= 100) ? 100 : 50;
@@ -296,6 +384,12 @@ void setup() {
   // Its own defaults are 104 Hz, +/-2 g and 2000 dps (LSM6DS3.h settings).
   imuOK = (myIMU.begin() == 0);
 
+  // Microphone. onReceive() before begin(), as the library's own example does.
+  PDM.onReceive(onPDMdata);
+  micOK = PDM.begin(1, MIC_RATE);
+  if (micOK) PDM.setGain(MIC_GAIN);       // after begin(): begin() sets its own
+  micOK = micOK && micProbe();
+
   // BLE: the Nordic UART Service, which is what SLIPBle rides on.
   //
   // configPrphConn BEFORE begin(), and this is not optional. BLEUart sizes
@@ -323,7 +417,8 @@ void setup() {
   Bluefruit.Advertising.start(0);           // 0 = advertise forever
 
   delay(300);
-  bundleOUT.add("/hello").add("XiaoBLEOscuino").add((intOSC_t)imuOK);
+  bundleOUT.add("/hello").add("XiaoBLEOscuino")
+      .add((intOSC_t)imuOK).add((intOSC_t)micOK);
   SLIPSerial.beginPacket();
   bundleOUT.send(SLIPSerial);
   SLIPSerial.endPacket();
@@ -352,6 +447,11 @@ void loop() {
   if (imuRateMs && imuOK && millis() - lastImu >= imuRateMs) {
     lastImu = millis();
     addIMU();
+    if (micOK) {
+      uint16_t rms, peak;
+      micLevel(&rms, &peak);
+      bundleOUT.add("/xb/mic").add((intOSC_t)rms).add((intOSC_t)peak);
+    }
     if (Bluefruit.connected()) flushTo(SLIPBle, bundleOUT);
     else                       flushTo(SLIPSerial, bundleOUT);
   }
