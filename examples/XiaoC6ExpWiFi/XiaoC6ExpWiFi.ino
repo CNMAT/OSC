@@ -322,6 +322,21 @@ void setup() {
   if (displayOK) { oled.setTextColor(SSD1306_WHITE); oled.cp437(true); redraw(); }
 
   WiFi.mode(WIFI_STA);                        // C6 is 2.4 GHz only
+  // Modem power save OFF. Left on -- the ESP32 default -- the radio batches
+  // traffic to DTIM beacons, which is latency an interactive protocol cannot
+  // afford. Measured on this board, A/B, three runs each way at RSSI -67:
+  //
+  //                     sleep ON (default)      setSleep(false)
+  //   UDP median            112 ms                  10 ms
+  //   UDP p90               353 ms                  41 ms
+  //   UDP worst             819 ms                  70 ms
+  //   ping average    147 / 155 / 226 ms     17 / 23 / 23 ms
+  //
+  // No packet loss either way at this signal strength; the cost is purely
+  // latency and jitter. On the EGG C3 twin at -91 dBm the same batching
+  // compounded into 1015 ms RTT and 66 % ping loss, so the weaker the link,
+  // the worse it gets. The pathology is the default, not the board.
+  WiFi.setSleep(false);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   for (int i = 0; i < 80 && WiFi.status() != WL_CONNECTED; i++) {
     delay(250);

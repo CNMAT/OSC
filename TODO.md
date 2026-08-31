@@ -132,18 +132,25 @@ including ones that had worked on it earlier). **Needs a second unit.**
 
 > Edit `boards.json`, not the sketch — see §6.
 
-### 3.3 XIAO ESP32-C6 WiFi — the whole radio path
+### 3.3 XIAO ESP32-C6 WiFi — radio path RUN 2026-08-30, one item left
 `examples/XiaoC6ExpWiFi/XiaoC6ExpWiFi.ino:37–42`
 
-Compiles clean at 81 % of flash and shares its OSC handlers with the serial
-twin, which *is* verified. Never run: association, the UDP listener and its
-reply to `Udp.remoteIP()`, the three HTTP routes and their CORS headers, and the
-IP shown on the OLED. No credentials were available on the bench.
+Credentials finally reached the bench. Verified on hardware: association (the
+board announced `192.168.0.136:8000`), the UDP listener and its reply to
+`Udp.remoteIP()` at 40/40 round trips, and all three HTTP routes — including
+the NUL-carrying raw `POST /osc` body that the old truncation bug killed, and
+`Access-Control-Allow-Origin: *` on both `GET /state` and the OPTIONS preflight.
 
-This one has already bitten once: the header's untested warning is exactly what
-allowed the `http.arg("plain")` NUL-truncation bug that left the entire browser
-path dead (`XiaoC6ExpWiFi.ino:257`). Treat the remaining untested list as live
-risk, not paperwork.
+**Still unverified: the IP shown on the OLED.** The C6 was bare for this run, so
+`/hello` reported `display:false, rtc:false` and the display path never
+executed. Put the C6 back on the expansion board and that last line closes.
+
+The run also found a fix now in the sketch: the ESP32's default modem power save
+batches traffic to DTIM beacons, measured A/B three runs each way at RSSI −67 as
+a 112 ms UDP median (353 ms p90, 819 ms worst) against 10 ms (41 / 70) with
+`WiFi.setSleep(false)`. See BOARDS.md for the table. **The same line is worth
+auditing wherever else this repo joins a network** — it was found first on the
+EGG C3, where a −91 dBm link turned the same batching into 66 % loss.
 
 ### 3.4 The four stock WiFi examples — not run, one branch not even compiled
 `WiFiEcho.ino:16`, `WiFiSendMessage.ino:12`, `WiFiSendBundle.ino:15`,
