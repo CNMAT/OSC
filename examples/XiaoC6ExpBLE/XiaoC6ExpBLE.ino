@@ -40,12 +40,18 @@
  * State, streamed at that rate and also on request:
  *   /xc6 <seq> <button> <millis> <buzzing>
  *
- * STATUS: compiles for the C6; NOT YET RUN ON HARDWARE — the board was not
- * on the bench when this was written. Untested specifically: advertising,
- * the NUS connection, notification chunking under real MTU negotiation, and
- * every peripheral line below. The nRF52840 twin IS verified over the air,
- * and this file is written to the same shape, but that is an argument, not a
- * measurement. Treat it as untested until someone runs it.
+ * STATUS — BLE VERIFIED OVER THE AIR, 2026-08-30, from Chrome via
+ * XiaoBLEOscuino.html (the same page, since both boards advertise NUS):
+ * advertising and the device picker, the connection, central-to-board writes
+ * (/led visibly toggling the XIAO's LED), and board-to-central notifications
+ * (/xc6 streaming continuously). That last one also proves reassembly: the
+ * state bundle is ~52 bytes and the adapter chunks at 20, so every packet the
+ * page decoded had been split across three notifications and put back
+ * together by SLIP. Over USB in the same build: /xc6, /led and /rate.
+ *
+ * NOT verified: the peripheral lines. This C6 was bare, so displayOK came
+ * back false and the OLED, buzzer and button addresses answered without
+ * driving anything. Put the board on the XIAO Expansion Board to close that.
  */
 
 #include <OSCBundle.h>
