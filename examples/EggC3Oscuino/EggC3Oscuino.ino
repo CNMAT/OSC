@@ -2,7 +2,12 @@
  * EggC3Oscuino — Oscuino over SLIP-encoded USB serial, for the EGG
  * ESP32-C3 board with the 0.42" OLED, hand-written like the other demos.
  * -----------------------------------------------------------------------------
- * Board : EGG ESP32-C3 (ESP32-C3, single core 160 MHz, 4 MB embedded flash)
+ * Board : ESP32-C3 SuperMini (hardware marking 466ab), the generic C3 board
+ *         also sold under seller names such as "EGG" — which is where this
+ *         example's folder name comes from. Single core 160 MHz, 4 MB flash.
+ *         Two units measured: one carrying the 0.42" OLED this sketch draws
+ *         on, one bare. The bare one still serves everything else, because
+ *         the display is probed by signal rather than assumed.
  * FQBN  : esp32:esp32:esp32c3:CDCOnBoot=cdc     <- the option is REQUIRED:
  *         without it Serial is UART0 and the board flashes, verifies and
  *         says nothing (the BRINGUP.md C3 trap).

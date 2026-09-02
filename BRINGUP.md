@@ -118,7 +118,10 @@ Entry and exit gestures, per family, as measured here:
   boots the app (measured — it turned every later flash cycle
   autonomous); so does a physical replug. Some boards additionally want
   BOOT held *while plugging in* to reach download mode for flashing
-  (measured on the EGG C3, GPIO9). Three "flashed, verified, says
+  (measured on the C3 SuperMini, GPIO9) — and note that this
+  strap-at-power-on parking is **stickier** than an ordinary post-flash
+  park: `esptool run` cannot lift it, and only a clean replug with no
+  button held will start the app. Afterwards `run` works normally. Three "flashed, verified, says
   nothing" C3 flash cycles here were this, not the firmware.
 * **ATmega32U4 Caterina** — 1200-baud touch → an 8-second bootloader
   window on a *renamed* port; race avrdude against it (procedure in
