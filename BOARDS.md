@@ -157,7 +157,7 @@ Chrome, which holds the permission and asks the user.
 
 | board | chip | ran | found |
 |---|---|---|---|
-| Seeed XIAO MG24 (Sense) | EFR32MG24 (M33), 1.5 MB flash, CMSIS-DAP interface chip | echo 22/22 · widths 11/11 (int=4 long=4 ll=8) · bench trickle gate CLEAN — then the transport wedged, see below; 2026-09-02 | First Silicon Labs part in this table, and it needed **no new rung** in `SLIPEncodedSerial.h`: `BOARD_HAS_USB_SERIAL` is correctly *not* defined for this core (probed with `#pragma message`), so a sketch falls back to `SLIPEncodedSerial(Serial)` — which is right, because `Serial` here is the UART bridged to the CMSIS-DAP interface chip's VCOM, not native USB. That places it with the UNO R4 in the **bridged-UART** family rather than any USB-stack row. FQBN carries a `protocol_stack` menu (Matter / BLE Arduino / BLE Silabs / None); the ladder above ran with `protocol_stack=none`. **Its radio is untested.** |
+| Seeed XIAO MG24 (Sense) | EFR32MG24 (M33), 1.5 MB flash, CMSIS-DAP interface chip | echo 22/22 · widths 11/11 (int=4 long=4 ll=8) · bench trickle gate CLEAN, and CLEAN again after a replug · one-write bursts: 220 B clean, 440 B lossy and wedging — see below; 2026-09-02 | First Silicon Labs part in this table, and it needed **no new rung** in `SLIPEncodedSerial.h`: `BOARD_HAS_USB_SERIAL` is correctly *not* defined for this core (probed with `#pragma message`), so a sketch falls back to `SLIPEncodedSerial(Serial)` — which is right, because `Serial` here is the UART bridged to the CMSIS-DAP interface chip's VCOM, not native USB. That places it with the UNO R4 in the **bridged-UART** family rather than any USB-stack row. FQBN carries a `protocol_stack` menu (Matter / BLE Arduino / BLE Silabs / None); the ladder above ran with `protocol_stack=none`. **Its radio is untested.** |
 
 **The wedge, and why the MG24 is not the culprit.** One `bench.py in 50 -1`
 (a 1102-byte single write) stalled at 918 bytes, and from then on *every*
@@ -175,10 +175,28 @@ wrong first guess:
 So the wedge belongs to the CMSIS-DAP bridge, not to the MG24 or to this
 library. It is worse than the UNO R4's bridged-UART behaviour, which merely
 drops the tail of an oversized burst: this one stops accepting writes
-altogether and survives target resets. **The expected cure is a physical
-replug** (the only thing that power-cycles the interface chip) — expected,
-not yet confirmed, because the board was not replugged before this was
-written. Anyone meeting this will otherwise conclude the board is dead.
+altogether and survives target resets. **The cure is a physical replug**,
+the only thing that power-cycles the interface chip — predicted from the
+evidence above and then **confirmed**: the trickle gate ran CLEAN
+immediately after one. Anyone meeting this will otherwise conclude the
+board is dead.
+
+**How small a burst does it take?** Smaller than the first failure
+suggested. Measured by sweeping upward from a clean replug:
+
+* **220 B** in one write (10 frames) — CLEAN.
+* **440 B** in one write (20 frames) — **LOSSY, and it wedges the bridge
+  again**, so exceeding the limit does not merely drop the tail.
+
+The 918-byte figure in the first paragraph is therefore *not* a working
+ceiling: it is how much the bridge had swallowed at the moment it died.
+The true limit sits between 220 and 440 bytes per write, and each attempt
+to narrow it costs another physical replug, so it is left as a range
+rather than guessed at. Two questions remain open for the same reason:
+whether **pacing** the same total bytes (a gap between frames instead of
+one write) avoids the failure entirely — which would make the rule "keep
+single writes small" rather than "keep traffic light" — and where in
+220…440 the edge actually falls.
 
 ### What the stock-queue overflow actually looks like
 
