@@ -21,7 +21,7 @@ The suites, briefly:
 
 ## By USB stack family
 
-The stack, not the board, is what determines transport behaviour. Seven
+The stack, not the board, is what determines transport behaviour. Eight
 families have been characterised on hardware:
 
 | family | host→device | device→host | verdict |
@@ -33,6 +33,7 @@ families have been characterised on hardware:
 | TinyUSB (RP2040/RP2350 core) | NAK — refuses to re-arm the endpoint without FIFO space | clean | clean end to end, including compound |
 | ESP32 HWCDC (USB-Serial-JTAG) | **drops** — ISR drains the 64-byte FIFO into a 256-byte queue and discards overflow | clean | bursts past ~260 B truncate *with mid-frame corruption* even against a fast-draining sketch; `begin()` now enlarges the queue (`OSC_SLIP_RX_BUFFER`, default 4096) |
 | stm32duino CDC (STM32F4) | **drops with corruption** — the core's CDC receive queue is 3 × 64 B = **192 bytes** (`CDC_RECEIVE_QUEUE_BUFFER_PACKET_NUMBER`, `#ifndef`-guarded); burst overflow loses mid-frame bytes | clean | bursts past ~200 B truncate with `seqErrs`+`crcErrs` even against a fast drain; the flag at 64 packets (4096 B) makes everything clean — set it in **both** C and C++ flags, the queue lives in a C file. The test instruments carry it via stm32duino's sketch-dir `build_opt.h`, which other cores ignore |
+| Silicon Labs **CMSIS-DAP VCOM** (XIAO MG24) | **drops, then wedges** — clean to ~242 B in one write, lossy beyond, and past ~396 B the interface chip stops accepting writes entirely | clean | the only stack here with a *latching* failure: the wedge survives reprogramming and resetting the target, because the CDC endpoint lives in the interface chip, and only a physical replug clears it. Pacing the same bytes is clean, so the constraint is per-write size |
 | Renesas RA4M1 **bridged UART** (UNO R4 WiFi) | **drops** — no USB at all on this path; the on-board ESP32-S3 bridge terminates flow control, so a full 512-byte UART ring simply overruns | clean | the only non-USB transport here; clean at ordinary rates and against a fast-draining sketch, but a slow reader loses the tail of any burst past its ring |
 
 ## Measured boards
@@ -157,7 +158,7 @@ Chrome, which holds the permission and asks the user.
 
 | board | chip | ran | found |
 |---|---|---|---|
-| Seeed XIAO MG24 (Sense) | EFR32MG24 (M33), 1.5 MB flash, CMSIS-DAP interface chip | echo 22/22 · widths 11/11 (int=4 long=4 ll=8) · bench trickle gate CLEAN, and CLEAN again after a replug · one-write bursts: 220 B clean, 440 B lossy and wedging — see below; 2026-09-02 | First Silicon Labs part in this table, and it needed **no new rung** in `SLIPEncodedSerial.h`: `BOARD_HAS_USB_SERIAL` is correctly *not* defined for this core (probed with `#pragma message`), so a sketch falls back to `SLIPEncodedSerial(Serial)` — which is right, because `Serial` here is the UART bridged to the CMSIS-DAP interface chip's VCOM, not native USB. That places it with the UNO R4 in the **bridged-UART** family rather than any USB-stack row. FQBN carries a `protocol_stack` menu (Matter / BLE Arduino / BLE Silabs / None); the ladder above ran with `protocol_stack=none`. **Its radio is untested.** |
+| Seeed XIAO MG24 (Sense) | EFR32MG24 (M33), 1.5 MB flash, CMSIS-DAP interface chip | echo 22/22 · widths 11/11 (int=4 long=4 ll=8) · gate CLEAN · one-write bursts bisected: ≤242 B clean, 264–374 B lossy, ≥396 B lossy **and wedging** · the same 1100 B **paced** at 5 ms: CLEAN — see below; 2026-09-02 | First Silicon Labs part in this table, and it needed **no new rung** in `SLIPEncodedSerial.h`: `BOARD_HAS_USB_SERIAL` is correctly *not* defined for this core (probed with `#pragma message`), so a sketch falls back to `SLIPEncodedSerial(Serial)` — which is right, because `Serial` here is the UART bridged to the CMSIS-DAP interface chip's VCOM, not native USB. That places it with the UNO R4 in the **bridged-UART** family rather than any USB-stack row. FQBN carries a `protocol_stack` menu (Matter / BLE Arduino / BLE Silabs / None); the ladder above ran with `protocol_stack=none`. **Its radio is untested.** |
 
 **The wedge, and why the MG24 is not the culprit.** One `bench.py in 50 -1`
 (a 1102-byte single write) stalled at 918 bytes, and from then on *every*
@@ -181,22 +182,25 @@ evidence above and then **confirmed**: the trickle gate ran CLEAN
 immediately after one. Anyone meeting this will otherwise conclude the
 board is dead.
 
-**How small a burst does it take?** Smaller than the first failure
-suggested. Measured by sweeping upward from a clean replug:
+**Measured limits.** The 918-byte figure in the first paragraph is *not* a
+working ceiling — it is how much the bridge had swallowed at the moment it
+died. Sweeping from clean states gives two distinct thresholds, and the
+per-write size is what matters, not the traffic:
 
-* **220 B** in one write (10 frames) — CLEAN.
-* **440 B** in one write (20 frames) — **LOSSY, and it wedges the bridge
-  again**, so exceeding the limit does not merely drop the tail.
+| one write | result |
+|---|---|
+| ≤ **242 B** (11 frames) | clean |
+| **264 – 374 B** | **lossy**, but the port survives and the next gate passes |
+| ≥ **396 B** (18 frames) | **lossy *and* the bridge wedges** until a physical replug |
+| **1100 B total, paced** at 5 ms between frames | **clean**, and clean again afterwards |
 
-The 918-byte figure in the first paragraph is therefore *not* a working
-ceiling: it is how much the bridge had swallowed at the moment it died.
-The true limit sits between 220 and 440 bytes per write, and each attempt
-to narrow it costs another physical replug, so it is left as a range
-rather than guessed at. Two questions remain open for the same reason:
-whether **pacing** the same total bytes (a gap between frames instead of
-one write) avoids the failure entirely — which would make the rule "keep
-single writes small" rather than "keep traffic light" — and where in
-220…440 the edge actually falls.
+So the rule for this board is *keep single writes small*, not *keep
+traffic light*: the same 1100 bytes that wedge the bridge in one write pass
+without a single loss when spaced out. A buffer of about 256 bytes in the
+interface chip would explain both numbers — clean below it, lossy above it,
+and a flow-control state machine that gives up somewhere past 1.5× — but
+that is an inference from the thresholds, not something read out of the
+chip, and it is recorded as such.
 
 ### What the stock-queue overflow actually looks like
 
