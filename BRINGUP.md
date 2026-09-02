@@ -163,6 +163,13 @@ python3 test/hardware/bench.py PORT ring 20   # ring map vs a lazy reader
 
 * The bench attributes loss to a segment (host wrote / board received /
   board sent / host received). "Lost somewhere" is not a result.
+* If the host cannot even *write* — `select()` never reports the port
+  writable — reflash the board and try again **watching the flasher's
+  output**. A wedge that survives a confirmed reprogram-and-reset cannot
+  be the sketch; on boards with a separate interface chip (CMSIS-DAP,
+  DAPLink, an on-board bridge) the CDC endpoint lives there and only a
+  physical replug power-cycles it. Measured on the XIAO MG24, where a
+  900-byte burst wedged the VCOM permanently.
 * Place the board's USB stack in the family table in BOARDS.md. A NAK
   stack should run everything clean; a drop stack shows a byte ceiling in
   `ring`; a shared-pool stack shows `compound` loss with clean separate

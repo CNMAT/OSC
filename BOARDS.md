@@ -153,6 +153,33 @@ Chrome, which holds the permission and asks the user.
 
 | SuperMini, bare (no OLED), MAC 90:70:69:ab:5d:c0 | ESP32-C3, single core 160 MHz, 4 MB | echo 22/22 · widths 11/11 · probe 7/7 · bench clean: gate, in 50 ×3, compound ×3, ring 20 — no same-day reference board ran, noted per Method · blue LED on GPIO8 seen lighting; 2026-09-02 | A second physical unit, and useful precisely because it is **missing the display**: `/egg/t` answered 0 and the sketch served everything else untouched, which is the capability-boolean design proving it reports absence rather than pretending. Same `/s/d` 22 and `/s/a` 6 as the OLED unit, same active-low GPIO8 LED. It also sharpened the boot-mode note: this board arrived **strap-parked**, having been plugged in with BOOT held, and in that state `esptool run` is powerless — it prints "Hard resetting via RTS pin" and nothing starts. Only a clean power cycle (replug, no button) leaves it. Once out, `esptool run` starts the app normally after every subsequent flash, so the stickiness belongs to the strap-at-power-on, not to flashing. |
 
+### Silicon Labs EFR32MG24 — a new family, and a bridge that wedges
+
+| board | chip | ran | found |
+|---|---|---|---|
+| Seeed XIAO MG24 (Sense) | EFR32MG24 (M33), 1.5 MB flash, CMSIS-DAP interface chip | echo 22/22 · widths 11/11 (int=4 long=4 ll=8) · bench trickle gate CLEAN — then the transport wedged, see below; 2026-09-02 | First Silicon Labs part in this table, and it needed **no new rung** in `SLIPEncodedSerial.h`: `BOARD_HAS_USB_SERIAL` is correctly *not* defined for this core (probed with `#pragma message`), so a sketch falls back to `SLIPEncodedSerial(Serial)` — which is right, because `Serial` here is the UART bridged to the CMSIS-DAP interface chip's VCOM, not native USB. That places it with the UNO R4 in the **bridged-UART** family rather than any USB-stack row. FQBN carries a `protocol_stack` menu (Matter / BLE Arduino / BLE Silabs / None); the ladder above ran with `protocol_stack=none`. **Its radio is untested.** |
+
+**The wedge, and why the MG24 is not the culprit.** One `bench.py in 50 -1`
+(a 1102-byte single write) stalled at 918 bytes, and from then on *every*
+host write stalled at **0** bytes — `select()` never reports the port
+writable. The evidence chain, because "the board hung" was the obvious and
+wrong first guess:
+
+* single-byte writes still succeed, so the OS, cable and port are fine;
+* the bench gate fails immediately after a **confirmed** reflash — openocd
+  prints "Programming Finished" and halts and resets the core — so the
+  freshly reset MG24 application cannot be what is refusing data;
+* reprogramming the target does not reset the **interface chip**, which is
+  where the CDC endpoint lives.
+
+So the wedge belongs to the CMSIS-DAP bridge, not to the MG24 or to this
+library. It is worse than the UNO R4's bridged-UART behaviour, which merely
+drops the tail of an oversized burst: this one stops accepting writes
+altogether and survives target resets. **The expected cure is a physical
+replug** (the only thing that power-cycles the interface chip) — expected,
+not yet confirmed, because the board was not replugged before this was
+written. Anyone meeting this will otherwise conclude the board is dead.
+
 ### What the stock-queue overflow actually looks like
 
 The C6 and Feather rows above each quote a truncation count under
