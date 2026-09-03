@@ -93,6 +93,11 @@ jobs:
             url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
             libs: U8g2
             sketches: EggC3Oscuino EggC3WiFi
+          - name: silabs mg24 (serial + ble)
+            fqbn: SiliconLabs:silabs:xiao_mg24:protocol_stack=ble_silabs
+            core: SiliconLabs:silabs
+            url: https://siliconlabs.github.io/arduino/package_arduinosilabs_index.json
+            sketches: XiaoMG24BLE
           - name: rp2350 fruitjam
             fqbn: rp2040:rp2040:adafruit_fruitjam
             core: rp2040:rp2040
