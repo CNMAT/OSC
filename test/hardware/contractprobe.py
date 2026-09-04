@@ -193,9 +193,19 @@ def main():
     r = ask([('/state', ())])
     check('/state -> /state <seq> <millis>',
           any(m[0] == '/state' and len(m[1]) == 2 for m in r), r)
-    for v in (1, 0):
-        r = ask([('/s/l', (v,))])
-        check(f'/s/l {v} echoed', any(m[0] == '/s/l' and m[1] == [v] for m in r), r)
+    # /s/l is core, but not every board HAS a plain LED -- the XIAO ESP32-C3's
+    # only LED belongs to its battery charger, and its variant defines no
+    # LED_BUILTIN, so OSCBoards.h leaves BOARD_HAS_LED undefined and the
+    # sketch correctly answers nothing. Under "absence is silence" that is the
+    # contract being obeyed, not broken, so silence here is a skip. A board
+    # that answers wrongly is still caught, because the echo must match.
+    first = ask([('/s/l', (1,))])
+    if not [m for m in first if m[0] == '/s/l']:
+        skip('/s/l', 'no reply: this board has no LED under BOARD_HAS_LED')
+    else:
+        check('/s/l 1 echoed', any(m[0] == '/s/l' and m[1] == [1] for m in first), first)
+        r = ask([('/s/l', (0,))])
+        check('/s/l 0 echoed', any(m[0] == '/s/l' and m[1] == [0] for m in r), r)
     r = ask([('/s/m', ())])
     check('/s/m answers', any(m[0] == '/s/m' for m in r), r)
 

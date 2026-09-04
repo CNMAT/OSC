@@ -28,7 +28,6 @@
     "three. bundles: false unticks the page's bundle box for sketches that",
     "parse each packet as one OSCMessage and would drop a bundle."
   ],
-
   "boards": [
     {
       "id": "Gemma",
@@ -37,16 +36,37 @@
       "fqbn": "adafruit:samd:adafruit_gemma_m0",
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x239A", "usbProductId": "0x801C" },
-        { "usbVendorId": "0x239A", "usbProductId": "0x001C" }
+        {
+          "usbVendorId": "0x239A",
+          "usbProductId": "0x801C"
+        },
+        {
+          "usbVendorId": "0x239A",
+          "usbProductId": "0x001C"
+        }
       ],
-      "pinClamp": { "digital": 3, "analog": 3 },
+      "pinClamp": {
+        "digital": 3,
+        "analog": 3
+      },
       "chips": [
-        { "label": "read D0", "addr": "/d/0", "args": "" },
-        { "label": "read A0", "addr": "/a/0", "args": "" },
-        { "label": "read A1", "addr": "/a/1", "args": "" }
+        {
+          "label": "read D0",
+          "addr": "/d/0",
+          "args": ""
+        },
+        {
+          "label": "read A0",
+          "addr": "/a/0",
+          "args": ""
+        },
+        {
+          "label": "read A1",
+          "addr": "/a/1",
+          "args": ""
+        }
       ],
-      "note": "Three pads only: D0/A2, D1/A0, D2/A1. The variant declares more analog inputs than it routes, so the sketch clamps both counts to 3 — see the pin note in the sketch header."
+      "note": "Three pads only: D0/A2, D1/A0, D2/A1. The variant declares more analog inputs than it routes, so the sketch clamps both counts to 3 \u2014 see the pin note in the sketch header."
     },
     {
       "id": "Playground",
@@ -55,14 +75,36 @@
       "fqbn": "adafruit:samd:adafruit_circuitplayground_m0",
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x239A", "usbProductId": "0x8018" },
-        { "usbVendorId": "0x239A", "usbProductId": "0x0019" }
+        {
+          "usbVendorId": "0x239A",
+          "usbProductId": "0x8018"
+        },
+        {
+          "usbVendorId": "0x239A",
+          "usbProductId": "0x0019"
+        }
       ],
       "chips": [
-        { "label": "read A1", "addr": "/a/1", "args": "" },
-        { "label": "read A2", "addr": "/a/2", "args": "" },
-        { "label": "button A (D4)", "addr": "/d/4/u", "args": "" },
-        { "label": "slide switch (D7)", "addr": "/d/7/u", "args": "" }
+        {
+          "label": "read A1",
+          "addr": "/a/1",
+          "args": ""
+        },
+        {
+          "label": "read A2",
+          "addr": "/a/2",
+          "args": ""
+        },
+        {
+          "label": "button A (D4)",
+          "addr": "/d/4/u",
+          "args": ""
+        },
+        {
+          "label": "slide switch (D7)",
+          "addr": "/d/7/u",
+          "args": ""
+        }
       ],
       "note": "A1-A7 are the alligator-clip pads. D4/D5 are the buttons and D7 the slide switch, all read with /u for the internal pullup."
     },
@@ -73,15 +115,33 @@
       "fqbn": "arduino:avr:LilyPadUSB",
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x1B4F", "usbProductId": "0x9207" },
-        { "usbVendorId": "0x1B4F", "usbProductId": "0x9208" }
+        {
+          "usbVendorId": "0x1B4F",
+          "usbProductId": "0x9207"
+        },
+        {
+          "usbVendorId": "0x1B4F",
+          "usbProductId": "0x9208"
+        }
       ],
       "chips": [
-        { "label": "read A2", "addr": "/a/2", "args": "" },
-        { "label": "read A3", "addr": "/a/3", "args": "" },
-        { "label": "PWM D9 50%", "addr": "/d/9", "args": "0.5" }
+        {
+          "label": "read A2",
+          "addr": "/a/2",
+          "args": ""
+        },
+        {
+          "label": "read A3",
+          "addr": "/a/3",
+          "args": ""
+        },
+        {
+          "label": "PWM D9 50%",
+          "addr": "/d/9",
+          "args": "0.5"
+        }
       ],
-      "note": "Sew tabs are A2-A5 and D2, D3, D9, D10, D11. D9/D10/D11 are the PWM-capable tabs — send a float to /d/<pin> for analogWrite."
+      "note": "Sew tabs are A2-A5 and D2, D3, D9, D10, D11. D9/D10/D11 are the PWM-capable tabs \u2014 send a float to /d/<pin> for analogWrite."
     },
     {
       "id": "Teensy",
@@ -90,13 +150,32 @@
       "fqbn": "teensy:avr:teensy40",
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x16C0", "usbProductId": "0x0483" }
+        {
+          "usbVendorId": "0x16C0",
+          "usbProductId": "0x0483"
+        }
       ],
       "chips": [
-        { "label": "read A0", "addr": "/a/0", "args": "" },
-        { "label": "read A1", "addr": "/a/1", "args": "" },
-        { "label": "PWM D3 50%", "addr": "/d/3", "args": "0.5" },
-        { "label": "tone D2 440Hz", "addr": "/tone/2", "args": "440" }
+        {
+          "label": "read A0",
+          "addr": "/a/0",
+          "args": ""
+        },
+        {
+          "label": "read A1",
+          "addr": "/a/1",
+          "args": ""
+        },
+        {
+          "label": "PWM D3 50%",
+          "addr": "/d/3",
+          "args": "0.5"
+        },
+        {
+          "label": "tone D2 440Hz",
+          "addr": "/tone/2",
+          "args": "440"
+        }
       ],
       "note": "14 analog inputs and PWM on most digital pins. The USB stack ignores the baud rate entirely."
     },
@@ -107,13 +186,31 @@
       "fqbn": "rp2040:rp2040:rpipico",
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x2E8A", "usbProductId": "0x000A" },
-        { "usbVendorId": "0x2E8A", "usbProductId": "0x010A" }
+        {
+          "usbVendorId": "0x2E8A",
+          "usbProductId": "0x000A"
+        },
+        {
+          "usbVendorId": "0x2E8A",
+          "usbProductId": "0x010A"
+        }
       ],
       "chips": [
-        { "label": "read A0 (GP26)", "addr": "/a/0", "args": "" },
-        { "label": "read A1 (GP27)", "addr": "/a/1", "args": "" },
-        { "label": "PWM GP15 50%", "addr": "/d/15", "args": "0.5" }
+        {
+          "label": "read A0 (GP26)",
+          "addr": "/a/0",
+          "args": ""
+        },
+        {
+          "label": "read A1 (GP27)",
+          "addr": "/a/1",
+          "args": ""
+        },
+        {
+          "label": "PWM GP15 50%",
+          "addr": "/d/15",
+          "args": "0.5"
+        }
       ],
       "note": "Three ADC channels: A0-A2 are GP26-GP28. Every digital pin can do PWM. Built for the Earle Philhower core."
     },
@@ -124,12 +221,27 @@
       "fqbn": "esp32:esp32:esp32s3",
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x303A", "usbProductId": "0x1001" }
+        {
+          "usbVendorId": "0x303A",
+          "usbProductId": "0x1001"
+        }
       ],
       "chips": [
-        { "label": "read A0", "addr": "/a/0", "args": "" },
-        { "label": "read A1", "addr": "/a/1", "args": "" },
-        { "label": "micros", "addr": "/s/m", "args": "" }
+        {
+          "label": "read A0",
+          "addr": "/a/0",
+          "args": ""
+        },
+        {
+          "label": "read A1",
+          "addr": "/a/1",
+          "args": ""
+        },
+        {
+          "label": "micros",
+          "addr": "/s/m",
+          "args": ""
+        }
       ],
       "note": "Build with USB CDC On Boot enabled so that Serial is the native USB port rather than UART0. ADC2 channels are unavailable while WiFi is active."
     },
@@ -140,13 +252,32 @@
       "fqbn": "esp32:esp32:m5stack_nanoc6",
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x303A", "usbProductId": "0x1001" }
+        {
+          "usbVendorId": "0x303A",
+          "usbProductId": "0x1001"
+        }
       ],
       "chips": [
-        { "label": "read G1 (A1)", "addr": "/a/1", "args": "" },
-        { "label": "read G2 (A2)", "addr": "/a/2", "args": "" },
-        { "label": "button G9", "addr": "/d/9/u", "args": "" },
-        { "label": "blue LED G7 on", "addr": "/d/7", "args": "1" }
+        {
+          "label": "read G1 (A1)",
+          "addr": "/a/1",
+          "args": ""
+        },
+        {
+          "label": "read G2 (A2)",
+          "addr": "/a/2",
+          "args": ""
+        },
+        {
+          "label": "button G9",
+          "addr": "/d/9/u",
+          "args": ""
+        },
+        {
+          "label": "blue LED G7 on",
+          "addr": "/d/7",
+          "args": "1"
+        }
       ],
       "note": "NOT YET VERIFIED ON HARDWARE - compiles only. The board used for testing stopped running any sketch part way through bringup (ROM bootloader still responds to esptool, applications produce no output, under every FQBN tried including ones that had worked on it earlier), so this example has never been seen to answer. RISC-V. Use the espressif core's esp32:esp32:m5stack_nanoc6, which sets USB CDC On Boot by default; the M5Stack core's m5stack:esp32:m5stack_nano_c6 defaults it OFF, which leaves Serial on UART0 and the page seeing nothing. Only G1 and G2 are brought out, on the HY2.0-4P Grove header; G7 is the blue LED, G9 the button (also the download-mode strap, so hold it while plugging in if auto-reset fails), G3 the IR LED. G19/G20 drive the RGB LED and its power enable -- do not repurpose them. No pinClamp: the pins above sit past any small clamp, and routeDigital only touches a pin when it is addressed."
     },
@@ -158,16 +289,47 @@
       "firmware": "microbit",
       "nativeUSB": false,
       "usbFilters": [
-        { "usbVendorId": "0x0D28", "usbProductId": "0x0204" }
+        {
+          "usbVendorId": "0x0D28",
+          "usbProductId": "0x0204"
+        }
       ],
       "chips": [
-        { "label": "read pin0", "addr": "/a/0", "args": "" },
-        { "label": "read pin1", "addr": "/a/1", "args": "" },
-        { "label": "buttons A B", "addr": "/btn", "args": "" },
-        { "label": "accelerometer", "addr": "/imu", "args": "" },
-        { "label": "scroll text", "addr": "/display/text", "args": "s:hi" },
-        { "label": "display on", "addr": "/s/l", "args": "1" },
-        { "label": "tone pin0 440Hz", "addr": "/tone/0", "args": "440" }
+        {
+          "label": "read pin0",
+          "addr": "/a/0",
+          "args": ""
+        },
+        {
+          "label": "read pin1",
+          "addr": "/a/1",
+          "args": ""
+        },
+        {
+          "label": "buttons A B",
+          "addr": "/btn",
+          "args": ""
+        },
+        {
+          "label": "accelerometer",
+          "addr": "/imu",
+          "args": ""
+        },
+        {
+          "label": "scroll text",
+          "addr": "/display/text",
+          "args": "s:hi"
+        },
+        {
+          "label": "display on",
+          "addr": "/s/l",
+          "args": "1"
+        },
+        {
+          "label": "tone pin0 440Hz",
+          "addr": "/tone/0",
+          "args": "440"
+        }
       ],
       "note": "Runs MicroPython, not an Arduino sketch -- copy ALL FOUR files (main.py, slip.py, osce.py, oscd.py; see extras/python/ for why the V1's on-board compiler needs the split). Pin numbers are micro:bit pins, so /a/0 reads the pin0 alligator pad; analog exists on pins 0-4 and 10. /mb/a is the accelerometer, /mb/b the two buttons, /mb/t scrolls a string on the LED matrix, /s/l lights the whole matrix, /s/q exits to the REPL. The DAPLink bridge carries a real UART: leave the baud at 115200 to match uart.init() in main.py. Opening the port does not reset the board (measured), so press its reset button after connecting if you want to see /enq."
     },
@@ -179,18 +341,54 @@
       "firmware": "fruitjam",
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x239A" },
-        { "usbVendorId": "0x2E8A" }
+        {
+          "usbVendorId": "0x239A"
+        },
+        {
+          "usbVendorId": "0x2E8A"
+        }
       ],
       "chips": [
-        { "label": "read buttons", "addr": "/btn", "args": "" },
-        { "label": "LEDs red", "addr": "/rgb", "args": "255 0 0" },
-        { "label": "LEDs teal", "addr": "/rgb", "args": "0 128 96" },
-        { "label": "LEDs off", "addr": "/rgb", "args": "0 0 0" },
-        { "label": "beep 880Hz", "addr": "/buzz", "args": "880 400" },
-        { "label": "beep off", "addr": "/buzz", "args": "0" },
-        { "label": "DVI text", "addr": "/display/text", "args": "s:hello-from-osc" },
-        { "label": "read A0", "addr": "/a/0", "args": "" }
+        {
+          "label": "read buttons",
+          "addr": "/btn",
+          "args": ""
+        },
+        {
+          "label": "LEDs red",
+          "addr": "/rgb",
+          "args": "255 0 0"
+        },
+        {
+          "label": "LEDs teal",
+          "addr": "/rgb",
+          "args": "0 128 96"
+        },
+        {
+          "label": "LEDs off",
+          "addr": "/rgb",
+          "args": "0 0 0"
+        },
+        {
+          "label": "beep 880Hz",
+          "addr": "/buzz",
+          "args": "880 400"
+        },
+        {
+          "label": "beep off",
+          "addr": "/buzz",
+          "args": "0"
+        },
+        {
+          "label": "DVI text",
+          "addr": "/display/text",
+          "args": "s:hello-from-osc"
+        },
+        {
+          "label": "read A0",
+          "addr": "/a/0",
+          "args": ""
+        }
       ],
       "note": "Two firmwares answer this page with the same address space: code.py under CircuitPython (extras/python/FruitJamOscuino/, copy boot.py + code.py to CIRCUITPY) and the hand-written examples/FruitJamOscuino sketch under arduino-pico (needs Adafruit NeoPXL8, Adafruit TLV320 I2S and Adafruit DVI HSTX; see the FruitJamArduino entry). /btn reads the three user buttons (1 = pressed), /rgb drives the five NeoPixels (/rgb/<n> for one), /buzz plays a sine through the headphone/speaker codec, /display/text puts text on the DVI output -- the same addresses every Oscuino board uses, see ADDRESSES.md. The USB filter matches Adafruit's and Raspberry Pi's vendor ids to cover both firmwares' CDC identities."
     },
@@ -202,17 +400,172 @@
       "firmware": "circuitpython",
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x239A" }
+        {
+          "usbVendorId": "0x239A"
+        }
       ],
       "chips": [
-        { "label": "read A0", "addr": "/a/0", "args": "" },
-        { "label": "read A1", "addr": "/a/1", "args": "" },
-        { "label": "read D1", "addr": "/d/1", "args": "" },
-        { "label": "LED on", "addr": "/s/l", "args": "1" },
-        { "label": "LED off", "addr": "/s/l", "args": "0" },
-        { "label": "micros", "addr": "/s/m", "args": "" }
+        {
+          "label": "read A0",
+          "addr": "/a/0",
+          "args": ""
+        },
+        {
+          "label": "read A1",
+          "addr": "/a/1",
+          "args": ""
+        },
+        {
+          "label": "read D1",
+          "addr": "/d/1",
+          "args": ""
+        },
+        {
+          "label": "LED on",
+          "addr": "/s/l",
+          "args": "1"
+        },
+        {
+          "label": "LED off",
+          "addr": "/s/l",
+          "args": "0"
+        },
+        {
+          "label": "micros",
+          "addr": "/s/m",
+          "args": ""
+        }
       ],
       "note": "Runs code.py under CircuitPython, not an Arduino sketch -- see extras/python/. One example covers every Adafruit CircuitPython board: pins resolve by name at runtime, so /d/13 is board.D13 and /a/0 is board.A0, and the port filter matches on Adafruit's vendor id alone. boot.py must be copied along with code.py -- it adds the second CDC port (the data channel) that SLIP runs on; pick that SECOND port in the browser chooser. Analog reads are 16-bit, 0..65535."
+    },
+    {
+      "id": "XiaoC3",
+      "name": "Seeed XIAO ESP32-C3",
+      "mcu": "ESP32-C3",
+      "fqbn": "esp32:esp32:XIAO_ESP32C3",
+      "nativeUSB": true,
+      "usbFilters": [
+        {
+          "usbVendorId": "0x303A",
+          "usbProductId": "0x1001"
+        }
+      ],
+      "chips": [
+        {
+          "label": "read BOOT (D9)",
+          "addr": "/d/9",
+          "args": ""
+        },
+        {
+          "label": "BOOT, pull-up",
+          "addr": "/d/9/u",
+          "args": ""
+        },
+        {
+          "label": "read A0 (GPIO2)",
+          "addr": "/a/2",
+          "args": ""
+        },
+        {
+          "label": "read A1 (GPIO3)",
+          "addr": "/a/3",
+          "args": ""
+        },
+        {
+          "label": "read A2 (GPIO4)",
+          "addr": "/a/4",
+          "args": ""
+        },
+        {
+          "label": "micros",
+          "addr": "/s/m",
+          "args": ""
+        },
+        {
+          "label": "digital pins",
+          "addr": "/s/d",
+          "args": ""
+        }
+      ],
+      "note": "Stock FQBN defaults: this variant already sets build.cdc_on_boot=1, so do NOT add :CDCOnBoot=cdc -- that belongs to the generic esp32c3 devkit, whose boards.txt defaults it to 0. No /s/l here: the board's only LED is the one marked CH, wired to the battery charger rather than to a GPIO, and the variant defines no LED_BUILTIN, so OSCBoards.h leaves BOARD_HAS_LED undefined and the sketch does not claim an LED it has not got. Pads are D0..D10 = GPIO 2,3,4,5,6,7,21,20,8,9,10, with A0..A2 on GPIO 2,3,4 -- the /a/<n> addresses take the core's analogRead() argument, which on ESP32 is the GPIO number, hence /a/2 for A0. I2C is SDA=GPIO6, SCL=GPIO7 (the EGG SuperMini's 5/6 is a DIFFERENT board with the same chip). Transport ladder clean 2026-09-04: echo 22/22, widths 11/11, gate, in/out/compound/ring x3."
+    },
+    {
+      "id": "XiaoC3WiFi",
+      "sketch": "XiaoC3WiFi",
+      "name": "Seeed XIAO ESP32-C3, WiFi twin",
+      "mcu": "ESP32-C3",
+      "fqbn": "esp32:esp32:XIAO_ESP32C3",
+      "handwritten": true,
+      "transport": "http",
+      "nativeUSB": true,
+      "usbFilters": [
+        {
+          "usbVendorId": "0x303A",
+          "usbProductId": "0x1001"
+        }
+      ],
+      "chips": [
+        {
+          "label": "read button",
+          "addr": "/btn",
+          "args": ""
+        },
+        {
+          "label": "state now",
+          "addr": "/state",
+          "args": ""
+        },
+        {
+          "label": "rate 100 ms",
+          "addr": "/rate",
+          "args": "100"
+        },
+        {
+          "label": "stop stream",
+          "addr": "/rate",
+          "args": "0"
+        }
+      ],
+      "note": "Hand-written sketch (examples/XiaoC3WiFi); only this page is generated. UDP on 8000 for real OSC software, and an HTTP bridge for the browser, which cannot open UDP sockets: POST /osc with raw OSC bytes, GET /state for the state bundle, GET /enq for the greeting -- all OSC bytes, not JSON, so the page needs one decoder. The board has no display, so it prints its IP once over USB serial at boot and reports it again in /enq/net. Verified 2026-09-04: 7/7, UDP 20/20 round trips at a 13 ms median."
+    },
+    {
+      "id": "XiaoC3BLE",
+      "sketch": "XiaoC3BLE",
+      "name": "Seeed XIAO ESP32-C3, BLE twin",
+      "mcu": "ESP32-C3",
+      "fqbn": "esp32:esp32:XIAO_ESP32C3",
+      "handwritten": true,
+      "transport": "ble",
+      "nativeUSB": true,
+      "usbFilters": [
+        {
+          "usbVendorId": "0x303A",
+          "usbProductId": "0x1001"
+        }
+      ],
+      "chips": [
+        {
+          "label": "read button",
+          "addr": "/btn",
+          "args": ""
+        },
+        {
+          "label": "state now",
+          "addr": "/state",
+          "args": ""
+        },
+        {
+          "label": "rate 100 ms",
+          "addr": "/rate",
+          "args": "100"
+        },
+        {
+          "label": "stop stream",
+          "addr": "/rate",
+          "args": "0"
+        }
+      ],
+      "note": "Hand-written sketch (examples/XiaoC3BLE); only this page is generated. Nordic UART Service, so the same page serves this board, the nRF52840, the XIAO C6 and the MG24. No /s/l: this board's only LED belongs to its battery charger, so under 'absence is silence' it answers nothing. State is streamed only while a central is connected -- over USB you ask for /state instead."
     },
     {
       "id": "EggC3",
@@ -223,16 +576,47 @@
       "transport": "serial",
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x303A", "usbProductId": "0x1001" }
+        {
+          "usbVendorId": "0x303A",
+          "usbProductId": "0x1001"
+        }
       ],
       "chips": [
-        { "label": "read button", "addr": "/btn", "args": "" },
-        { "label": "LED on", "addr": "/s/l", "args": "1" },
-        { "label": "LED off", "addr": "/s/l", "args": "0" },
-        { "label": "OLED line", "addr": "/display/text", "args": "s:hello-from-osc" },
-        { "label": "read A0", "addr": "/a/0", "args": "" },
-        { "label": "read A1", "addr": "/a/1", "args": "" },
-        { "label": "micros", "addr": "/s/m", "args": "" }
+        {
+          "label": "read button",
+          "addr": "/btn",
+          "args": ""
+        },
+        {
+          "label": "LED on",
+          "addr": "/s/l",
+          "args": "1"
+        },
+        {
+          "label": "LED off",
+          "addr": "/s/l",
+          "args": "0"
+        },
+        {
+          "label": "OLED line",
+          "addr": "/display/text",
+          "args": "s:hello-from-osc"
+        },
+        {
+          "label": "read A0",
+          "addr": "/a/0",
+          "args": ""
+        },
+        {
+          "label": "read A1",
+          "addr": "/a/1",
+          "args": ""
+        },
+        {
+          "label": "micros",
+          "addr": "/s/m",
+          "args": ""
+        }
       ],
       "note": "Hand-written sketch (examples/EggC3Oscuino, needs U8g2); only this page is generated. /btn reads the BOOT button on GPIO9 (1 = pressed), /s/l the plain active-low LED on GPIO8, /display/text puts a line on the 72x40 OLED (5 lines of 15 characters, scrolling up; announced as /enq/display 15 5 only when the 0x3C ACK is seen at boot). Build with CDCOnBoot=cdc or the sketch says nothing. After esptool flashing, `esptool run` or a replug boots the app: the automatic reset is a no-op on this board. The USB filter is Espressif's USB-Serial-JTAG id."
     },
@@ -247,14 +631,37 @@
       "bundles": false,
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x303A", "usbProductId": "0x1001" }
+        {
+          "usbVendorId": "0x303A",
+          "usbProductId": "0x1001"
+        }
       ],
       "chips": [
-        { "label": "OLED lines", "addr": "/display/text", "args": "s:hello s:from s:the s:browser" },
-        { "label": "network panel", "addr": "/display/net", "args": "" },
-        { "label": "LED on", "addr": "/s/l", "args": "1" },
-        { "label": "LED off", "addr": "/s/l", "args": "0" },
-        { "label": "rate 100 ms", "addr": "/rate", "args": "100" }
+        {
+          "label": "OLED lines",
+          "addr": "/display/text",
+          "args": "s:hello s:from s:the s:browser"
+        },
+        {
+          "label": "network panel",
+          "addr": "/display/net",
+          "args": ""
+        },
+        {
+          "label": "LED on",
+          "addr": "/s/l",
+          "args": "1"
+        },
+        {
+          "label": "LED off",
+          "addr": "/s/l",
+          "args": "0"
+        },
+        {
+          "label": "rate 100 ms",
+          "addr": "/rate",
+          "args": "100"
+        }
       ],
       "note": "The WiFi twin of EggC3Oscuino: OSC on UDP port 8000 for OSC software, plus an HTTP bridge for this page because a browser cannot send UDP -- pick HTTP above and enter the IP the OLED shows. POST /osc carries the OSC bytes, GET /enq answers the enq bundle (with /enq/net ip rssi port), GET /state the /state + /btn bundle, polled at the /rate period. /display/text takes up to 5 lines, /display/net brings the IP panel back, /s/l is the active-low LED. Credentials come from arduino_secrets.h, see the sketch. The sketch parses each packet as one OSCMessage, so bundle starts unticked. Its USB port carries text logging only, not OSC."
     },
@@ -267,16 +674,46 @@
       "transport": "serial",
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x2886" }
+        {
+          "usbVendorId": "0x2886"
+        }
       ],
       "chips": [
-        { "label": "screen text", "addr": "/display/text", "args": "s:hello s:round s:world" },
-        { "label": "fill magenta", "addr": "/display/fill", "args": "120 0 40" },
-        { "label": "fill black", "addr": "/display/fill", "args": "0 0 0" },
-        { "label": "read RTC", "addr": "/rtc", "args": "" },
-        { "label": "touch rate 30 ms", "addr": "/rate", "args": "30" },
-        { "label": "read A0", "addr": "/a/0", "args": "" },
-        { "label": "micros", "addr": "/s/m", "args": "" }
+        {
+          "label": "screen text",
+          "addr": "/display/text",
+          "args": "s:hello s:round s:world"
+        },
+        {
+          "label": "fill magenta",
+          "addr": "/display/fill",
+          "args": "120 0 40"
+        },
+        {
+          "label": "fill black",
+          "addr": "/display/fill",
+          "args": "0 0 0"
+        },
+        {
+          "label": "read RTC",
+          "addr": "/rtc",
+          "args": ""
+        },
+        {
+          "label": "touch rate 30 ms",
+          "addr": "/rate",
+          "args": "30"
+        },
+        {
+          "label": "read A0",
+          "addr": "/a/0",
+          "args": ""
+        },
+        {
+          "label": "micros",
+          "addr": "/s/m",
+          "args": ""
+        }
       ],
       "note": "Hand-written sketch for any XIAO on the Round Display for XIAO (GC9A01 240x240 round LCD, CHSC6X touch, BM8563 RTC); brought up on the original SAMD21 XIAO, whose FQBN is above. Needs Adafruit GC9A01A (+GFX) and I2C BM8563 RTC. /display/text centres up to 4 lines, /display/fill floods the screen, /rtc reads or (with six ints) sets the clock and is announced only when the 0x51 ACK is seen; /touch x y streams while a finger is down, paced by /rate. The port filter matches Seeed's vendor id 0x2886; native USB, baud ignored."
     },
@@ -289,22 +726,77 @@
       "transport": "ble",
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x2886", "usbProductId": "0x8045" }
+        {
+          "usbVendorId": "0x2886",
+          "usbProductId": "0x8045"
+        }
       ],
       "chips": [
-        { "label": "read IMU", "addr": "/imu", "args": "" },
-        { "label": "stream 50 ms", "addr": "/rate", "args": "50" },
-        { "label": "stop stream", "addr": "/rate", "args": "0" },
-        { "label": "LED red", "addr": "/rgb", "args": "120 0 0" },
-        { "label": "LED green", "addr": "/rgb", "args": "0 120 0" },
-        { "label": "LED blue", "addr": "/rgb", "args": "0 0 120" },
-        { "label": "LED off", "addr": "/rgb", "args": "0 0 0" },
-        { "label": "mic level", "addr": "/mic", "args": "" },
-        { "label": "gain 50", "addr": "/mic/gain", "args": "50" },
-        { "label": "battery", "addr": "/bat", "args": "" },
-        { "label": "charge state", "addr": "/chg", "args": "" },
-        { "label": "charge 100 mA", "addr": "/chg", "args": "100" },
-        { "label": "micros", "addr": "/s/m", "args": "" }
+        {
+          "label": "read IMU",
+          "addr": "/imu",
+          "args": ""
+        },
+        {
+          "label": "stream 50 ms",
+          "addr": "/rate",
+          "args": "50"
+        },
+        {
+          "label": "stop stream",
+          "addr": "/rate",
+          "args": "0"
+        },
+        {
+          "label": "LED red",
+          "addr": "/rgb",
+          "args": "120 0 0"
+        },
+        {
+          "label": "LED green",
+          "addr": "/rgb",
+          "args": "0 120 0"
+        },
+        {
+          "label": "LED blue",
+          "addr": "/rgb",
+          "args": "0 0 120"
+        },
+        {
+          "label": "LED off",
+          "addr": "/rgb",
+          "args": "0 0 0"
+        },
+        {
+          "label": "mic level",
+          "addr": "/mic",
+          "args": ""
+        },
+        {
+          "label": "gain 50",
+          "addr": "/mic/gain",
+          "args": "50"
+        },
+        {
+          "label": "battery",
+          "addr": "/bat",
+          "args": ""
+        },
+        {
+          "label": "charge state",
+          "addr": "/chg",
+          "args": ""
+        },
+        {
+          "label": "charge 100 mA",
+          "addr": "/chg",
+          "args": "100"
+        },
+        {
+          "label": "micros",
+          "addr": "/s/m",
+          "args": ""
+        }
       ],
       "note": "Hand-written sketch serving USB serial and Bluetooth LE (Nordic UART Service) at once, so Web Serial and Web Bluetooth both work here; needs Seeed_Arduino_LSM6DS3. /rgb drives the one RGB LED, /imu answers six floats (g, then deg/s), /mic rms and peak with /mic/gain 0..80 (40 = unity, 0.5 dB a step), /bat millivolts, /chg the charger state and current (-1 until /chg 50 or /chg 100 sets it). /rate streams /state + /imu + /mic. The USB filter is the Sense's VID 0x2886 PID 0x8045."
     },
@@ -318,18 +810,57 @@
       "bundles": false,
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x303A", "usbProductId": "0x1001" }
+        {
+          "usbVendorId": "0x303A",
+          "usbProductId": "0x1001"
+        }
       ],
       "chips": [
-        { "label": "OLED text", "addr": "/display/text", "args": "s:OSC-over-USB s:XIAO-ESP32-C6" },
-        { "label": "big HELLO", "addr": "/display/big", "args": "s:HELLO" },
-        { "label": "clear", "addr": "/display/clear", "args": "" },
-        { "label": "invert", "addr": "/display/invert", "args": "1" },
-        { "label": "buzz C5", "addr": "/buzz", "args": "523 200" },
-        { "label": "silence", "addr": "/buzz", "args": "0" },
-        { "label": "LED on", "addr": "/s/l", "args": "1" },
-        { "label": "LED off", "addr": "/s/l", "args": "0" },
-        { "label": "rate 50 ms", "addr": "/rate", "args": "50" }
+        {
+          "label": "OLED text",
+          "addr": "/display/text",
+          "args": "s:OSC-over-USB s:XIAO-ESP32-C6"
+        },
+        {
+          "label": "big HELLO",
+          "addr": "/display/big",
+          "args": "s:HELLO"
+        },
+        {
+          "label": "clear",
+          "addr": "/display/clear",
+          "args": ""
+        },
+        {
+          "label": "invert",
+          "addr": "/display/invert",
+          "args": "1"
+        },
+        {
+          "label": "buzz C5",
+          "addr": "/buzz",
+          "args": "523 200"
+        },
+        {
+          "label": "silence",
+          "addr": "/buzz",
+          "args": "0"
+        },
+        {
+          "label": "LED on",
+          "addr": "/s/l",
+          "args": "1"
+        },
+        {
+          "label": "LED off",
+          "addr": "/s/l",
+          "args": "0"
+        },
+        {
+          "label": "rate 50 ms",
+          "addr": "/rate",
+          "args": "50"
+        }
       ],
       "note": "Hand-written sketch for the XIAO Expansion Board's 128x64 OLED (0x3C), passive buzzer (D3) and user button (D1); needs Adafruit SSD1306 + GFX. Stock FQBN defaults: this variant sets cdc_on_boot itself, do not add CDCOnBoot. /display/text takes four lines, /display/big one centred line, /display/clear and /display/invert do what they say, /buzz hz ms, /s/l the XIAO's LED, /rate the /state + /btn period (20..2000 ms). The sketch parses each packet as one OSCMessage, so bundle starts unticked. The USB filter is Espressif's USB-Serial-JTAG id."
     },
@@ -344,19 +875,62 @@
       "bundles": false,
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x303A", "usbProductId": "0x1001" }
+        {
+          "usbVendorId": "0x303A",
+          "usbProductId": "0x1001"
+        }
       ],
       "chips": [
-        { "label": "OLED text", "addr": "/display/text", "args": "s:OSC-over-WiFi s:XIAO-ESP32-C6" },
-        { "label": "big HELLO", "addr": "/display/big", "args": "s:HELLO" },
-        { "label": "clear", "addr": "/display/clear", "args": "" },
-        { "label": "invert", "addr": "/display/invert", "args": "1" },
-        { "label": "network panel", "addr": "/display/net", "args": "" },
-        { "label": "buzz C5", "addr": "/buzz", "args": "523 200" },
-        { "label": "silence", "addr": "/buzz", "args": "0" },
-        { "label": "LED on", "addr": "/s/l", "args": "1" },
-        { "label": "LED off", "addr": "/s/l", "args": "0" },
-        { "label": "rate 100 ms", "addr": "/rate", "args": "100" }
+        {
+          "label": "OLED text",
+          "addr": "/display/text",
+          "args": "s:OSC-over-WiFi s:XIAO-ESP32-C6"
+        },
+        {
+          "label": "big HELLO",
+          "addr": "/display/big",
+          "args": "s:HELLO"
+        },
+        {
+          "label": "clear",
+          "addr": "/display/clear",
+          "args": ""
+        },
+        {
+          "label": "invert",
+          "addr": "/display/invert",
+          "args": "1"
+        },
+        {
+          "label": "network panel",
+          "addr": "/display/net",
+          "args": ""
+        },
+        {
+          "label": "buzz C5",
+          "addr": "/buzz",
+          "args": "523 200"
+        },
+        {
+          "label": "silence",
+          "addr": "/buzz",
+          "args": "0"
+        },
+        {
+          "label": "LED on",
+          "addr": "/s/l",
+          "args": "1"
+        },
+        {
+          "label": "LED off",
+          "addr": "/s/l",
+          "args": "0"
+        },
+        {
+          "label": "rate 100 ms",
+          "addr": "/rate",
+          "args": "100"
+        }
       ],
       "note": "The WiFi twin of XiaoC6ExpOscuino: the same OLED, buzzer and button over OSC on UDP port 8000, plus an HTTP bridge for this page because a browser cannot send UDP -- pick HTTP above and enter the address the OLED shows. POST /osc carries the OSC bytes, GET /enq the enq bundle (with /enq/net ip rssi port), GET /state the /state + /btn bundle, polled at the /rate period. /display/net brings the board's own IP panel back. Credentials come from arduino_secrets.h, see the sketch. Parses each packet as one OSCMessage, so bundle starts unticked. Its USB port carries text logging only, not OSC."
     },
@@ -370,17 +944,52 @@
       "transport": "ble",
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x303A", "usbProductId": "0x1001" }
+        {
+          "usbVendorId": "0x303A",
+          "usbProductId": "0x1001"
+        }
       ],
       "chips": [
-        { "label": "OLED text", "addr": "/display/text", "args": "s:OSC-over-BLE s:XIAO-ESP32-C6" },
-        { "label": "clear", "addr": "/display/clear", "args": "" },
-        { "label": "buzz C5", "addr": "/buzz", "args": "523 200" },
-        { "label": "silence", "addr": "/buzz", "args": "0" },
-        { "label": "LED on", "addr": "/s/l", "args": "1" },
-        { "label": "LED off", "addr": "/s/l", "args": "0" },
-        { "label": "stream 100 ms", "addr": "/rate", "args": "100" },
-        { "label": "stop stream", "addr": "/rate", "args": "0" }
+        {
+          "label": "OLED text",
+          "addr": "/display/text",
+          "args": "s:OSC-over-BLE s:XIAO-ESP32-C6"
+        },
+        {
+          "label": "clear",
+          "addr": "/display/clear",
+          "args": ""
+        },
+        {
+          "label": "buzz C5",
+          "addr": "/buzz",
+          "args": "523 200"
+        },
+        {
+          "label": "silence",
+          "addr": "/buzz",
+          "args": "0"
+        },
+        {
+          "label": "LED on",
+          "addr": "/s/l",
+          "args": "1"
+        },
+        {
+          "label": "LED off",
+          "addr": "/s/l",
+          "args": "0"
+        },
+        {
+          "label": "stream 100 ms",
+          "addr": "/rate",
+          "args": "100"
+        },
+        {
+          "label": "stop stream",
+          "addr": "/rate",
+          "args": "0"
+        }
       ],
       "note": "The third twin: the same vocabulary over Bluetooth LE (Nordic UART Service, through the sketch's ble_stream.h adapter) and over USB serial at the same time, so Web Bluetooth and Web Serial both work here. /display/text takes four lines, /display/clear blanks the OLED, /buzz hz ms, /s/l the XIAO's LED (active low on this module), /rate the /state + /btn period. Needs Adafruit SSD1306 + GFX; stock FQBN defaults. The USB filter is Espressif's USB-Serial-JTAG id."
     },
@@ -395,14 +1004,46 @@
       "nativeUSB": false,
       "usbFilters": [],
       "chips": [
-        { "label": "LED on", "addr": "/s/l", "args": "1" },
-        { "label": "LED off", "addr": "/s/l", "args": "0" },
-        { "label": "state", "addr": "/state", "args": "" },
-        { "label": "stream 100 ms", "addr": "/rate", "args": "100" },
-        { "label": "stop stream", "addr": "/rate", "args": "0" },
-        { "label": "micros", "addr": "/s/m", "args": "" },
-        { "label": "digital pins", "addr": "/s/d", "args": "" },
-        { "label": "analog pins", "addr": "/s/a", "args": "" }
+        {
+          "label": "LED on",
+          "addr": "/s/l",
+          "args": "1"
+        },
+        {
+          "label": "LED off",
+          "addr": "/s/l",
+          "args": "0"
+        },
+        {
+          "label": "state",
+          "addr": "/state",
+          "args": ""
+        },
+        {
+          "label": "stream 100 ms",
+          "addr": "/rate",
+          "args": "100"
+        },
+        {
+          "label": "stop stream",
+          "addr": "/rate",
+          "args": "0"
+        },
+        {
+          "label": "micros",
+          "addr": "/s/m",
+          "args": ""
+        },
+        {
+          "label": "digital pins",
+          "addr": "/s/d",
+          "args": ""
+        },
+        {
+          "label": "analog pins",
+          "addr": "/s/a",
+          "args": ""
+        }
       ],
       "note": "Hand-written sketch: the standard pin set plus /state and /rate, over Bluetooth LE (Nordic UART Service, built on sl_bt_gattdb_* because the core's ezBLE cannot notify) and over the USB serial at the same time. The protocol_stack=ble_silabs option is required. That USB port is a CMSIS-DAP VCOM bridge at 115200 baud, which the sketch header records as losing data past ~242 bytes per write and wedging until a replug past ~396; nothing this page sends is that large. Its USB id was not recorded, so the port chooser is unfiltered here."
     },
@@ -416,18 +1057,54 @@
       "transport": "serial",
       "nativeUSB": true,
       "usbFilters": [
-        { "usbVendorId": "0x239A" },
-        { "usbVendorId": "0x2E8A" }
+        {
+          "usbVendorId": "0x239A"
+        },
+        {
+          "usbVendorId": "0x2E8A"
+        }
       ],
       "chips": [
-        { "label": "read buttons", "addr": "/btn", "args": "" },
-        { "label": "LEDs red", "addr": "/rgb", "args": "255 0 0" },
-        { "label": "LEDs teal", "addr": "/rgb", "args": "0 128 96" },
-        { "label": "LEDs off", "addr": "/rgb", "args": "0 0 0" },
-        { "label": "beep 880Hz", "addr": "/buzz", "args": "880 400" },
-        { "label": "beep off", "addr": "/buzz", "args": "0" },
-        { "label": "DVI text", "addr": "/display/text", "args": "s:hello-from-osc" },
-        { "label": "read A0", "addr": "/a/0", "args": "" }
+        {
+          "label": "read buttons",
+          "addr": "/btn",
+          "args": ""
+        },
+        {
+          "label": "LEDs red",
+          "addr": "/rgb",
+          "args": "255 0 0"
+        },
+        {
+          "label": "LEDs teal",
+          "addr": "/rgb",
+          "args": "0 128 96"
+        },
+        {
+          "label": "LEDs off",
+          "addr": "/rgb",
+          "args": "0 0 0"
+        },
+        {
+          "label": "beep 880Hz",
+          "addr": "/buzz",
+          "args": "880 400"
+        },
+        {
+          "label": "beep off",
+          "addr": "/buzz",
+          "args": "0"
+        },
+        {
+          "label": "DVI text",
+          "addr": "/display/text",
+          "args": "s:hello-from-osc"
+        },
+        {
+          "label": "read A0",
+          "addr": "/a/0",
+          "args": ""
+        }
       ],
       "note": "The hand-written Arduino sketch for the Fruit Jam (arduino-pico >= 6.0.0; needs Adafruit NeoPXL8, Adafruit TLV320 I2S and Adafruit DVI HSTX -- not PicoDVI, which wedges the boot on this board). The CircuitPython firmware in extras/python/FruitJamOscuino/ speaks the same addresses. /btn reads the three user buttons (1 = pressed), /rgb drives the five NeoPixels (/rgb/<n> for one), /buzz plays a sine through the headphone/speaker codec, /display/text prints a line on the DVI output; /enq/buzz and /enq/display appear in /enq only when the codec and the display came up. The USB filter matches Adafruit's and Raspberry Pi's vendor ids to cover both firmwares' CDC identities."
     }
