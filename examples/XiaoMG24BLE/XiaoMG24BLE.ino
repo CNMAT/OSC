@@ -198,6 +198,7 @@ void routeRate(OSCMessage &msg, int addrOffset) {
 void routeEnq(OSCMessage &msg, int addrOffset) {
   (void)msg; (void)addrOffset;
   bundleOUT.add("/enq").add("XiaoMG24BLE");
+  bundleOUT.add("/enq/led");        // this board has a plain LED on /s/l
 }
 
 static void dispatchAll(OSCBundle &b) {

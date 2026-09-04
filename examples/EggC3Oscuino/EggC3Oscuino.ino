@@ -194,6 +194,7 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
 // ---- capability routes -------------------------------------------------------
 static void addEnq() {
   bundleOUT.add("/enq").add("EggC3Oscuino");
+  bundleOUT.add("/enq/led");        // this board has a plain LED on /s/l
   bundleOUT.add("/enq/btn").add((intOSC_t)1);
   if (dispOK) bundleOUT.add("/enq/display").add((intOSC_t)OLED_COLS).add((intOSC_t)OLED_LINES);
 }

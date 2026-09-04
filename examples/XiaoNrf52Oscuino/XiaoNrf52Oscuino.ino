@@ -299,6 +299,7 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
 
 static void addEnq() {
   bundleOUT.add("/enq").add("XiaoNrf52Oscuino");
+  bundleOUT.add("/enq/led");        // this board has a plain LED on /s/l
   bundleOUT.add("/enq/rgb").add((intOSC_t)1);
   if (imuOK) bundleOUT.add("/enq/imu").add((intOSC_t)6);
   if (micOK) bundleOUT.add("/enq/mic");

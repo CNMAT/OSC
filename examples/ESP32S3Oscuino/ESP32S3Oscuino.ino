@@ -51,6 +51,12 @@ SLIPEncodedSerial SLIPSerial(Serial);
 
 // This variant's NUM_*_PINS macros match its pads; nothing to clamp.
 
+// A user button, when boards.json names its pin. Guessing one is not
+// harmless -- the pin is an input on one board and a bus line on the next --
+// so a board that does not declare it simply has no /btn, and the generic
+// /d/<pin> read still works for anyone who knows the wiring.
+// This board declares no user button in boards.json.
+
 static const unsigned long BAUD = 115200;   // ignored on native USB, but Web Serial still demands a value
 
 static OSCBundle bundleOUT;
@@ -166,6 +172,71 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
 #endif
 }
 
+// /state and /rate, the core streaming pair (ADDRESSES.md). A pin-only board
+// has nothing to stream but a heartbeat, so the default is 0 -- silent until
+// a client asks -- rather than chattering at every browser that connects.
+// /state still answers on request at any time, and the sequence number is
+// what makes a dropped packet visible instead of merely late.
+static int32_t  seq      = 0;
+static uint32_t reportMs = 0;            // 0 = not streaming
+
+#ifdef BOARD_BUTTON_PIN
+static void addBtn() {
+  const int raw = digitalRead(BOARD_BUTTON_PIN);
+  bundleOUT.add("/btn").add((intOSC_t)(BOARD_BUTTON_ACTIVE_LOW ? raw == LOW : raw == HIGH));
+}
+
+// /enq/btn promises a client can ASK, not merely that it rides in the stream.
+void routeBtn(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  addBtn();
+}
+#endif
+
+static void addState() {
+  bundleOUT.add("/state").add((intOSC_t)seq).add((intOSC_t)millis());
+#ifdef BOARD_BUTTON_PIN
+  addBtn();                      // beside /state, as the hand-written twins do
+#endif
+}
+
+void routeState(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  addState();
+}
+
+void routeRate(OSCMessage &msg, int addrOffset) {
+  (void)addrOffset;
+  if (msg.isInt(0)) {
+    const int32_t v = msg.getInt(0);
+    // 0 STOPS. Clamping it to a minimum would make "be quiet" stream faster,
+    // which is exactly the bug found on the C6 twin on 2026-09-04.
+    reportMs = (v <= 0) ? 0 : (uint32_t)constrain(v, 20, 2000);
+  }
+  bundleOUT.add("/rate").add((intOSC_t)reportMs);
+}
+
+// The greeting of ADDRESSES.md: the sketch name, then one /enq line per
+// capability actually present. This template drives pins, so the only thing
+// it can claim is the plain LED -- and only where the variant has one.
+// OSCBoards.h defines BOARD_HAS_LED from LED_BUILTIN, so a board like the
+// XIAO ESP32-C3, whose only LED belongs to its battery charger, announces
+// nothing here and stays silent on /s/l. Absence is silence.
+static void addEnq() {
+  bundleOUT.add("/enq").add("ESP32S3Oscuino");
+#ifdef BOARD_HAS_LED
+  bundleOUT.add("/enq/led");
+#endif
+#ifdef BOARD_BUTTON_PIN
+  bundleOUT.add("/enq/btn").add((intOSC_t)1);
+#endif
+}
+
+void routeEnq(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  addEnq();
+}
+
 // -----------------------------------------------------------------------------
 
 void setup() {
@@ -173,11 +244,16 @@ void setup() {
 #ifdef BOARD_HAS_LED
   pinMode(LED_BUILTIN, OUTPUT);
 #endif
+#ifdef BOARD_BUTTON_PIN
+  pinMode(BOARD_BUTTON_PIN, BOARD_BUTTON_ACTIVE_LOW ? INPUT_PULLUP : INPUT);
+#endif
 
-  // Native-USB boards enumerate after begin(); give the host a moment, then say
-  // hello so the browser log shows something the instant it connects.
+  // Native-USB boards enumerate after begin(); give the host a moment, then
+  // greet, so the browser log shows something the instant it connects. The
+  // boot greeting is usually lost anyway (the host opens the port later), so
+  // /enq is an INBOUND address too -- see routeEnq above.
   delay(300);
-  bundleOUT.add("/enq").add("ESP32S3Oscuino");
+  addEnq();
   SLIPSerial.beginPacket();
   bundleOUT.send(SLIPSerial);
   SLIPSerial.endPacket();
@@ -219,6 +295,12 @@ void loop() {
       bundleIN.route("/a", routeAnalog);
       bundleIN.route("/tone", routeTone);
       bundleIN.route("/s", routeSystem);
+      bundleIN.route("/enq", routeEnq);
+      bundleIN.route("/state", routeState);
+      bundleIN.route("/rate", routeRate);
+#ifdef BOARD_BUTTON_PIN
+      bundleIN.route("/btn", routeBtn);
+#endif
     }
     bundleIN.empty();
   }
@@ -226,6 +308,14 @@ void loop() {
   // Only transmit when a route actually produced something. Sending an empty
   // bundle every pass would flood the port at loop speed and drown the replies
   // you care about.
+  static uint32_t lastReport = 0;
+  const uint32_t now = millis();
+  if (reportMs != 0 && now - lastReport >= reportMs) {
+    lastReport = now;
+    seq++;
+    addState();
+  }
+
   if (bundleOUT.size() > 0) {
     SLIPSerial.beginPacket();
     bundleOUT.send(SLIPSerial);

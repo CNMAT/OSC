@@ -8,7 +8,7 @@
  * Board : Seeed XIAO ESP32-C3 (ESP32-C3)
  * FQBN  : esp32:esp32:XIAO_ESP32C3
  *
- * Stock FQBN defaults: this variant already sets build.cdc_on_boot=1, so do NOT add :CDCOnBoot=cdc -- that belongs to the generic esp32c3 devkit, whose boards.txt defaults it to 0. No /s/l here: the board's only LED is the one marked CH, wired to the battery charger rather than to a GPIO, and the variant defines no LED_BUILTIN, so OSCBoards.h leaves BOARD_HAS_LED undefined and the sketch does not claim an LED it has not got. Pads are D0..D10 = GPIO 2,3,4,5,6,7,21,20,8,9,10, with A0..A2 on GPIO 2,3,4 -- the /a/<n> addresses take the core's analogRead() argument, which on ESP32 is the GPIO number, hence /a/2 for A0. I2C is SDA=GPIO6, SCL=GPIO7 (the EGG SuperMini's 5/6 is a DIFFERENT board with the same chip). Transport ladder clean 2026-09-04: echo 22/22, widths 11/11, gate, in/out/compound/ring x3.
+ * Stock FQBN defaults: this variant already sets build.cdc_on_boot=1, so do NOT add :CDCOnBoot=cdc -- that belongs to the generic esp32c3 devkit, whose boards.txt defaults it to 0. No /s/l here: the board's only LED is the one marked CH, wired to the battery charger rather than to a GPIO, and the variant defines no LED_BUILTIN, so OSCBoards.h leaves BOARD_HAS_LED undefined and the sketch does not claim an LED it has not got. Pads are D0..D10 = GPIO 2,3,4,5,6,7,21,20,8,9,10, with A0..A2 on GPIO 2,3,4 -- the /a/<n> addresses take the core's analogRead() argument, which on ESP32 is the GPIO number, hence /a/2 for A0. I2C is SDA=GPIO6, SCL=GPIO7 (the EGG SuperMini's 5/6 is a DIFFERENT board with the same chip). Transport ladder clean 2026-09-04: echo 22/22, widths 11/11, gate, in/out/compound/ring x3. BUTTON PIN UNVERIFIED: GPIO9 is the documented BOOT button and the /btn plumbing is proven on hardware (announced in /enq, answered on request, carried beside /state), but no press has been observed -- /btn and the raw /d/9 both stayed released through two sampling windows on 2026-09-04. One press closes it; until then the pin is documentation, not measurement.
  *
  * Pair this with XiaoC3Oscuino.html, sitting next to this file. Serve that page
  * over http://localhost or https:// (Web Serial refuses a file:// origin), click
@@ -50,6 +50,13 @@ SLIPEncodedSerial SLIPSerial(Serial);
 #endif
 
 // This variant's NUM_*_PINS macros match its pads; nothing to clamp.
+
+// A user button, when boards.json names its pin. Guessing one is not
+// harmless -- the pin is an input on one board and a bus line on the next --
+// so a board that does not declare it simply has no /btn, and the generic
+// /d/<pin> read still works for anyone who knows the wiring.
+#define BOARD_BUTTON_PIN 9
+#define BOARD_BUTTON_ACTIVE_LOW 1
 
 static const unsigned long BAUD = 115200;   // ignored on native USB, but Web Serial still demands a value
 
@@ -166,6 +173,71 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
 #endif
 }
 
+// /state and /rate, the core streaming pair (ADDRESSES.md). A pin-only board
+// has nothing to stream but a heartbeat, so the default is 0 -- silent until
+// a client asks -- rather than chattering at every browser that connects.
+// /state still answers on request at any time, and the sequence number is
+// what makes a dropped packet visible instead of merely late.
+static int32_t  seq      = 0;
+static uint32_t reportMs = 0;            // 0 = not streaming
+
+#ifdef BOARD_BUTTON_PIN
+static void addBtn() {
+  const int raw = digitalRead(BOARD_BUTTON_PIN);
+  bundleOUT.add("/btn").add((intOSC_t)(BOARD_BUTTON_ACTIVE_LOW ? raw == LOW : raw == HIGH));
+}
+
+// /enq/btn promises a client can ASK, not merely that it rides in the stream.
+void routeBtn(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  addBtn();
+}
+#endif
+
+static void addState() {
+  bundleOUT.add("/state").add((intOSC_t)seq).add((intOSC_t)millis());
+#ifdef BOARD_BUTTON_PIN
+  addBtn();                      // beside /state, as the hand-written twins do
+#endif
+}
+
+void routeState(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  addState();
+}
+
+void routeRate(OSCMessage &msg, int addrOffset) {
+  (void)addrOffset;
+  if (msg.isInt(0)) {
+    const int32_t v = msg.getInt(0);
+    // 0 STOPS. Clamping it to a minimum would make "be quiet" stream faster,
+    // which is exactly the bug found on the C6 twin on 2026-09-04.
+    reportMs = (v <= 0) ? 0 : (uint32_t)constrain(v, 20, 2000);
+  }
+  bundleOUT.add("/rate").add((intOSC_t)reportMs);
+}
+
+// The greeting of ADDRESSES.md: the sketch name, then one /enq line per
+// capability actually present. This template drives pins, so the only thing
+// it can claim is the plain LED -- and only where the variant has one.
+// OSCBoards.h defines BOARD_HAS_LED from LED_BUILTIN, so a board like the
+// XIAO ESP32-C3, whose only LED belongs to its battery charger, announces
+// nothing here and stays silent on /s/l. Absence is silence.
+static void addEnq() {
+  bundleOUT.add("/enq").add("XiaoC3Oscuino");
+#ifdef BOARD_HAS_LED
+  bundleOUT.add("/enq/led");
+#endif
+#ifdef BOARD_BUTTON_PIN
+  bundleOUT.add("/enq/btn").add((intOSC_t)1);
+#endif
+}
+
+void routeEnq(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  addEnq();
+}
+
 // -----------------------------------------------------------------------------
 
 void setup() {
@@ -173,11 +245,16 @@ void setup() {
 #ifdef BOARD_HAS_LED
   pinMode(LED_BUILTIN, OUTPUT);
 #endif
+#ifdef BOARD_BUTTON_PIN
+  pinMode(BOARD_BUTTON_PIN, BOARD_BUTTON_ACTIVE_LOW ? INPUT_PULLUP : INPUT);
+#endif
 
-  // Native-USB boards enumerate after begin(); give the host a moment, then say
-  // hello so the browser log shows something the instant it connects.
+  // Native-USB boards enumerate after begin(); give the host a moment, then
+  // greet, so the browser log shows something the instant it connects. The
+  // boot greeting is usually lost anyway (the host opens the port later), so
+  // /enq is an INBOUND address too -- see routeEnq above.
   delay(300);
-  bundleOUT.add("/enq").add("XiaoC3Oscuino");
+  addEnq();
   SLIPSerial.beginPacket();
   bundleOUT.send(SLIPSerial);
   SLIPSerial.endPacket();
@@ -219,6 +296,12 @@ void loop() {
       bundleIN.route("/a", routeAnalog);
       bundleIN.route("/tone", routeTone);
       bundleIN.route("/s", routeSystem);
+      bundleIN.route("/enq", routeEnq);
+      bundleIN.route("/state", routeState);
+      bundleIN.route("/rate", routeRate);
+#ifdef BOARD_BUTTON_PIN
+      bundleIN.route("/btn", routeBtn);
+#endif
     }
     bundleIN.empty();
   }
@@ -226,6 +309,14 @@ void loop() {
   // Only transmit when a route actually produced something. Sending an empty
   // bundle every pass would flood the port at loop speed and drown the replies
   // you care about.
+  static uint32_t lastReport = 0;
+  const uint32_t now = millis();
+  if (reportMs != 0 && now - lastReport >= reportMs) {
+    lastReport = now;
+    seq++;
+    addState();
+  }
+
   if (bundleOUT.size() > 0) {
     SLIPSerial.beginPacket();
     bundleOUT.send(SLIPSerial);

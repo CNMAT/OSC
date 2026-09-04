@@ -200,6 +200,7 @@ static void addState() {
 
 static void addEnq() {
   bundleOUT.add("/enq").add("XiaoC6ExpBLE");
+  bundleOUT.add("/enq/led");        // this board has a plain LED on /s/l
   bundleOUT.add("/enq/btn").add((intOSC_t)1);
   bundleOUT.add("/enq/buzz");
   if (displayOK) bundleOUT.add("/enq/display").add((intOSC_t)OLED_W).add((intOSC_t)OLED_H);

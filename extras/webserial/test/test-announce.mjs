@@ -26,7 +26,7 @@ const EXAMPLES = join(ROOT, "examples");
 const ASK = {
   btn: "/btn", imu: "/imu", cap: "/cap", joy: "/joy", pot: "/pot",
   bat: "/bat", light: "/light", temp: "/temp", hum: "/hum",
-  chg: "/chg", enc: "/enc", rtc: "/rtc", mic: "/mic",
+  chg: "/chg", enc: "/enc", rtc: "/rtc", mic: "/mic", volts: "/s/v",
 };
 
 const ENQ = /"\/enq\/([a-z]+)"/g;

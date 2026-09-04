@@ -185,6 +185,7 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
 // ---- capability routes -------------------------------------------------------
 static void addEnq() {
   bundleOUT.add("/enq").add("FruitJamOscuino");
+  bundleOUT.add("/enq/led");        // this board has a plain LED on /s/l
   bundleOUT.add("/enq/btn").add((intOSC_t)3);
   bundleOUT.add("/enq/rgb").add((intOSC_t)NUM_NEOPIXEL);
   if (codecOK) bundleOUT.add("/enq/buzz");

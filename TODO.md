@@ -241,6 +241,16 @@ Re-verified so far:
 | XIAO ESP32-C6, WiFi (`XiaoC6ExpWiFi`) | 2026-09-04: 7/7 — UDP 20/20 round trips (median 10 ms), state bundle, CORS, `GET /enq`, `POST /osc` |
 | XIAO ESP32-C6, BLE (`XiaoC6ExpBLE`) | 2026-09-04: greeting, echoes, 12 consecutive `/state` bundles seq 2208..2219 with no gaps at 100 ms, `/rate 0` stops |
 
+**Open on the XIAO ESP32-C3: the button pin has never been seen to move.**
+`boards.json` declares `button: {pin: 9}` from Seeed's documentation, and the
+plumbing is verified on hardware — `/enq/btn` announced, `/btn` answered on
+request, `/btn` carried beside `/state`, and the three C3 sketches finally
+agree with each other. But across two sampling windows on 2026-09-04 (63
+samples over 20 s, `/btn` and the raw `/d/9` polled together) both stayed
+released, so nothing distinguishes "nobody pressed it" from "wrong pin". One
+press closes it. Until then the pin is documentation, and BRINGUP.md Phase 0
+is explicit that documentation is not measurement.
+
 The C6 is the first board verified on all three transports since the rename.
 Each pass found real defects rather than confirming a hope: `/rate 0` clamped
 to 20 ms so "stop" streamed faster, actuators never echoed, `/s/m` unanswered,

@@ -246,6 +246,7 @@ static void routeImu(OSCMessage &) { if (accelOK) addImu(); }      // /imu
 // line is only there when the LIS3DH answered at boot.
 static void addEnq() {
   bundleOUT.add("/enq").add("HallowingOscuino");
+  bundleOUT.add("/enq/led");        // this board has a plain LED on /s/l
   bundleOUT.add("/enq/display").add((intOSC_t) TFT_W).add((intOSC_t) TFT_H);
   bundleOUT.add("/enq/buzz");
   bundleOUT.add("/enq/rgb").add((intOSC_t) 1);

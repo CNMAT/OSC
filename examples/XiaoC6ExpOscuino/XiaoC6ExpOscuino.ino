@@ -199,6 +199,7 @@ static void routeRate(OSCMessage &m) {
 static void sendEnq() {
   OSCBundle b;
   b.add("/enq").add("XiaoC6ExpOscuino");
+  b.add("/enq/led");        // this board has a plain LED on /s/l
   b.add("/enq/btn").add((intOSC_t) 1);
   b.add("/enq/buzz");
   if (displayOK) b.add("/enq/display").add((intOSC_t) OLED_W).add((intOSC_t) OLED_H);

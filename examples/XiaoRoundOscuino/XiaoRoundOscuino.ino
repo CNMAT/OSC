@@ -212,6 +212,7 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
 // ---- capability routes -------------------------------------------------------
 static void addEnq() {
   bundleOUT.add("/enq").add("XiaoRoundOscuino");
+  bundleOUT.add("/enq/led");        // this board has a plain LED on /s/l
   bundleOUT.add("/enq/display").add((intOSC_t)240).add((intOSC_t)240);
   // /enq/touch is unconditional: the CHSC6X only answers I2C while a finger
   // is down, so a boot probe cannot see it (measured, see the header), and

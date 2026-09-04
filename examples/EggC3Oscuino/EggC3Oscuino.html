@@ -421,10 +421,24 @@ the browser</textarea>
       <button data-a="/s/m" data-g="">/s/m micros</button>
       <button data-a="/s/d" data-g="">/s/d pins</button>
       <button data-a="/s/a" data-g="">/s/a analog pins</button>
-      <button data-a="/s/v" data-g="">/s/v volts</button>
+    </div>
+  </div>
+
+  <!-- led and volts keep their 2012 addresses but are announced capabilities:
+       not every board has an LED (the XIAO ESP32-C3's belongs to its battery
+       charger) and almost none can measure their own supply. Hidden until the
+       board says otherwise, so no control is offered that can only be silent. -->
+  <div class="panel cap" data-cap="led" hidden>
+    <div class="ph"><label>led</label></div>
+    <div class="row">
       <button data-a="/s/l" data-g="1">LED on</button>
       <button data-a="/s/l" data-g="0">LED off</button>
     </div>
+  </div>
+
+  <div class="panel cap" data-cap="volts" hidden>
+    <div class="ph"><label>volts</label></div>
+    <div class="row"><span class="v" id="voltsV">&ndash;</span><button data-a="/s/v" data-g="">/s/v volts</button></div>
   </div>
 
   <div class="panel">
@@ -690,7 +704,7 @@ class SlipDecoder {                   // a TransformStream transformer; the BLE
 // The panels, in page order. /enq/<name> for anything else is still listed
 // in the capability chips, it just has no panel.
 const PANEL_ORDER = ["rgb", "display", "buzz", "btn", "imu", "mic", "light", "temp",
-  "hum", "bat", "chg", "touch", "cap", "joy", "pot", "enc", "rtc", "rfid", "cam",
+  "hum", "led", "volts", "bat", "chg", "touch", "cap", "joy", "pot", "enc", "rtc", "rfid", "cam",
   "motor", "servo", "relay", "net"];
 
 function newModel() {
@@ -1362,6 +1376,8 @@ const RENDER = {
   light(m) { const v = m.values.light; if (v) $("lightV").textContent = fmt(v[0]) + " (raw)"; },
   temp(m)  { const v = m.values.temp;  if (v) $("tempV").textContent = fmt(v[0], 1) + " °C"; },
   hum(m)   { const v = m.values.hum;   if (v) $("humV").textContent  = fmt(v[0], 1) + " %"; },
+  volts(m) { const v = m.values["s/v"] || m.values.volts;
+             if (v) $("voltsV").textContent = fmt(v[0], 2) + " V"; },
   bat(m)   { const v = m.values.bat;   if (v) $("batV").textContent = fmt(v[0]) + " mV"; },
   chg(m) {
     const v = m.values.chg;

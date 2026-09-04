@@ -34,8 +34,6 @@ asked, because the boot one is usually lost to USB enumeration.
 | `/c/<pin>` | ask | capacitance sense on a pin (AVR) → `/c/<pin> <i>` |
 | `/s/m` | ask | `/s/m <i>` micros |
 | `/s/d`, `/s/a` | ask | `/s/d <i>` digital pin count, `/s/a <i>` analog pin count |
-| `/s/l <i>` | write | the board's plain LED; echoed. There is no other LED address. |
-| `/s/v` | ask | `/s/v <f>` supply voltage, volts (was `/s/s`) |
 | `/s/q` | write | Python firmwares only: exit to the REPL |
 | `/rate <i>` | write | streaming period in ms; 0 stops. Echoed. |
 | `/heartbeat <i>` | write | stream at least this often even if nothing changed; 0 disables |
@@ -46,6 +44,13 @@ A stream is a bundle sent every `/rate` ms containing `/state` and the
 readings of whatever capabilities the board streams. Nothing is streamed
 under a board's name. An actuator may be streamed too, to report the state
 it is in.
+
+**A capability's addresses usually live under its own root** — `rgb` owns
+`/rgb…`, `display` owns `/display/…`. Three do not, and deliberately: `led`
+and `volts` keep the `/s/l` and `/s/v` of the 2012 set so existing clients
+keep working, and `net` announces an address (`/display/net`) that belongs to
+the display it draws on. The `/enq` line is what a page needs; the address is
+what the wire needs, and they are allowed to differ when history says so.
 
 **Absence is silence.** A capability the board does not have is simply
 missing from the `/enq` bundle, and a request to it answers *nothing*.
@@ -71,6 +76,8 @@ after the name tell the page the shape.
 | **btn** — buttons | `<i>` count | `/btn` | `/btn <i>…` one per button, 1 = pressed |
 | **imu** — motion | `<i>` axes: 3 accel, 6 accel+gyro | `/imu` | `/imu <f>…` g, then deg/s |
 | **mic** — microphone | — | `/mic`; `/mic/gain <i>` | `/mic <i> <i> [<i> <b>]` rms, peak, full scale 0..32767; boards with a scope add the sample rate and a waveform blob |
+| **led** — the board's plain on/off LED | — | `/s/l <i>` | echoed. The address stays in the `/s` space because it is the 2012 Oscuino vocabulary that existing CNMAT Max patches speak; the capability only says whether the board HAS one. There is no other LED address — colour LEDs are **rgb** |
+| **volts** — supply voltage | — | `/s/v` | `/s/v <f>` volts (was `/s/s`). Same reasoning as **led** for the address |
 | **light** — ambient light | — | `/light` | `/light <i>` raw |
 | **temp** — temperature | — | `/temp` | `/temp <f>` °C (was `/t` → `/s/t`). Degrees or nothing: a board whose sensor is uncalibrated must say so and not announce `/enq/temp` |
 | **hum** — relative humidity | — | `/hum` | `/hum <f>` percent |

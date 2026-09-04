@@ -421,10 +421,24 @@ the browser</textarea>
       <button data-a="/s/m" data-g="">/s/m micros</button>
       <button data-a="/s/d" data-g="">/s/d pins</button>
       <button data-a="/s/a" data-g="">/s/a analog pins</button>
-      <button data-a="/s/v" data-g="">/s/v volts</button>
+    </div>
+  </div>
+
+  <!-- led and volts keep their 2012 addresses but are announced capabilities:
+       not every board has an LED (the XIAO ESP32-C3's belongs to its battery
+       charger) and almost none can measure their own supply. Hidden until the
+       board says otherwise, so no control is offered that can only be silent. -->
+  <div class="panel cap" data-cap="led" hidden>
+    <div class="ph"><label>led</label></div>
+    <div class="row">
       <button data-a="/s/l" data-g="1">LED on</button>
       <button data-a="/s/l" data-g="0">LED off</button>
     </div>
+  </div>
+
+  <div class="panel cap" data-cap="volts" hidden>
+    <div class="ph"><label>volts</label></div>
+    <div class="row"><span class="v" id="voltsV">&ndash;</span><button data-a="/s/v" data-g="">/s/v volts</button></div>
   </div>
 
   <div class="panel">
@@ -435,8 +449,7 @@ the browser</textarea>
       <button id="send" disabled>Send</button>
     </div>
     <div class="chips">
-      <button data-a="/d/9" data-g="">read BOOT (D9)</button>
-      <button data-a="/d/9/u" data-g="">BOOT, pull-up</button>
+      <button data-a="/btn" data-g="">read button</button>
       <button data-a="/a/2" data-g="">read A0 (GPIO2)</button>
       <button data-a="/a/3" data-g="">read A1 (GPIO3)</button>
       <button data-a="/a/4" data-g="">read A2 (GPIO4)</button>
@@ -448,7 +461,7 @@ the browser</textarea>
       Force a type with <code>i:</code> <code>f:</code> <code>s:</code>, or use bare <code>T</code> <code>F</code> <code>N</code>.
       <b>bundle</b> is ticked by default because <code>XiaoC3Oscuino.ino</code> reads bundles, as do the stock Oscuino examples and the CNMAT Max patches.
       <br><br>
-      <b>Seeed XIAO ESP32-C3.</b> Stock FQBN defaults: this variant already sets build.cdc_on_boot=1, so do NOT add :CDCOnBoot=cdc -- that belongs to the generic esp32c3 devkit, whose boards.txt defaults it to 0. No /s/l here: the board's only LED is the one marked CH, wired to the battery charger rather than to a GPIO, and the variant defines no LED_BUILTIN, so OSCBoards.h leaves BOARD_HAS_LED undefined and the sketch does not claim an LED it has not got. Pads are D0..D10 = GPIO 2,3,4,5,6,7,21,20,8,9,10, with A0..A2 on GPIO 2,3,4 -- the /a/&lt;n&gt; addresses take the core's analogRead() argument, which on ESP32 is the GPIO number, hence /a/2 for A0. I2C is SDA=GPIO6, SCL=GPIO7 (the EGG SuperMini's 5/6 is a DIFFERENT board with the same chip). Transport ladder clean 2026-09-04: echo 22/22, widths 11/11, gate, in/out/compound/ring x3.
+      <b>Seeed XIAO ESP32-C3.</b> Stock FQBN defaults: this variant already sets build.cdc_on_boot=1, so do NOT add :CDCOnBoot=cdc -- that belongs to the generic esp32c3 devkit, whose boards.txt defaults it to 0. No /s/l here: the board's only LED is the one marked CH, wired to the battery charger rather than to a GPIO, and the variant defines no LED_BUILTIN, so OSCBoards.h leaves BOARD_HAS_LED undefined and the sketch does not claim an LED it has not got. Pads are D0..D10 = GPIO 2,3,4,5,6,7,21,20,8,9,10, with A0..A2 on GPIO 2,3,4 -- the /a/&lt;n&gt; addresses take the core's analogRead() argument, which on ESP32 is the GPIO number, hence /a/2 for A0. I2C is SDA=GPIO6, SCL=GPIO7 (the EGG SuperMini's 5/6 is a DIFFERENT board with the same chip). Transport ladder clean 2026-09-04: echo 22/22, widths 11/11, gate, in/out/compound/ring x3. BUTTON PIN UNVERIFIED: GPIO9 is the documented BOOT button and the /btn plumbing is proven on hardware (announced in /enq, answered on request, carried beside /state), but no press has been observed -- /btn and the raw /d/9 both stayed released through two sampling windows on 2026-09-04. One press closes it; until then the pin is documentation, not measurement.
     </div>
   </div>
 
@@ -690,7 +703,7 @@ class SlipDecoder {                   // a TransformStream transformer; the BLE
 // The panels, in page order. /enq/<name> for anything else is still listed
 // in the capability chips, it just has no panel.
 const PANEL_ORDER = ["rgb", "display", "buzz", "btn", "imu", "mic", "light", "temp",
-  "hum", "bat", "chg", "touch", "cap", "joy", "pot", "enc", "rtc", "rfid", "cam",
+  "hum", "led", "volts", "bat", "chg", "touch", "cap", "joy", "pot", "enc", "rtc", "rfid", "cam",
   "motor", "servo", "relay", "net"];
 
 function newModel() {
@@ -1362,6 +1375,8 @@ const RENDER = {
   light(m) { const v = m.values.light; if (v) $("lightV").textContent = fmt(v[0]) + " (raw)"; },
   temp(m)  { const v = m.values.temp;  if (v) $("tempV").textContent = fmt(v[0], 1) + " °C"; },
   hum(m)   { const v = m.values.hum;   if (v) $("humV").textContent  = fmt(v[0], 1) + " %"; },
+  volts(m) { const v = m.values["s/v"] || m.values.volts;
+             if (v) $("voltsV").textContent = fmt(v[0], 2) + " V"; },
   bat(m)   { const v = m.values.bat;   if (v) $("batV").textContent = fmt(v[0]) + " mV"; },
   chg(m) {
     const v = m.values.chg;

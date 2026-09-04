@@ -148,6 +148,18 @@ const TONE_BODY = `  for (int pin = 0; pin < NUM_DIGITAL_PINS; pin++) {
     return;
   }`;
 
+// boards.json may name a user button: {"button": {"pin": 9, "activeLow": true}}.
+// Only a pin somebody has actually checked belongs here -- an unchecked guess
+// makes the sketch read a bus line and report it as a button.
+function buttonDefine(board) {
+  const b = board.button;
+  if (!b) return "// This board declares no user button in boards.json.";
+  if (typeof b.pin !== "number")
+    throw new Error(`${board.id}: button.pin must be a number`);
+  return `#define BOARD_BUTTON_PIN ${b.pin}\n`
+       + `#define BOARD_BUTTON_ACTIVE_LOW ${b.activeLow === false ? 0 : 1}`;
+}
+
 const TONE_UNSUPPORTED = `  // This core ships no tone()/noTone(). Left as a no-op so the address space
   // stays identical across boards and a client does not have to special-case it.
   (void)msg; (void)addrOffset;`;
@@ -253,6 +265,7 @@ export function render(board) {
     SERIAL_DECL,
     PIN_CLAMP: pinClamp(board),
     TONE_BODY: board.tone === false ? TONE_UNSUPPORTED : TONE_BODY,
+    BUTTON_DEFINE: buttonDefine(board),
     BAUD_NOTE: board.nativeUSB
       ? "ignored on native USB, but Web Serial still demands a value"
       : "must match the baud picked in the browser exactly",

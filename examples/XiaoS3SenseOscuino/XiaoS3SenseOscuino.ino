@@ -350,6 +350,7 @@ static void routeSize(OSCMessage &m) {                // /cam/size 0..3
 static void sendEnq() {
   OSCBundle b;
   b.add("/enq").add("XiaoS3SenseOscuino");
+  b.add("/enq/led");        // this board has a plain LED on /s/l
   b.add("/enq/temp");
   b.add("/enq/diag");
   if (cameraOK) b.add("/enq/cam").add((intOSC_t) SIZES[curSizeIdx].w)

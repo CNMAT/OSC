@@ -628,6 +628,7 @@ static void routeMicGain(OSCMessage &m) {
 // page decides whether to show those panels from the hello, not from a flag.
 static void sendEnq() {
   bundleOUT.add("/enq").add("PyBadgeOscuino");
+  bundleOUT.add("/enq/led");        // this board has a plain LED on /s/l
   bundleOUT.add("/enq/display").add((intOSC_t) tft.width()).add((intOSC_t) tft.height());
   bundleOUT.add("/enq/buzz");
   bundleOUT.add("/enq/rgb").add((intOSC_t) NEOPIX_NUM);

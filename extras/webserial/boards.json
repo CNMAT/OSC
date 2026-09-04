@@ -452,13 +452,8 @@
       ],
       "chips": [
         {
-          "label": "read BOOT (D9)",
-          "addr": "/d/9",
-          "args": ""
-        },
-        {
-          "label": "BOOT, pull-up",
-          "addr": "/d/9/u",
+          "label": "read button",
+          "addr": "/btn",
           "args": ""
         },
         {
@@ -487,7 +482,11 @@
           "args": ""
         }
       ],
-      "note": "Stock FQBN defaults: this variant already sets build.cdc_on_boot=1, so do NOT add :CDCOnBoot=cdc -- that belongs to the generic esp32c3 devkit, whose boards.txt defaults it to 0. No /s/l here: the board's only LED is the one marked CH, wired to the battery charger rather than to a GPIO, and the variant defines no LED_BUILTIN, so OSCBoards.h leaves BOARD_HAS_LED undefined and the sketch does not claim an LED it has not got. Pads are D0..D10 = GPIO 2,3,4,5,6,7,21,20,8,9,10, with A0..A2 on GPIO 2,3,4 -- the /a/<n> addresses take the core's analogRead() argument, which on ESP32 is the GPIO number, hence /a/2 for A0. I2C is SDA=GPIO6, SCL=GPIO7 (the EGG SuperMini's 5/6 is a DIFFERENT board with the same chip). Transport ladder clean 2026-09-04: echo 22/22, widths 11/11, gate, in/out/compound/ring x3."
+      "note": "Stock FQBN defaults: this variant already sets build.cdc_on_boot=1, so do NOT add :CDCOnBoot=cdc -- that belongs to the generic esp32c3 devkit, whose boards.txt defaults it to 0. No /s/l here: the board's only LED is the one marked CH, wired to the battery charger rather than to a GPIO, and the variant defines no LED_BUILTIN, so OSCBoards.h leaves BOARD_HAS_LED undefined and the sketch does not claim an LED it has not got. Pads are D0..D10 = GPIO 2,3,4,5,6,7,21,20,8,9,10, with A0..A2 on GPIO 2,3,4 -- the /a/<n> addresses take the core's analogRead() argument, which on ESP32 is the GPIO number, hence /a/2 for A0. I2C is SDA=GPIO6, SCL=GPIO7 (the EGG SuperMini's 5/6 is a DIFFERENT board with the same chip). Transport ladder clean 2026-09-04: echo 22/22, widths 11/11, gate, in/out/compound/ring x3. BUTTON PIN UNVERIFIED: GPIO9 is the documented BOOT button and the /btn plumbing is proven on hardware (announced in /enq, answered on request, carried beside /state), but no press has been observed -- /btn and the raw /d/9 both stayed released through two sampling windows on 2026-09-04. One press closes it; until then the pin is documentation, not measurement.",
+      "button": {
+        "pin": 9,
+        "activeLow": true
+      }
     },
     {
       "id": "XiaoC3WiFi",

@@ -177,6 +177,7 @@ static void addTemp()  { if (shtOK) bundleOUT.add("/temp").add(tempC); }
 // detach, so their lines are only there when the address answered at boot.
 static void addEnq() {
   bundleOUT.add("/enq").add("PicoBricksOscuino");
+  bundleOUT.add("/enq/led");        // this board has a plain LED on /s/l
   if (oledOK) bundleOUT.add("/enq/display").add((intOSC_t) OLED_W).add((intOSC_t) OLED_H);
   bundleOUT.add("/enq/rgb").add((intOSC_t) RGB_COUNT);
   bundleOUT.add("/enq/buzz");
