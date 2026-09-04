@@ -77,6 +77,23 @@ Evidence that *does* separate boards carrying the same chip:
   only then a demo whose pin map you have confirmed. Peripherals that
   "fail to probe" are the classic symptom of the wrong pin map, not of
   absent hardware.
+* **The USB product string, once your own sketch is running.** Many
+  variants set `USB_MANUFACTURER` and `USB_PRODUCT` — the M5Capsule's says
+  `M5Stack` / `Capsule`. This is board-level evidence, but it appears only
+  after a sketch built from that variant boots: in ROM download mode, or
+  running firmware built for a different board, an ESP32 reports only
+  "Espressif USB JTAG/serial debug unit". So it confirms an identification
+  afterwards rather than making one beforehand.
+
+**Some boards must be told to stay alive.** Several M5Stack ESP32-S3 boards
+(Capsule, Dial, DinMeter) latch their own power through **GPIO46**, and
+M5Unified drives it high as the very first statement of `begin()` — before
+the display, before anything. A bare test sketch that never calls M5Unified
+has to do it itself. The M5Capsule flashed with a plain `OscEcho` beeped
+repeatedly until it did. If a board misbehaves audibly, resets, or dies on
+battery the moment your sketch replaces the vendor demo, look for a
+power-hold or power-enable pin in the vendor's library before suspecting
+your own code.
 
 When the carrier genuinely cannot be established, say so, flash only the
 transport test, and record the row as chip-level with the board unknown.

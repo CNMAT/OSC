@@ -146,6 +146,13 @@ static void jumpToBootloader() {
 #endif
 
 void setup() {
+  // See the note in OscEcho: these M5Stack S3 boards latch their own power
+  // through GPIO46 and must hold it high before anything else.
+#if defined(ARDUINO_M5STACK_CAPSULE) || defined(ARDUINO_M5STACK_DIAL) \
+ || defined(ARDUINO_M5STACK_DINMETER)
+  pinMode(46, OUTPUT);
+  digitalWrite(46, HIGH);
+#endif
   // On ESP32, SLIPSerial.begin() enlarges the core's receive ring to
   // OSC_SLIP_RX_BUFFER (4096) before opening the port -- the library-level
   // fix for the HWCDC ISR dropping bytes on its default 256-byte queue.

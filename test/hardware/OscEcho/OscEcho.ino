@@ -21,6 +21,17 @@ static uint8_t buf[600];
 static size_t  n = 0;          // MUST persist across loop() iterations
 
 void setup() {
+  // Some M5Stack ESP32-S3 boards latch their own power through a GPIO and
+  // switch off, or misbehave audibly, unless it is driven high immediately.
+  // M5Unified does this as the very first statement of begin(), before the
+  // display or anything else, for Capsule, Dial and DinMeter. A bare test
+  // sketch that never calls M5Unified has to do it itself: the M5Capsule
+  // flashed with this sketch beeped repeatedly until it did (2026-09-04).
+#if defined(ARDUINO_M5STACK_CAPSULE) || defined(ARDUINO_M5STACK_DIAL) \
+ || defined(ARDUINO_M5STACK_DINMETER)
+  pinMode(46, OUTPUT);
+  digitalWrite(46, HIGH);
+#endif
   SLIPSerial.begin(115200);
 }
 

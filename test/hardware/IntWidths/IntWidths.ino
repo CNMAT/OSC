@@ -38,7 +38,16 @@ static void jumpToBootloader() {
 }
 #endif
 
-void setup(){ SLIPSerial.begin(115200); }
+void setup(){
+  // See the note in OscEcho: these M5Stack S3 boards latch their own power
+  // through GPIO46 and must hold it high before anything else.
+#if defined(ARDUINO_M5STACK_CAPSULE) || defined(ARDUINO_M5STACK_DIAL) \
+ || defined(ARDUINO_M5STACK_DINMETER)
+  pinMode(46, OUTPUT);
+  digitalWrite(46, HIGH);
+#endif
+  SLIPSerial.begin(115200);
+}
 
 void loop(){
   static OSCMessage in;                     // parsed only so /dfu is visible;
