@@ -1,5 +1,5 @@
 /*
- * XiaoBLEOscuino — Oscuino over TWO transports at once: SLIP-encoded USB
+ * XiaoNrf52Oscuino — Oscuino over TWO transports at once: SLIP-encoded USB
  * serial, and SLIP-encoded OSC over Bluetooth LE. For the Seeed XIAO
  * nRF52840 Sense.
  * -----------------------------------------------------------------------------
@@ -7,7 +7,7 @@
  * FQBN  : Seeeduino:nrf52:xiaonRF52840Sense
  * Libs  : Seeed_Arduino_LSM6DS3 (GitHub ZIP, the library Seeed's wiki names
  *         for this board's IMU); BLE comes from the core's own Bluefruit52Lib.
- * Page  : XiaoBLEOscuino.html, generated beside this sketch by extras/webserial;
+ * Page  : XiaoNrf52Oscuino.html, generated beside this sketch by extras/webserial;
  *         pick Web Bluetooth or Web Serial there (extras/webserial/oscuino.html
  *         is the same page for any board)
  *
@@ -298,7 +298,7 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
 // same on every board that has the capability. See ADDRESSES.md.
 
 static void addEnq() {
-  bundleOUT.add("/enq").add("XiaoBLEOscuino");
+  bundleOUT.add("/enq").add("XiaoNrf52Oscuino");
   bundleOUT.add("/enq/rgb").add((intOSC_t)1);
   if (imuOK) bundleOUT.add("/enq/imu").add((intOSC_t)6);
   if (micOK) bundleOUT.add("/enq/mic");
@@ -432,7 +432,7 @@ void setup() {
   Bluefruit.configPrphConn(BLE_GATT_ATT_MTU_MAX, BLE_GAP_EVENT_LENGTH_DEFAULT, 16, 16);
   Bluefruit.begin();
   Bluefruit.setTxPower(4);
-  Bluefruit.setName("XiaoBLEOscuino");
+  Bluefruit.setName("XiaoNrf52Oscuino");
   bleuart.begin();
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.Advertising.addTxPower();

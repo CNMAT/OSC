@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>XiaoBLEOscuino &mdash; OSC in the browser</title>
+<title>XiaoNrf52Oscuino &mdash; OSC in the browser</title>
 <style>
   :root {
     --bg: #10131a;
@@ -107,8 +107,8 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>XiaoBLEOscuino</h1>
-  <div class="sub">OSC for <span class="board">Seeed XIAO nRF52840 Sense</span> (nRF52840) over Bluetooth LE (Nordic UART Service). Browser &harr; OSC &harr; the CNMAT OSC library. Pair with <code>XiaoBLEOscuino.ino</code>. No server, no dependencies.</div>
+  <h1>XiaoNrf52Oscuino</h1>
+  <div class="sub">OSC for <span class="board">Seeed XIAO nRF52840 Sense</span> (nRF52840) over Bluetooth LE (Nordic UART Service). Browser &harr; OSC &harr; the CNMAT OSC library. Pair with <code>XiaoNrf52Oscuino.ino</code>. No server, no dependencies.</div>
 
   <div class="panel" id="connPanel">
     <div class="row">
@@ -452,7 +452,7 @@ the browser</textarea>
     <div class="note">
       Args are typed automatically: <code>1</code> &rarr; int, <code>0.5</code> &rarr; float, anything else &rarr; string.
       Force a type with <code>i:</code> <code>f:</code> <code>s:</code>, or use bare <code>T</code> <code>F</code> <code>N</code>.
-      <b>bundle</b> is ticked by default because <code>XiaoBLEOscuino.ino</code> reads bundles, as do the stock Oscuino examples and the CNMAT Max patches.
+      <b>bundle</b> is ticked by default because <code>XiaoNrf52Oscuino.ino</code> reads bundles, as do the stock Oscuino examples and the CNMAT Max patches.
       <br><br>
       <b>Seeed XIAO nRF52840 Sense.</b> Hand-written sketch serving USB serial and Bluetooth LE (Nordic UART Service) at once, so Web Serial and Web Bluetooth both work here; needs Seeed_Arduino_LSM6DS3. /rgb drives the one RGB LED, /imu answers six floats (g, then deg/s), /mic rms and peak with /mic/gain 0..80 (40 = unity, 0.5 dB a step), /bat millivolts, /chg the charger state and current (-1 until /chg 50 or /chg 100 sets it). /rate streams /state + /imu + /mic. The USB filter is the Sense's VID 0x2886 PID 0x8045.
     </div>

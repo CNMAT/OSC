@@ -156,6 +156,39 @@ of the library. `check.mjs` is what keeps the duplication honest: the copies
 cannot drift silently, because a template change that was never regenerated
 fails the check, and a hand-edited page fails it too.
 
+### Naming an example
+
+`<Board><Chip><Transport>`, in that order, and the transport last:
+
+| part | rule | examples |
+|---|---|---|
+| Board | the product or family name, as its maker writes it | `Xiao`, `Egg`, `PicoMate`, `FruitJam` |
+| Chip | only when the board name alone is ambiguous | `XiaoC3`, `XiaoC6Exp`, `XiaoMG24`, `XiaoS3Sense` |
+| Transport | `Oscuino` = USB serial, `WiFi` = UDP + HTTP, `BLE` = Bluetooth LE | `XiaoC3Oscuino`, `XiaoC3WiFi`, `XiaoC3BLE` |
+
+Seeed sells five different XIAOs, so `Xiao` alone names nothing — hence the
+chip. Conversely `PicoMate` and `FruitJam` are unique products and take no
+chip. The transport goes last because a board's twins should sort together.
+
+`XiaoNrf52Oscuino` was `XiaoBLEOscuino` until 2026-09-04, and the rename is
+the reason this table exists: `BLE` sat in the *board* slot there, naming the
+nRF52840, while `XiaoC6ExpBLE` and `XiaoMG24BLE` use the same word in the
+*transport* slot. One word, two meanings, decided by position — the sort of
+thing that reads fine to whoever wrote it and to nobody else. Note that the
+board's advertised BLE name changed with it, so it appears in a Web Bluetooth
+picker as `XiaoNrf52Oscuino`.
+
+Three names deliberately break the pattern, and stay broken:
+
+* `OSCEsplora` — the 2013 original, predating `Oscuino` entirely. It is cited
+  by name in the README and in outside material; renaming it would break
+  references for no gain. `EsploraOscuino` is its modern counterpart, and the
+  pair reading in opposite orders is the price of not rewriting history.
+* `CircuitPlaygroundSensors` — the sensor half of the board. It cannot be
+  `PlaygroundOscuino`, which is the generated pin half and a different sketch.
+* `RP2040Oscuino`, `ESP32S3Oscuino` — chip-only, because they target generic
+  dev boards with no product name to use.
+
 ### Adding a board
 
 Add an entry to `boards.json` and run `make generate`. Nothing else needs

@@ -19,7 +19,7 @@
  * packet, and a long reply spans several of them.
  *
  * THE POINT: _SLIPSerial<T> is a template over anything Stream-shaped. On
- * the nRF52840 (examples/XiaoBLEOscuino) Bluefruit's BLEUart already was a
+ * the nRF52840 (examples/XiaoNrf52Oscuino) Bluefruit's BLEUart already was a
  * Stream, so BLE cost that sketch nothing. The ESP32 BLE library has no such
  * class, so ble_stream.h supplies one in ~60 lines of buffering, and the
  * transport line here is identical to the nRF52840's:

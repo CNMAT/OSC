@@ -718,7 +718,7 @@
       "note": "Hand-written sketch for any XIAO on the Round Display for XIAO (GC9A01 240x240 round LCD, CHSC6X touch, BM8563 RTC); brought up on the original SAMD21 XIAO, whose FQBN is above. Needs Adafruit GC9A01A (+GFX) and I2C BM8563 RTC. /display/text centres up to 4 lines, /display/fill floods the screen, /rtc reads or (with six ints) sets the clock and is announced only when the 0x51 ACK is seen; /touch x y streams while a finger is down, paced by /rate. The port filter matches Seeed's vendor id 0x2886; native USB, baud ignored."
     },
     {
-      "id": "XiaoBLE",
+      "id": "XiaoNrf52",
       "name": "Seeed XIAO nRF52840 Sense",
       "mcu": "nRF52840",
       "fqbn": "Seeeduino:nrf52:xiaonRF52840Sense",
