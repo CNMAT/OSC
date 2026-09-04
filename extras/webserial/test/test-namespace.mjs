@@ -68,7 +68,18 @@ for (const dir of SCAN_DIRS) {
     const text = readFileSync(file, "utf8")
       .replace(/\b(?:fullMatch|match)\(\s*"\/[^"]*"/g, "")
       .replace(/\bpinAddress\([^)]*\)/g, "")
-      .replace(/\bstrcat\([^)]*\)/g, "");          // the 2012 sketches' strcat(out, "/u")
+      .replace(/\bstrcat\([^)]*\)/g, "")           // the 2012 sketches' strcat(out, "/u")
+      // A filesystem path is not an OSC address, and the two look identical:
+      // WiFiSetup keeps its credentials in "/fs/oscwifi" on a NINA module's
+      // flash. Constants named *_FILE / *_PATH / *_DIR are storage, so their
+      // initialisers are skipped -- the name is the declaration of intent.
+      .replace(/\b\w*(?:FILE|PATH|DIR)\w*\s*=\s*"[^"]*"/gi, "")
+      // An HTTP route is not an OSC address either. WiFiSetup serves a
+      // settings page and compares the request path against "/save" and
+      // "/forget"; a literal tested against a .path member is a URL, so it
+      // is skipped by shape rather than by adding its words to a whitelist,
+      // which would let those roots through as OSC addresses everywhere.
+      .replace(/\.path\s*,\s*"[^"]*"/g, "");
     for (const m of text.matchAll(LITERAL)) {
       const whole = m[0], root = m[1];
       if (whole.includes(".") || whole.includes(":")) continue;   // a path or URL

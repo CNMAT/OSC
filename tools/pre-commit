@@ -36,12 +36,20 @@ fi
 
 # Added lines only: first char '+', but not the '+++ b/file' header. Substring
 # comparison, not regex -- see the portability note above.
+#
+# The value pattern is "[^")] rather than "[^"]: a quote followed immediately
+# by ')' is a format string closing, not a secret. WiFiSetup.ino's
+#     Serial.print("  password: ");
+# tripped the old pattern, on a line whose next statement prints "(set)" or
+# "(none)" and never the password itself. Excluding ')' costs only a credential
+# whose value begins with a close paren, and buys back a false positive on the
+# most natural way to write a prompt.
 added=$(git diff --cached -U0 --diff-filter=AM |
         awk 'substr($0,1,1)=="+" && substr($0,1,3)!="+++"')
 
 if [ -n "$added" ]; then
   bad=$(printf '%s\n' "$added" |
-        grep -iE '(secret_(ssid|pass)|wifi_(ssid|pass)|ssid|password|passphrase|psk)[[:space:]]*[=:[:space:]]+"[^"]' |
+        grep -iE '(secret_(ssid|pass)|wifi_(ssid|pass)|ssid|pass|password|passphrase|psk)[[:space:]]*[=:[:space:]]+"[^")]' |
         grep -viE '"(your-[a-z0-9-]*|changeme|ssid|password|network-name|xxx+)"')
   if [ -n "$bad" ]; then
     echo "pre-commit: these staged lines look like real credentials:"
