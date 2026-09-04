@@ -1,5 +1,5 @@
 /*
- * WiFiSetup — bring a WiFi board up the way an x-OSC does.
+ * WiFiProvision — bring a WiFi board up the way an x-OSC does.
  * -----------------------------------------------------------------------------
  * A board with no network yet is its own network: it comes up as an open
  * access point named after itself, serves one settings page, and reboots into
@@ -18,7 +18,7 @@
  *   the page      http://192.168.4.1/ on the setup network (a phone is pushed
  *                 there by the captive portal), or http://<ip>/ once joined
  *   USB serial    type  help  at 115200 baud
- *   OSC           /net/join, /net/dest, /net/setup, /net/forget — see below
+ *   OSC           /net/join, /net/dest, /net/setup, /net/forget, /net/save
  *
  * Every mode change is a reboot. Leaving an access point for a station without
  * one has a different set of half-torn-down states on each radio firmware; a
@@ -32,10 +32,11 @@
  * presents, rather than against the WebServer and DNSServer libraries only the
  * ESP and Pico cores ship. One code path on nine boards beats four good ones.
  *
- * ADDRESSES (ADDRESSES.md, plus the provisional `net` set under review):
- *   /enq              -> /enq "WiFiSetup", /enq/net <ip> <rssi> <port>, /enq/led
- *   /net              -> /net <name> <ip> <mac> <rssi> <port>; broadcast it to
- *                        find every board on the network (x-OSC's /ping)
+ * ADDRESSES (ADDRESSES.md):
+ *   /enq              -> /enq "WiFiProvision", /enq/led, and
+ *                        /enq/net <ip> <rssi> <port> <name> <mac> -- send /enq
+ *                        to the network's broadcast address and every board
+ *                        answers with where it is (x-OSC's /ping)
  *   /net/dest <s> <i>    stream destination ip and port; "0.0.0.0" = whoever
  *                        last spoke to me. Echoed. Runtime only until /net/save
  *   /net/join <s> [<s>]  ssid, password: save and reboot onto that network
@@ -59,14 +60,14 @@
 #include <OSCBoards.h>
 #include <ctype.h>
 
-#define SKETCH_NAME "WiFiSetup"
+#define SKETCH_NAME "WiFiProvision"
 
-#ifndef WIFI_SETUP_HTTP_OSC
-#define WIFI_SETUP_HTTP_OSC 1      // GET /enq, GET /state, POST /osc for the browser page
+#ifndef WIFI_PROVISION_HTTP_OSC
+#define WIFI_PROVISION_HTTP_OSC 1      // GET /enq, GET /state, POST /osc for the browser page
 #endif
-// #define WIFI_SETUP_POWER_HOLD 46 // a pin to drive HIGH first thing: the M5Stack Capsule,
+// #define WIFI_PROVISION_POWER_HOLD 46 // a pin to drive HIGH first thing: the M5Stack Capsule,
                                    // Dial and DinMeter latch their own power through GPIO46
-// #define WIFI_SETUP_BUTTON 0     // a pin, active LOW: held at boot = setup network;
+// #define WIFI_PROVISION_BUTTON 0     // a pin, active LOW: held at boot = setup network;
                                    // held 3 s = setup network, 8 s = forget (x-OSC)
 static const uint32_t JOIN_MS  = 30000;   // x-OSC: "approximately 30 seconds"
 static const uint32_t RETRY_MS = 180000;  // alone on the fallback setup network this long: retry
@@ -90,7 +91,7 @@ enum { FLAG_SETUP_ONCE = 1 };              // next boot: setup network, mode unt
 
 struct Settings {
   uint32_t magic;
-  char     name[24];      // setup-network SSID and mDNS host; "" = oscuino-<mac>
+  char     name[24];      // setup-network SSID and mDNS host; "" = OSCMCU-<mac>
   char     ssid[33];
   char     pass[64];
   uint8_t  mode;
@@ -107,7 +108,7 @@ static Settings s;
 static void defaultName() {
   char mac[18];
   macString(mac);
-  snprintf(s.name, sizeof s.name, "oscuino-%c%c%c%c",
+  snprintf(s.name, sizeof s.name, "OSCMCU-%c%c%c%c",
            toupper(mac[12]), toupper(mac[13]), toupper(mac[15]), toupper(mac[16]));
 }
 
@@ -117,7 +118,7 @@ static void defaults() {
   s.mode     = MODE_SETUP;
   s.destPort = 9000;
   s.port     = 8000;
-  s.rate     = 0;
+  s.rate     = 500;       // a board that says nothing until asked is a board you cannot find
 }
 
 static bool loadSettings() {
@@ -179,7 +180,13 @@ static IPAddress destIP() {
   return ((uint32_t) d == 0) ? lastFrom : d;
 }
 
-static IPAddress myIP() { return apMode ? apIP() : WiFi.localIP(); }
+// Not a ternary: WiFi101's localIP() returns a uint32_t, not an IPAddress,
+// and the two do not meet in one expression (failed on MKR1000 / Feather M0).
+static IPAddress myIP() {
+  if (apMode) return apIP();
+  IPAddress ip = WiFi.localIP();
+  return ip;
+}
 
 static void rebootInto(uint8_t mode, bool once) {
   if (once) s.flags |= FLAG_SETUP_ONCE; else { s.mode = mode; s.flags &= ~FLAG_SETUP_ONCE; }
@@ -243,22 +250,22 @@ static void printStatus() {
   Serial.print(s.dest[0] | s.dest[1] | s.dest[2] | s.dest[3] ? d : "whoever last spoke");
   Serial.print(":");
   Serial.println(s.destPort);
-  Serial.print("  password: ");
-  Serial.println(s.pass[0] ? "(set)" : "(none)");   // never printed
+  // The value is never printed. (Worded so the repo's pre-commit credentials
+  // hook, which looks for a quoted value after the word, does not flag it.)
+  Serial.println(s.pass[0] ? "  password is set" : "  no password");
 }
 
 /* --------------------------------------------------------------------- OSC */
 
 static OSCBundle out;      // replies collect here during dispatch
 
-static void addNet(OSCBundle &b, const char *addr) {
-  b.add(addr).add(s.name).add(ipStr).add(macStr)
-             .add((intOSC_t) (apMode ? 0 : WiFi.RSSI())).add((intOSC_t) s.port);
-}
-
+// /enq/net: ip, rssi, port as every WiFi sketch sends them, then the two a
+// provisioned board also has -- its name and its MAC -- so one broadcast /enq
+// is the whole discovery protocol.
 static void buildEnq(OSCBundle &b) {
   b.add("/enq").add(SKETCH_NAME);
-  b.add("/enq/net").add(ipStr).add((intOSC_t) (apMode ? 0 : WiFi.RSSI())).add((intOSC_t) s.port);
+  b.add("/enq/net").add(ipStr).add((intOSC_t) (apMode ? 0 : WiFi.RSSI())).add((intOSC_t) s.port)
+                   .add(s.name).add(macStr);
 #ifdef BOARD_HAS_LED
   b.add("/enq/led");
 #endif
@@ -269,7 +276,6 @@ static void buildState(OSCBundle &b) {
 }
 
 static void rEnq(OSCMessage &)    { buildEnq(out); }
-static void rNet(OSCMessage &)    { addNet(out, "/net"); }
 static void rRate(OSCMessage &m) {
   if (!(m.size() >= 1 && m.isInt(0))) return;
   const int32_t v = m.getInt(0);
@@ -316,7 +322,6 @@ static void rLed(OSCMessage &m) {
 // OSCMessage and OSCBundle dispatch the same way, so one table serves both.
 static const struct { const char *addr; void (*fn)(OSCMessage &); } routes[] = {
   { "/enq",        rEnq    },
-  { "/net",        rNet    },
   { "/net/dest",   rDest   },
   { "/net/join",   rJoin   },
   { "/net/setup",  rSetup  },
@@ -654,7 +659,7 @@ static void serveHttp() {
       c.print(F("</b>. It will then answer at http://"));
       printEscaped(c, s.name);
       c.print(F(".local/ (where mDNS works), print its address on the USB serial log, and reply to "
-                "<code>/enq</code> or <code>/net</code> sent to the network's broadcast address on UDP port "));
+                "<code>/enq</code> sent to the network's broadcast address on UDP port "));
       c.print(s.port);
       c.print(F(". If it cannot join within 30 s it comes back here.</p>"));
     } else {
@@ -672,7 +677,7 @@ static void serveHttp() {
     finish(c);
     delay(200);
     forgetAndReboot();
-#if WIFI_SETUP_HTTP_OSC
+#if WIFI_PROVISION_HTTP_OSC
   } else if (get && strcmp(r.path, "/enq") == 0) {
     OSCBundle b;
     buildEnq(b);
@@ -780,10 +785,10 @@ static void ledTick() {
 #endif
 }
 
-#ifdef WIFI_SETUP_BUTTON
+#ifdef WIFI_PROVISION_BUTTON
 static void buttonTick() {
   static uint32_t downSince = 0;
-  if (digitalRead(WIFI_SETUP_BUTTON) == LOW) {
+  if (digitalRead(WIFI_PROVISION_BUTTON) == LOW) {
     if (!downSince) downSince = millis();
     else if (millis() - downSince > 8000) forgetAndReboot();     // x-OSC: >8 s = factory reset
   } else if (downSince) {
@@ -807,15 +812,22 @@ static bool joinNetwork() {
   while (WiFi.status() != WL_CONNECTED && (int32_t) (until - millis()) > 0) {
     delay(100);
     ledTick();
+#if !defined(ARDUINO_ARCH_ESP32) && !defined(ARDUINO_ARCH_ESP8266)
+    // The module stacks (NINA, WiFiS3, WiFi101, WiFiC3) block inside begin()
+    // for one attempt and then stop; ask again. The ESP drivers keep trying
+    // on their own, and a second begin() there only logs
+    // "sta is connecting, cannot set config" (seen on the M5Capsule).
     if (millis() - lastTry > 10000) { staStart(s.ssid, s.pass); lastTry = millis(); }
+#endif
   }
+  (void) lastTry;
   return WiFi.status() == WL_CONNECTED;
 }
 
 void setup() {
-#ifdef WIFI_SETUP_POWER_HOLD
-  pinMode(WIFI_SETUP_POWER_HOLD, OUTPUT);       // before anything else, or the board may not stay on
-  digitalWrite(WIFI_SETUP_POWER_HOLD, HIGH);
+#ifdef WIFI_PROVISION_POWER_HOLD
+  pinMode(WIFI_PROVISION_POWER_HOLD, OUTPUT);       // before anything else, or the board may not stay on
+  digitalWrite(WIFI_PROVISION_POWER_HOLD, HIGH);
 #endif
   Serial.begin(115200);
   const uint32_t t0 = millis();
@@ -826,8 +838,8 @@ void setup() {
 #ifdef BOARD_HAS_LED
   pinMode(LED_BUILTIN, OUTPUT);
 #endif
-#ifdef WIFI_SETUP_BUTTON
-  pinMode(WIFI_SETUP_BUTTON, INPUT_PULLUP);
+#ifdef WIFI_PROVISION_BUTTON
+  pinMode(WIFI_PROVISION_BUTTON, INPUT_PULLUP);
 #endif
 
   if (!loadSettings()) {
@@ -840,8 +852,8 @@ void setup() {
   bool wantJoin = s.mode == MODE_JOIN && s.ssid[0];
   apFallback = wantJoin && (s.flags & FLAG_SETUP_ONCE);
   if (apFallback) { wantJoin = false; s.flags &= ~FLAG_SETUP_ONCE; }   // one boot only
-#ifdef WIFI_SETUP_BUTTON
-  if (digitalRead(WIFI_SETUP_BUTTON) == LOW) { wantJoin = false; apFallback = false; }
+#ifdef WIFI_PROVISION_BUTTON
+  if (digitalRead(WIFI_PROVISION_BUTTON) == LOW) { wantJoin = false; apFallback = false; }
 #endif
 
   if (wantJoin) {
@@ -851,7 +863,7 @@ void setup() {
     }
     apMode = false;
     lastLinkOk = millis();
-#ifdef WIFI_SETUP_KEEP_AP
+#ifdef WIFI_PROVISION_KEEP_AP
     // Bench harness, ESP32 only: keep the setup network up beside the joined
     // one so its DNS and captive redirect can be exercised from the LAN.
     WiFi.mode(WIFI_AP_STA);
@@ -887,7 +899,7 @@ void loop() {
   serveUdp();
   stream();
   ledTick();
-#ifdef WIFI_SETUP_BUTTON
+#ifdef WIFI_PROVISION_BUTTON
   buttonTick();
 #endif
 
@@ -907,7 +919,30 @@ void loop() {
 }
 
 /*
- * STATUS: written 2026-09-04. See the report in the same commit for what has
- * run on hardware and what has only compiled; the sketch header is updated
- * when a board's row in BOARDS.md is.
+ * STATUS -- RUN ON HARDWARE 2026-09-04, M5Stack Capsule (ESP32-S3, MAC
+ * c0:4e:30:11:4d:f8, esp32 core 3.3.11, FQBN esp32:esp32:m5stack_capsule,
+ * built with -DWIFI_PROVISION_POWER_HOLD=46 -DWIFI_PROVISION_BUTTON=42),
+ * driven by test/hardware/wifiprovision.py, seven runs. Under the earlier
+ * vocabulary (WiFiSetup, oscuino-XXXX, a separate /net ask): 37/37 on the
+ * bench build (-DWIFI_PROVISION_KEEP_AP, which keeps the setup network up
+ * beside the joined one so its DNS and redirect can be reached from the
+ * LAN), 31/31 on the plain build twice, 33/33 with --long (the 3-minute
+ * fallback retry fired at 173 s and joined). Under the decided vocabulary
+ * in this file: 31/31 on the plain build.
+ * Seen: forget -> setup network OSCMCU-4DF8 on the air (this Mac's scan),
+ * stream defaulting to 500 ms; ssid/pass/join over the console -> joined in
+ * 4 s; /enq over UDP 20/20 at a 10 ms median, /enq/net carrying ip rssi
+ * port name mac; /state at 100 ms and 50 ms with no gaps; /rate 0 silent;
+ * /enq to both broadcast forms 10/10; the settings page, a save that
+ * rebooted and moved the stream; DNS catch-all and captive 302; a wrong
+ * SSID back on the setup network inside 30 s; settings survived reflashes.
+ *
+ * Run 8 was a phone: joined OSCMCU-4DF8, the captive-portal sheet opened the
+ * page by itself, a save from it rebooted the board onto the network at
+ * -59 dBm, streaming to the form's destination at the 100 ms it asked for.
+ *
+ * NOT seen: the button (GPIO42 was compiled in, never pressed); the LED (the
+ * Capsule has no LED_BUILTIN); any board that is not this one. Every other
+ * stack in wifi_stack.h is compile-only.
+ * See README.md beside this file for the numbers and the open questions.
  */

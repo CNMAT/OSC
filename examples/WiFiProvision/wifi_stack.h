@@ -1,5 +1,5 @@
 // wifi_stack.h -- everything about WiFi that differs from one Arduino core to
-// the next, in one place, so WiFiSetup.ino can be written once.
+// the next, in one place, so WiFiProvision.ino can be written once.
 //
 // Six WiFi stacks present the same WiFiUDP / WiFiServer / WiFiClient objects,
 // which is why the stock WiFi* examples are one sketch each. Bringing a board
@@ -25,30 +25,38 @@
 // no radio fails with "WiFiNINA.h: No such file", not with something subtler.
 #pragma once
 
+// mDNS (name.local, and an _osc._udp service) costs flash; -DWIFI_PROVISION_NO_MDNS
+// leaves it out on the cores that have it.
 #if defined(ARDUINO_ARCH_ESP8266)
   #include <ESP8266WiFi.h>
-  #include <ESP8266mDNS.h>
   #include <EEPROM.h>
   #define WS_AP_SOFTAP
   #define WS_STORE_EEPROM_COMMIT
-  #define WS_HAS_MDNS
+  #if !defined(WIFI_PROVISION_NO_MDNS)
+    #include <ESP8266mDNS.h>
+    #define WS_HAS_MDNS
+  #endif
 #elif defined(ARDUINO_ARCH_ESP32)
   #include <WiFi.h>
-  #include <ESPmDNS.h>
   #include <Preferences.h>
   #include <esp_mac.h>
   #define WS_AP_SOFTAP
   #define WS_STORE_PREFERENCES
-  #define WS_HAS_MDNS
+  #if !defined(WIFI_PROVISION_NO_MDNS)
+    #include <ESPmDNS.h>
+    #define WS_HAS_MDNS
+  #endif
 #elif defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)
   // Raspberry Pi Pico W / Pico 2 W on arduino-pico (CYW43). The Nano RP2040
   // Connect on the mbed core is a WiFiNINA board and takes the last branch.
   #include <WiFi.h>
-  #include <SimpleMDNS.h>
   #include <EEPROM.h>
   #define WS_AP_SOFTAP
   #define WS_STORE_EEPROM_COMMIT
-  #define WS_HAS_MDNS
+  #if !defined(WIFI_PROVISION_NO_MDNS)
+    #include <SimpleMDNS.h>
+    #define WS_HAS_MDNS
+  #endif
 #elif defined(ARDUINO_UNOR4_WIFI)
   #include <WiFiS3.h>
   #include <EEPROM.h>
@@ -60,6 +68,7 @@
   #include <EEPROM.h>
   #define WS_AP_BEGINAP
   #define WS_STORE_EEPROM
+  #define WS_NO_ACCEPT            // its accept() is protected; available() calls it
 #elif defined(ADAFRUIT_FEATHER_M0) || defined(ARDUINO_SAMD_MKR1000)
   // ATWINC1500 parts want WiFi101, not WiFiNINA. adafruit_feather_m0 is one
   // FQBN for the whole Feather M0 family, so this branch assumes the WiFi one.
@@ -130,6 +139,15 @@ static void staStart(const char *ssid, const char *pass) {
   WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
 #endif
+#if defined(ARDUINO_ARCH_ESP32)
+  // The driver's default is a "fast scan": join the FIRST access point that
+  // answers to the name, not the strongest. On a network with several nodes
+  // (the bench's has 2.4 GHz nodes on channels 1 and 11) that put the
+  // M5Capsule on a -78 to -87 dBm link while a stronger node was in range.
+  // Scanning every channel costs a couple of seconds once, at join.
+  WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+  WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+#endif
   if (pass && pass[0]) WiFi.begin(ssid, pass);
   else                 WiFi.begin(ssid);
 }
@@ -152,7 +170,7 @@ static void radioNoSleep() {
 //
 // Measured on the M5Capsule (esp32 core 3.3.11): WiFi.macAddress() before the
 // station driver is up returns 00:00:2c:00:00:00, and the board named itself
-// oscuino-0000. The efuse is readable at any time, so read that instead; it
+// OSCMCU-0000. The efuse is readable at any time, so read that instead; it
 // is the station MAC on every ESP32, in every mode.
 static void macString(char *out) {
   uint8_t m[6];

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-wifisetup.py -- bench harness for examples/WiFiSetup: the setup-network,
+wifiprovision.py -- bench harness for examples/WiFiProvision: the setup-network,
 join, stream, settings-page and fallback paths, driven over the USB serial
 console and checked over UDP and HTTP from this machine.
 
-    python3 test/hardware/wifisetup.py PORT --secrets examples/XiaoC3WiFi/arduino_secrets.h
-                                            [--captive] [--long] [--keep]
+    python3 test/hardware/wifiprovision.py PORT --secrets examples/XiaoC3WiFi/arduino_secrets.h
+                                            [--captive] [--long] [--forget-at-end]
 
 The secrets file's SECRET_SSID / SECRET_PASS are typed into the board over the
 tty and never printed. Standard library only.
@@ -15,19 +15,19 @@ What it checks, in order (each later step assumes the earlier ones passed):
   1  the sketch answers `show` on the serial console
   2  `forget` reboots onto the setup network, and this Mac's WiFi scan sees it
   3  ssid/pass/dest/rate/join over serial: the board joins and prints its address
-  4  UDP /enq answers /enq "WiFiSetup" + /enq/net with that address
-  5  UDP /net x20: name, ip, mac; the round-trip median
+  4  UDP /enq answers /enq "WiFiProvision" + /enq/net ip rssi port name mac
+  5  UDP /enq x20: the round-trip median
   6  the /state stream arrives at the destination at the set period, no gaps
   7  /rate 0 stops it, /rate 100 restarts it, both echoed
-  8  /net broadcast to 255.255.255.255 finds the board (x-OSC's /ping)
+  8  /enq broadcast to 255.255.255.255 finds the board (x-OSC's /ping)
   9  GET / is the settings form, ssid prefilled, password never in it
  10  GET /enq, GET /state, POST /osc, OPTIONS /osc (the browser page's bridge)
  11  POST /save changes the destination and period, reboots, and the stream follows
- 12  [--captive, ESP32 built with -DWIFI_SETUP_KEEP_AP] the DNS catch-all and the
+ 12  [--captive, ESP32 built with -DWIFI_PROVISION_KEEP_AP] the DNS catch-all and the
      captive redirect, reached over the joined network
  13  a wrong ssid falls back to the setup network within the join window
  14  [--long] alone on the fallback network, the board retries and joins
- 15  the real ssid again: joined, left running (or `forget` with --keep unset)
+ 15  the real ssid again: joined and left running (--forget-at-end forgets instead)
 
 The Mac never joins the board's access point (that would drop this machine
 off its own network); the setup network is seen by a WiFi scan, and its
@@ -173,15 +173,19 @@ def my_ip(toward):
     return ip
 
 
-def scan_for(ssid):
-    try:
-        out = subprocess.run([AIRPORT, "-s"], capture_output=True, text=True, timeout=20).stdout
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    for ln in out.splitlines():
-        if ssid in ln:
-            m = re.search(r"(-\d+)\s+(\d+)", ln[ln.index(ssid) + len(ssid):])
-            return (int(m.group(1)), int(m.group(2))) if m else (None, None)
+def scan_for(ssid, tries=4):
+    """A WiFi scan from this Mac, retried: a network that came up a second
+    ago is not always in the first scan's results."""
+    for _ in range(tries):
+        try:
+            out = subprocess.run([AIRPORT, "-s"], capture_output=True, text=True, timeout=20).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        for ln in out.splitlines():
+            if ssid in ln:
+                m = re.search(r"(-\d+)\s+(\d+)", ln[ln.index(ssid) + len(ssid):])
+                return (int(m.group(1)), int(m.group(2))) if m else (None, None)
+        time.sleep(3)
     return None
 
 
@@ -239,8 +243,14 @@ def dns_query(ip, name, qtype=1):
 
 
 def wait_joined(port, timeout=50):
-    m, _ = port.read_until(r'joined "(.*)" as (\d+\.\d+\.\d+\.\d+)', timeout)
-    return m.group(2) if m else None
+    """The board's address once it prints the joined banner, and how long
+    the join took from the 'joining' line if that was seen; None if not."""
+    t0 = time.time()
+    m, text = port.read_until(r'joined "(.*)" as (\d+\.\d+\.\d+\.\d+), (-?\d+) dBm', timeout)
+    if not m:
+        return None
+    print(f"  joined in {time.time() - t0:.0f} s from here, RSSI {m.group(3)} dBm")
+    return m.group(2)
 
 
 def stream_sample(listen_port, seconds, expect_period_ms):
@@ -271,10 +281,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("port")
     ap.add_argument("--secrets", required=True, help="arduino_secrets.h with SECRET_SSID / SECRET_PASS")
-    ap.add_argument("--captive", action="store_true", help="board built with -DWIFI_SETUP_KEEP_AP: test DNS + redirect over the LAN")
+    ap.add_argument("--captive", action="store_true", help="board built with -DWIFI_PROVISION_KEEP_AP: test DNS + redirect over the LAN")
     ap.add_argument("--long", action="store_true", help="also wait out the 3-minute fallback retry")
-    ap.add_argument("--keep", action="store_true", help="leave the board joined at the end (default: yes); --no-keep forgets")
-    ap.add_argument("--forget-at-end", action="store_true")
+    ap.add_argument("--forget-at-end", action="store_true", help="finish on the setup network instead of joined")
     a = ap.parse_args()
 
     ssid, pw = secrets(a.secrets)
@@ -285,18 +294,25 @@ def main():
     # 1 ---------------------------------------------------------------------
     print("\n1. serial console")
     port.send("show")
-    m, text = port.read_until(r'WiFiSetup "(\S+)"', 4)
+    m, text = port.read_until(r'WiFiProvision "(\S+)"', 4)
     if not ok("show answers", bool(m)):
-        sys.exit("the board is not running WiFiSetup, or not on this port")
+        sys.exit("the board is not running WiFiProvision, or not on this port")
     name = m.group(1)
     print(f"  board name {name}")
 
     # 2 ---------------------------------------------------------------------
     print("\n2. forget -> setup network")
     port.send("forget")
-    m, _ = port.read_until(r'setup network "(\S+)" \(open\) at http://(\d+\.\d+\.\d+\.\d+)/', 30)
+    # The banner: the setup-network line, an optional "because joining" line,
+    # then the OSC line with the stream period -- read through to that one.
+    m, text = port.read_until(r'setup network "(\S+)" \(open\) at http://(\d+\.\d+\.\d+\.\d+)/[^\n]*\n(?:[^\n]*\n)?[^\n]*streaming every (\d+) ms', 30)
     ok("boots onto the setup network after forget", bool(m))
     ap_ssid, ap_ip = (m.group(1), m.group(2)) if m else (name, None)
+    ok("factory name is OSCMCU-<mac>, stream defaults to 500 ms",
+       bool(m) and ap_ssid.startswith("OSCMCU-") and m.group(3) == "500", f"{ap_ssid}, {m.group(3) if m else '?'} ms")
+    # From here the board's name is the factory one: whatever `show` said in
+    # step 1 came from settings the previous firmware left in flash.
+    name = ap_ssid
     time.sleep(3)
     seen = scan_for(ap_ssid)
     ok("this Mac's WiFi scan sees the setup network", bool(seen),
@@ -322,22 +338,19 @@ def main():
     msgs = flat(data) if data else []
     enq = [x for x in msgs if x[0] == "/enq"]
     net = [x for x in msgs if x[0] == "/enq/net"]
-    ok("/enq answers /enq WiFiSetup", bool(enq) and enq[0][1][:1] == ["WiFiSetup"], str(enq))
-    ok("/enq/net carries the board's ip and port 8000", bool(net) and net[0][1][0] == ip and net[0][1][2] == 8000, str(net))
+    ok("/enq answers /enq WiFiProvision", bool(enq) and enq[0][1][:1] == ["WiFiProvision"], str(enq))
+    ok("/enq/net is ip rssi port name mac", bool(net) and len(net[0][1]) == 5 and net[0][1][0] == ip
+       and net[0][1][2] == 8000 and net[0][1][3] == name and re.fullmatch(r"([0-9a-f]{2}:){5}[0-9a-f]{2}", net[0][1][4]) is not None, str(net))
 
     # 5 ---------------------------------------------------------------------
-    print("\n5. UDP /net x20")
-    rtts, last = [], None
+    print("\n5. UDP /enq x20")
+    rtts = []
     for _ in range(20):
-        data, addr, dt = ask(ip, 8000, msg("/net"))
+        data, addr, dt = ask(ip, 8000, msg("/enq"))
         if data:
             rtts.append(dt)
-            last = flat(data)
     good = len(rtts)
-    ok("/net answers 20/20", good == 20, f"{good}/20, median {statistics.median(rtts):.1f} ms, worst {max(rtts):.1f} ms" if rtts else "none")
-    if last:
-        n = [x for x in last if x[0] == "/net"]
-        ok("/net reply is name ip mac rssi port", bool(n) and n[0][1][0] == name and n[0][1][1] == ip and len(n[0][1]) == 5, str(n))
+    ok("/enq answers 20/20", good == 20, f"{good}/20, median {statistics.median(rtts):.1f} ms, worst {max(rtts):.1f} ms" if rtts else "none")
 
     # 6 ---------------------------------------------------------------------
     print("\n6. the stream: dest = this Mac:9000, every 100 ms")
@@ -361,12 +374,23 @@ def main():
 
     # 8 ---------------------------------------------------------------------
     print("\n8. broadcast discovery")
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    data, addr, dt = ask("255.255.255.255", 8000, msg("/net"), sock=s)
-    s.close()
-    ok("/net to 255.255.255.255:8000 answered by the board", bool(data) and addr and addr[0] == ip,
-       f"from {addr[0] if addr else None} in {dt:.0f} ms")
+    # Broadcast frames from an access point to its stations go out at the
+    # basic rate with no acknowledgement and no retry, so on a weak link they
+    # are lost far more often than unicast. A discovering client should ask
+    # more than once; this counts how often one ask is enough.
+    directed = ".".join(ip.split(".")[:3]) + ".255"
+    for dst in (directed, "255.255.255.255"):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        hits, rtts = 0, []
+        for _ in range(10):
+            data, addr, dt = ask(dst, 8000, msg("/enq"), timeout=1.0, sock=s)
+            if data and addr and addr[0] == ip:
+                hits += 1
+                rtts.append(dt)
+        s.close()
+        ok(f"/enq to {dst}:8000 finds the board", hits >= 1,
+           f"{hits}/10 single asks answered" + (f", rtt {min(rtts):.0f}..{max(rtts):.0f} ms" if rtts else ""))
 
     # 9 ---------------------------------------------------------------------
     print("\n9. the settings page")
@@ -386,9 +410,9 @@ def main():
     st, h, body = http_req(ip, "GET", "/state")
     got = flat(body) if st == 200 and body else []
     ok("GET /state is a /state bundle", st == 200 and got and got[0][0] == "/state", str(got))
-    st, h, body = http_req(ip, "POST", "/osc", body=msg("/net"), headers={"Content-Type": "application/octet-stream"})
+    st, h, body = http_req(ip, "POST", "/osc", body=msg("/enq"), headers={"Content-Type": "application/octet-stream"})
     got = flat(body) if st == 200 and body else []
-    ok("POST /osc /net answers the /net reply in the body", st == 200 and got and got[0][0] == "/net" and got[0][1][1] == ip, str(got)[:80])
+    ok("POST /osc /enq answers the enq bundle in the body", st == 200 and any(x[0] == "/enq/net" and x[1][0] == ip for x in got), str(got)[:90])
     st, h, body = http_req(ip, "OPTIONS", "/osc")
     ok("OPTIONS /osc is 204 with CORS headers", st == 204 and "POST" in h.get("access-control-allow-methods", ""), f"{st} {h.get('access-control-allow-methods')}")
 
@@ -429,10 +453,8 @@ def main():
     port.send("join")
     m, _ = port.read_until(r"could not join", 45)
     ok("gives up within the join window", bool(m))
-    m, _ = port.read_until(r'setup network "(\S+)" \(open\) at http://(\d+\.\d+\.\d+\.\d+)/', 30)
-    ok("comes back on the setup network", bool(m))
-    m2, _ = port.read_until(r"because joining .* failed", 3)
-    ok("and says why", bool(m2))
+    m, text = port.read_until(r'setup network "(\S+)" \(open\) at http://(\d+\.\d+\.\d+\.\d+)/.*\n.*because joining .* failed', 30)
+    ok("comes back on the setup network, and says why", bool(m))
     time.sleep(3)
     seen = scan_for(name)
     ok("scan sees the fallback setup network", bool(seen), f"rssi {seen[0]} ch {seen[1]}" if seen else "not in scan")
