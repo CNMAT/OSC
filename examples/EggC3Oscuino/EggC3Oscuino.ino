@@ -67,6 +67,8 @@ static const int PIN_LED = 8;              // plain LED, ACTIVE LOW (measured)
 U8G2_SSD1306_72X40_ER_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE, PIN_SCL, PIN_SDA);
 
 static bool dispOK = false;
+static int32_t  seq      = 0;      // makes a dropped /state visible
+static uint32_t reportMs = 50;     // same default as the WiFi twin; 0 stops
 
 // Five lines of OLED text, scrolled up as /display/text messages arrive.
 #define OLED_LINES 5
@@ -201,9 +203,37 @@ void routeEnq(OSCMessage &msg, int addrOffset) {
   addEnq();
 }
 
+static void addBtn() {
+  bundleOUT.add("/btn").add((intOSC_t)(digitalRead(PIN_BOOT_BTN) == LOW));
+}
+
 void routeBtn(OSCMessage &msg, int addrOffset) {
   (void)msg; (void)addrOffset;
-  bundleOUT.add("/btn").add((intOSC_t)(digitalRead(PIN_BOOT_BTN) == LOW));
+  addBtn();
+}
+
+// /state and /rate are core (ADDRESSES.md), and this sketch answered neither
+// until 2026-09-04 -- while its own WiFi twin streamed /state + /btn happily.
+// The same board over two transports was speaking two vocabularies, which is
+// the thing this address space exists to stop. Caught by contractprobe on a
+// third C3 unit, not by reading the code.
+static void addState() {
+  bundleOUT.add("/state").add((intOSC_t)seq).add((intOSC_t)millis());
+  addBtn();
+}
+
+void routeState(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  addState();
+}
+
+void routeRate(OSCMessage &msg, int addrOffset) {
+  (void)addrOffset;
+  if (msg.isInt(0)) {
+    const int32_t v = msg.getInt(0);
+    reportMs = (v <= 0) ? 0 : (uint32_t)constrain(v, 20, 2000);   // 0 stops
+  }
+  bundleOUT.add("/rate").add((intOSC_t)reportMs);
 }
 
 void routeDisplay(OSCMessage &msg, int addrOffset) {
@@ -263,9 +293,19 @@ void loop() {
       bundleIN.route("/s", routeSystem);
       bundleIN.route("/enq", routeEnq);
       bundleIN.route("/btn",  routeBtn);
+      bundleIN.route("/state", routeState);
+      bundleIN.route("/rate",  routeRate);
       bundleIN.route("/display", routeDisplay);
     }
     bundleIN.empty();
+  }
+
+  static uint32_t lastReport = 0;
+  const uint32_t now = millis();
+  if (reportMs != 0 && now - lastReport >= reportMs) {
+    lastReport = now;
+    seq++;
+    addState();
   }
 
   if (bundleOUT.size() > 0) {

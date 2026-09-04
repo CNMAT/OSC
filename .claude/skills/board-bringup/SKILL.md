@@ -10,12 +10,23 @@ the operating summary. Record results per
 
 ## Non-negotiables
 
-1. **Identify before flashing.** `arduino-cli board list` +
-   `system_profiler SPUSBDataType` (VID/PID) + `esptool chip_id` for
-   ESP32s. Boards displace each other on hubs, ports renumber after every
-   flash, UF2 bootloader IDs name the bootloader not the model, and what
-   the user believes is plugged in has been wrong before. Never identify
-   by port name.
+1. **Identify before flashing — the chip AND the board it sits on.**
+   `arduino-cli board list` + `system_profiler SPUSBDataType` (VID/PID) +
+   `esptool chip_id` for ESP32s. Boards displace each other on hubs, ports
+   renumber after every flash, UF2 bootloader IDs name the bootloader not
+   the model, and what the user believes is plugged in has been wrong
+   before. Never identify by port name.
+
+   `chip_id` names the silicon only. Every native-USB ESP32 enumerates as
+   `303a:1001`, so VID/PID cannot tell a XIAO from a SuperMini — and the
+   pin map, LED polarity, populated buses and FQBN defaults all belong to
+   the *carrier*. Inferring the board from the chip put the EGG demo on a
+   XIAO ESP32-C3 on 2026-09-04, driving the wrong pins and reporting a
+   missing peripheral that was really a wrong address. Ask the user what
+   the board is and believe them over your own inference; flash the
+   board-agnostic `test/hardware/OscEcho` before any pin-driving demo; and
+   treat a peripheral that "fails to probe" as a suspected wrong pin map
+   first. See BRINGUP.md Phase 0, *The chip is not the board*.
 2. **Verify, don't assert.** No number leaves the session without: trickle
    gate passed, 3 repeats, same-day reference board, mechanism named.
    Unverified code carries a STATUS comment saying so. If a measurement

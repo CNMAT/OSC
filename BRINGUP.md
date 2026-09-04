@@ -41,6 +41,46 @@ lsof /dev/cu.usbmodem*                       # who is holding the port
   `variant.h`/`variant.cpp` for the pin map. The variant's own comments
   ("SPI for PDM mic") are the wiring documentation.
 
+### The chip is not the board — identify the carrier too
+
+`chip_id` names the *silicon*. It does not name the **board the silicon
+sits on**, and everything that matters after this — pin map, LED polarity,
+which I2C pins have parts on them, which FQBN options the variant already
+sets — belongs to the board, not the chip. Establish the carrier before
+flashing anything that drives a pin.
+
+This is not hypothetical. On 2026-09-04 a board was identified as
+"ESP32-C3, 4 MB XMC flash, VID/PID 303a:1001" and flashed with the EGG
+SuperMini demo on that basis. It was a **Seeed XIAO ESP32-C3**: a different
+pin map, a different LED, no OLED on the probed bus. The chip was right and
+the board was wrong, so the sketch drove the wrong pins and its capability
+probe reported an absence that was really a mis-address.
+
+Evidence that *does* separate boards carrying the same chip:
+
+* **Ask, and believe the answer over your own inference.** The person
+  holding the board can see the silkscreen. An inference from the chip is
+  the weakest evidence in this list, and it outranks nothing.
+* **VID/PID is family-level at best.** Every ESP32 with native
+  USB-Serial-JTAG enumerates as `303a:1001` — EGG SuperMini, XIAO C3,
+  XIAO C6 and a dozen others are indistinguishable by it.
+* **MAC OUI** hints at the module vendor: Seeed and generic SuperMini
+  modules sit in different ranges. A hint, not proof.
+* **Flash size and vendor** from `esptool flash_id`, and the chip's
+  feature line, narrow the module family.
+* **Physical form** decides it: castellated edges and a BAT pad on the
+  underside say XIAO; a 0.42" OLED soldered above the USB connector says
+  the EGG variant. If you cannot see the board, ask for a photograph or
+  for the markings.
+* **A wrong guess is falsifiable.** Flash the board-agnostic transport
+  test first (`test/hardware/OscEcho`), which touches no board pins, and
+  only then a demo whose pin map you have confirmed. Peripherals that
+  "fail to probe" are the classic symptom of the wrong pin map, not of
+  absent hardware.
+
+When the carrier genuinely cannot be established, say so, flash only the
+transport test, and record the row as chip-level with the board unknown.
+
 ## Phase 1 — compile
 
 ```sh
