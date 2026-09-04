@@ -113,10 +113,17 @@
 <p class="lede">
   The board laid out as it physically is: modules down each side, the Pico dock
   and prototyping area in the middle. Each one is drawn as the thing it is — a
-  compass needle for the magnetometer, a spirit level for the accelerometer, a
-  thermometer and a hygrometer dial, a lamp for the colour sensor. Everything
-  arrives in a single <code>/pm</code> message so the readings share one
-  instant. Web Serial needs <code>http://localhost</code>.
+  spirit level for the accelerometer, a thermometer and a hygrometer dial, a
+  lamp for the light sensor. Everything arrives in one bundle —
+  <code>/state</code> then one message per capability (<code>/btn</code>,
+  <code>/enc</code>, <code>/imu</code>, <code>/temp</code>, <code>/hum</code>,
+  <code>/light</code>, <code>/mic</code>, and the PIR as <code>/d/28</code>) —
+  so the readings share one instant. The board announces what it has with
+  <code>/enq</code> + <code>/enq/…</code>, and a module that did not answer its
+  probe stays grey. The compass stays grey for a different reason: the
+  magnetometer works, but the address space has no capability to carry it, so
+  the board only mentions it in a <code>/diag</code> line.
+  Web Serial needs <code>http://localhost</code>.
 </p>
 
 <div class="bar">
@@ -218,8 +225,10 @@
         <circle cx="60" cy="48" r="3.5" fill="#5a5348"/>
       </svg>
       <div class="val" id="mag-hdg" style="font-size:17px">–<span class="unit">°</span></div>
-      <div class="sub" id="mag-xyz">– µT</div>
-      <div class="part">MMC5603NJ</div>
+      <div class="sub" id="mag-xyz">not streamed</div>
+      <div class="part">MMC5603NJ · fitted and working; ADDRESSES.md has no
+        magnetometer capability, so the board says so in a /diag line and
+        sends no readings</div>
     </div>
   </div>
 
@@ -300,15 +309,17 @@
     </div>
 
     <div class="mod off" id="m-ltr">
-      <h3>Colour + light <em>0x53</em></h3>
+      <h3>Ambient light <em>0x53</em></h3>
       <svg viewBox="0 0 120 56" style="width:100%;height:52px">
         <defs><radialGradient id="lampg"><stop offset="0" stop-color="#fff" stop-opacity=".95"/>
           <stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
         <circle id="lamp-halo" cx="60" cy="28" r="26" fill="url(#lampg)" opacity=".2"/>
         <circle id="lamp" cx="60" cy="28" r="15" fill="#caa" stroke="#8a8578"/>
       </svg>
-      <div class="sub" id="ltr-rgb">– / – / –</div>
-      <div class="part">LTR-381RGB-01 · register-level, no Arduino driver exists</div>
+      <div class="sub" id="ltr-rgb">– raw</div>
+      <div class="part">LTR-381RGB-01 · Arduino_LTR381RGB · /light is one raw
+        ALS count, so the part's lux conversion and its red/green/blue/IR
+        channels stay on the board — no colour capability exists yet</div>
     </div>
 
     <div class="mod off" id="m-oled">
@@ -411,6 +422,21 @@ function decodeMessage(bytes){
     }}
   return {address,args};
 }
+// A bundle is "#bundle", an 8-byte timetag, then size-prefixed messages.
+// The board sends nothing but bundles: the hello, the stream and the echoes.
+function decodePacket(bytes){
+  if(bytes.length>=16&&bytes[0]===0x23){
+    const dv=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),out=[];
+    let pos=16;
+    while(pos+4<=bytes.length){
+      const size=dv.getInt32(pos);pos+=4;
+      if(size<=0||pos+size>bytes.length)break;
+      out.push(decodeMessage(bytes.subarray(pos,pos+size)));pos+=size;
+    }
+    return {bundle:true,packets:out};
+  }
+  return decodeMessage(bytes);
+}
 const pad4=b=>{const n=(b.length+3)&~3,o=new Uint8Array(n);o.set(b);return o;};
 function encodeMessage(address,args){
   const parts=[pad4(enc.encode(address+"\0"))];
@@ -468,113 +494,195 @@ function drawProto(){
 drawProto();
 
 let frames=0,t0=0,lastSeq=null,dropped=0;
+// /temp and /hum are separate messages off the same SHT30, and /light has no
+// absolute full scale, so the page keeps the little state those need.
+let lastTempC=null,lastHum=null,lightMax=0;
 const logLine=(t,s)=>{const e=$("log");
   e.textContent=(t?t+" ":"")+s+"\n"+e.textContent;
   if(e.textContent.length>1200)e.textContent=e.textContent.slice(0,1200);};
+// the photo overlay and the instruments render from the same message -- one
+// decode, two renderings, so the badges on the board can never disagree with
+// the instruments below them
+const hv=(id,t)=>{const e=$(id); if(e) e.textContent=t;};
+// One badge over the SHT30 fed by two capabilities: show each half as soon as
+// it has arrived rather than waiting for the pair.
+const shtBadge=()=>hv("hv-sht",
+  [lastTempC!==null?lastTempC.toFixed(1)+"°C":null,
+   lastHum!==null?lastHum.toFixed(0)+"%":null].filter(Boolean).join("  ")||"–");
 
 function onFrame(payload){
-  let m; try{m=decodeMessage(payload);}catch{return;}
+  let pkt; try{ pkt=decodePacket(payload); }catch{ return; }
+  if(!pkt.bundle){ onMessage(pkt); return; }
+  let hello=null;
+  for(const m of pkt.packets){
+    if(m.address==="/enq"){ hello={name:m.args[0],caps:{}}; continue; }
+    if(hello&&m.address.startsWith("/enq/")){ hello.caps[m.address.slice(5)]=m.args; continue; }
+    onMessage(m);
+  }
+  if(hello) onHello(hello.name,hello.caps);
+}
 
-  if(m.address==="/pm"){
-    const [seq,button,pir,encv,ax,ay,az,gx,gy,gz,mx,my,mz,tempC,hum,ir,gr,rd,bl,lux,mrms,mpeak]=m.args;
+// The enq bundle: /enq <name>, then one /enq/<capability> [shape] per
+// part the board proved it has at boot. /enq/imu 6 means the LSM6DS3TR-C
+// answered with accel and gyro. Temperature and humidity are two capabilities
+// off one SHT30, so the module lights up for either and the hygrometer arc
+// waits for /enq/hum specifically. Nothing is assumed: a module that did not
+// answer its probe has no /enq line, and its panel stays grey instead of
+// drawing zeros.
+function onHello(name,caps){
+  $("name").textContent=name??"–";
+  const imu=!!caps.imu;
+  const tmp=!!caps.temp, hum=!!caps.hum, sht=tmp||hum;
+  const ltr=!!caps.light, mic=!!caps.mic, oled=!!caps.display;
+  const set=(id,ok)=>$(id).classList.toggle("off",!ok);
+  set("m-imu",imu); set("m-sht",sht); set("m-ltr",ltr);
+  set("m-mic",mic); set("m-oled",oled);
+  set("h-imu",imu); set("h-sht",sht);
+  set("h-ltr",ltr); set("h-mic",mic); set("h-oled",oled);
+  // The compass has no capability to be announced under, so it can never
+  // un-grey from a hello: the panel says why, and any /diag line is logged.
+  set("m-mag",false); set("h-mag",false);
+  if(!hum){ $("hum").textContent="–"; $("humarc").setAttribute("stroke-dashoffset",132); }
+  // Three of the four parts on i2c1 are announceable; the magnetometer is the
+  // fourth, and nothing in the contract lets it say it is there.
+  const n=[imu,sht,ltr].filter(Boolean).length;
+  $("bus1").textContent=n+" of 3 announced";
+  $("bus0").textContent=oled?"OLED 0x3C":"absent";
+  hv("hv-dock", n+"/3"+(oled?" + OLED":""));
+  const list=Object.entries(caps).map(([k,a])=>a.length?k+" "+a.join(" "):k);
+  logLine("","board: "+name+" — "+list.join(", "));
+}
 
+// One message per capability, all from the same bundle. Only what the board
+// has arrives, so each instrument updates from its own message and an absent
+// part simply never moves.
+function onMessage(m){
+  const a=m.args;
+  switch(m.address){
+
+  case "/state":{                       // seq, millis -- the stream's heartbeat
+    const seq=a[0];
     if(lastSeq!==null&&seq>lastSeq+1)dropped+=seq-lastSeq-1;
     lastSeq=seq;
     $("seq").textContent=seq; $("drop").textContent=dropped;
     frames++; if(!t0)t0=performance.now();
     const secs=(performance.now()-t0)/1000;
     if(secs>0.5)$("hz").textContent=(frames/secs).toFixed(1)+" Hz";
+    return;
+  }
 
-    // button: the cap actually depresses
+  case "/btn":{                         // the cap actually depresses
+    const button=a[0]===1;
     $("btn-cap").setAttribute("r",button?12:15);
     $("btn-cap").setAttribute("fill",button?"#a83526":"#d94f3d");
     $("btn-gloss").setAttribute("opacity",button?".12":".35");
     $("btn-txt").textContent=button?"pressed":"released";
+    hv("hv-btn", button?"PRESSED":"released");
+    $("h-btn").classList.toggle("hot",button);
+    return;
+  }
 
-    // encoder: 4 counts per detent on most encoders; show the shaft angle
+  case "/d/28":{                        // the AS312 PIR on GP28: no motion
+    const pir=a[0]===1;                 // capability exists, so it is the pin
+    $("pir-rays").setAttribute("opacity",pir?"1":"0");
+    $("pir-dome").setAttribute("fill",pir?"#ffe9e4":"#f2f0ea");
+    $("pir-txt").textContent=pir?"MOTION":"no motion";
+    hv("hv-pir", pir?"MOTION":"clear");
+    $("h-pir").classList.toggle("hot",pir);
+    return;
+  }
+
+  case "/enc":{                         // position, delta; show the shaft angle
+    const encv=a[0]|0;
     $("enc-rot").setAttribute("transform",`rotate(${encv*15} 60 35)`);
     $("enc-val").innerHTML=encv+'<span class="unit"> counts</span>';
+    hv("hv-enc", encv+"");
+    return;
+  }
 
+  case "/imu":{                         // ax ay az g, then gx gy gz deg/s
+    const [ax,ay,az,gx,gy,gz]=a;
     // accelerometer as a bubble level: tilt pushes the bubble off centre
     const bx=Math.max(-1,Math.min(1,ax)), by=Math.max(-1,Math.min(1,ay));
     $("bubble").setAttribute("cx",100+bx*30);
     $("bubble").setAttribute("cy",46+by*30);
     $("imu-a").textContent=`accel ${ax.toFixed(2)} ${ay.toFixed(2)} ${az.toFixed(2)} g`;
     $("imu-g").textContent=`gyro ${gx.toFixed(0)} ${gy.toFixed(0)} ${gz.toFixed(0)} °/s`;
-
-    // compass: heading from the horizontal components
-    const hdg=(Math.atan2(my,mx)*180/Math.PI+360)%360;
-    $("needle").setAttribute("transform",`rotate(${-hdg} 60 48)`);
-    $("mag-hdg").innerHTML=hdg.toFixed(0)+'<span class="unit">°</span>';
-    $("mag-xyz").textContent=`${mx.toFixed(1)} ${my.toFixed(1)} ${mz.toFixed(1)} µT`;
-
-    // thermometer: mercury rises 0..40 C; hygrometer arc sweeps 0..100 %
-    const tf=Math.max(0,Math.min(1,tempC/40));
-    $("merc").setAttribute("y",68-tf*60); $("merc").setAttribute("height",tf*60);
-    $("tmp").innerHTML=tempC.toFixed(1)+'<span class="unit"> °C</span>';
-    $("hum").textContent=hum.toFixed(0)+"%";
-    $("humarc").setAttribute("stroke-dashoffset",132-Math.max(0,Math.min(1,hum/100))*132);
-
-    // colour sensor: paint the lamp with the actual measured RGB ratio
-    const mxv=Math.max(rd,gr,bl,1);
-    const cr=Math.round(255*rd/mxv),cg=Math.round(255*gr/mxv),cb=Math.round(255*bl/mxv);
-    // lux comes from the library's own conversion, so the halo tracks real
-    // illuminance rather than a raw-count guess; 400 lx is ordinary indoors
-    const lum=Math.max(0,Math.min(1,lux/400));
-    $("lamp").setAttribute("fill",`rgb(${cr},${cg},${cb})`);
-    $("lamp-halo").setAttribute("opacity",(0.12+lum*0.75).toFixed(2));
-    $("ltr-rgb").textContent=`${lux} lx · R ${rd} G ${gr} B ${bl} · IR ${ir}`;
-
-    // microphone: a real VU meter is logarithmic, so the needle rides dBFS
-    // across a 60 dB window. A linear needle would sit pinned at the left,
-    // this mic's own quiet-room floor being around -47 dBFS.
-    if(typeof mrms==="number"){
-      const db = mrms>0 ? 20*Math.log10(mrms/32768) : -90;
-      const t  = Math.max(0,Math.min(1,(db+60)/60));
-      $("vu-needle").setAttribute("transform",`rotate(${-80+t*160} 100 40)`);
-      $("mic-txt").textContent = mrms>0
-        ? `${db.toFixed(1)} dBFS   rms ${mrms}  peak ${mpeak}` : "silent";
-    }
-
-    // the photo overlay, from the same frame -- one decode, two renderings,
-    // so the badges on the board can never disagree with the instruments
-    const hv=(id,t)=>{const e=$(id); if(e) e.textContent=t;};
-    hv("hv-btn", button?"PRESSED":"released");
-    $("h-btn").classList.toggle("hot",!!button);
-    hv("hv-enc", encv+"");
     hv("hv-imu", `${ax.toFixed(2)} ${ay.toFixed(2)} ${az.toFixed(2)} g`);
-    hv("hv-mag", ((Math.atan2(my,mx)*180/Math.PI+360)%360).toFixed(0)+"\u00b0");
-    hv("hv-sht", `${tempC.toFixed(1)}\u00b0C  ${hum.toFixed(0)}%`);
-    hv("hv-ltr", lux+" lx");
-    hv("hv-pir", pir?"MOTION":"clear");
-    $("h-pir").classList.toggle("hot",!!pir);
-    if(typeof mrms==="number")
-      hv("hv-mic", mrms>0 ? (20*Math.log10(mrms/32768)).toFixed(0)+" dBFS" : "silent");
-
-    // PIR
-    $("pir-rays").setAttribute("opacity",pir?"1":"0");
-    $("pir-dome").setAttribute("fill",pir?"#ffe9e4":"#f2f0ea");
-    $("pir-txt").textContent=pir?"MOTION":"no motion";
     return;
   }
 
-  if(m.address==="/hello"){
-    const [name,imu,mag,sht,ltr,oled,mic]=m.args;
-    $("name").textContent=name??"–";
-    // Grey out a module that is not answering rather than drawing zeros for it
-    const set=(id,ok)=>$(id).classList.toggle("off",!ok);
-    set("m-imu",imu); set("m-mag",mag); set("m-sht",sht); set("m-ltr",ltr);
-    set("m-mic",mic);
-    const hv2=(id,t)=>{const e=$(id); if(e) e.textContent=t;};
-    const n=[imu,mag,sht,ltr].filter(Boolean).length;
-    $("bus1").textContent=n+" of 4 sensors";
-    $("bus0").textContent=oled?"OLED 0x3C":"absent";
-    logLine("","board: "+m.args.join(" "));
-    const hoff=(id,ok)=>$(id).classList.toggle("off",!ok);
-    hoff("h-imu",imu); hoff("h-mag",mag); hoff("h-sht",sht);
-    hoff("h-ltr",ltr); hoff("h-mic",mic); hoff("h-oled",oled);
-    hv2("hv-dock", n+"/4 + OLED");
+  // Two messages, one part. The thermometer and the hygrometer are drawn from
+  // whichever arrives; the badge shows both once both have been seen.
+  case "/temp":{                        // degrees C, one float
+    const tempC=a[0];
+    if(typeof tempC!=="number")return;
+    lastTempC=tempC;
+    // thermometer: mercury rises 0..40 C
+    const tf=Math.max(0,Math.min(1,tempC/40));
+    $("merc").setAttribute("y",68-tf*60); $("merc").setAttribute("height",tf*60);
+    $("tmp").innerHTML=tempC.toFixed(1)+'<span class="unit"> °C</span>';
+    shtBadge();
     return;
+  }
+
+  case "/hum":{                         // relative humidity, per cent
+    const rh=a[0];
+    if(typeof rh!=="number")return;
+    lastHum=rh;
+    // hygrometer arc sweeps 0..100 %
+    $("hum").textContent=rh.toFixed(0)+"%";
+    $("humarc").setAttribute("stroke-dashoffset",132-Math.max(0,Math.min(1,rh/100))*132);
+    shtBadge();
+    return;
+  }
+
+  case "/light":{                       // one int: the raw ALS count
+    const raw=a[0];
+    if(typeof raw!=="number")return;
+    // No fixed full scale to divide by: the count depends on the part's gain
+    // and integration time, neither of which is on the wire. So the halo is
+    // scaled against the brightest reading this session -- a relative meter
+    // that needs no invented constant, and honest about being relative.
+    if(raw>lightMax)lightMax=raw;
+    const lum=lightMax>0?Math.max(0,Math.min(1,raw/lightMax)):0;
+    $("lamp-halo").setAttribute("opacity",(0.12+lum*0.75).toFixed(2));
+    $("ltr-rgb").textContent=`${raw} raw · ${(lum*100).toFixed(0)}% of this session's brightest`;
+    hv("hv-ltr", raw+" raw");
+    return;
+  }
+
+  case "/mic":{                         // rms, peak, full scale 0..32767
+    // a real VU meter is logarithmic, so the needle rides dBFS across a
+    // 60 dB window. A linear needle would sit pinned at the left, this
+    // mic's own quiet-room floor being around -47 dBFS.
+    const [mrms,mpeak]=a;
+    if(typeof mrms!=="number")return;
+    const db = mrms>0 ? 20*Math.log10(mrms/32768) : -90;
+    const t  = Math.max(0,Math.min(1,(db+60)/60));
+    $("vu-needle").setAttribute("transform",`rotate(${-80+t*160} 100 40)`);
+    $("mic-txt").textContent = mrms>0
+      ? `${db.toFixed(1)} dBFS   rms ${mrms}  peak ${mpeak}` : "silent";
+    hv("hv-mic", mrms>0 ? db.toFixed(0)+" dBFS" : "silent");
+    return;
+  }
+
+  case "/enq": onHello(a[0],{}); return;   // a bare hello: nothing announced
+
+  // Free text, never parsed: the board's own note about what it has that the
+  // contract cannot carry. It goes to the log verbatim.
+  case "/diag": logLine("","board says: "+a.join(" ")); return;
+
+  // The board echoes every actuator write and answers /display/text with the
+  // line count. The page already drew each of those at the click, so every
+  // echo is logged and nothing else -- but it is logged, because an echo that
+  // never arrives is how you find out the write did not land.
+  case "/rgb":
+  case "/rgb/0":       logLine("",m.address+" "+a.join(" ")); return;
+  case "/rgb/bright":  logLine("","brightness "+a[0]); return;
+  case "/buzz":        logLine("",a[0]>0?"buzz "+a[0]+" Hz "+a[1]+" ms":"buzz off"); return;
+  case "/rate":        logLine("","rate "+a[0]+" ms"); return;
+  case "/display/text":logLine("","oled: "+a[0]+" lines"); return;
   }
 }
 
@@ -613,9 +721,10 @@ $("connect").onclick=async()=>{
     $("status").textContent="connected";
     $("connect").disabled=true; $("disconnect").disabled=false;
     frames=0;t0=0;lastSeq=null;dropped=0;
-    // Ask for /hello. The board sends one at boot, but USB re-enumerates after
+    lastTempC=null;lastHum=null;lightMax=0;   // a new session, a new full scale
+    // Ask for /enq. The board sends one at boot, but USB re-enumerates after
     // reset and this page opens the port later, so that one is always gone.
-    setTimeout(()=>send("/hello",[]),150);
+    setTimeout(()=>send("/enq",[]),150);
   }catch(e){logLine("!",String(e));}
 };
 $("disconnect").onclick=async()=>{
@@ -635,7 +744,7 @@ $("disconnect").onclick=async()=>{
 
 function setRGB(hex){
   const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-  send("/pm/rgb",[r,g,b]);
+  send("/rgb",[r,g,b]);
   const dark = (r+g+b) < 24;
   $("ws-die").setAttribute("fill",dark?"#3a3a40":hex);
   $("ws-glow").setAttribute("fill",hex);
@@ -653,7 +762,7 @@ $("rgbpick").oninput=e=>setRGB(e.target.value);
 let buzLen=180;
 $("buzlen").oninput=e=>{buzLen=+e.target.value; $("buzlenv").textContent=buzLen;};
 function buzz(f,ms){
-  send("/pm/buzz",[f,ms]);
+  send("/buzz",[f,ms]);
   $("waves").setAttribute("opacity","1");
   clearTimeout(window._w);
   window._w=setTimeout(()=>$("waves").setAttribute("opacity","0"),ms);
@@ -663,15 +772,15 @@ document.querySelectorAll("#keyrow i").forEach(k=>{
     k.classList.add("hit"); setTimeout(()=>k.classList.remove("hit"),buzLen); };
 });
 $("waves").parentNode.style.cursor="pointer";
-$("waves").parentNode.onclick=e=>{ if(e.target.tagName!=="path") send("/pm/buzz",[0,0]); };
+$("waves").parentNode.onclick=e=>{ if(e.target.tagName!=="path") send("/buzz",[0,0]); };
 
-// The OLED: type on the glass, and each line becomes one /pm/oled argument.
+// The OLED: type on the glass, and each line becomes one /display/text argument.
 // Debounced so a burst of keystrokes is not a burst of I2C redraws.
 let oledT=null;
 const pushOled=()=>{
   const rows=$("glass").innerText.replace(/\u00a0/g," ").split("\n").slice(0,4);
   while(rows.length<4) rows.push("");
-  send("/pm/oled",rows.map(r=>r.slice(0,21)));
+  send("/display/text",rows.map(r=>r.slice(0,21)));
 };
 $("glass").addEventListener("input",()=>{ clearTimeout(oledT); oledT=setTimeout(pushOled,260); });
 $("glass").addEventListener("keydown",e=>{

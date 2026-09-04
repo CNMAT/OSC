@@ -22,12 +22,20 @@
   Connect lists only boards matching ESPLORA_FILTERS (0x2341/0x803C for the
   sketch, 0x003C for the bootloader). Tick "show all ports" to drop the
   filter -- if ports appear only then, the board's USB ids are not stock.
+
+  What the sketch speaks is the capability-named address space in
+  ADDRESSES.md, nothing board-named: /enq answers with a bundle of
+  /enq <name> and one /enq/<capability> per thing on the board; every
+  report is a bundle of /state <seq> <millis> plus /btn, /joy, /pot, /light,
+  /temp, /mic and /imu. Inbound: /rgb, /rgb/0, /rgb/bright, /buzz, /d/3,
+  /d/11 (int = level, float 0..1 = PWM, no argument reads back), /rate,
+  /heartbeat, /deadband, /enq.
 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EsploraOscuino &mdash; the whole board in one OSC message</title>
+<title>EsploraOscuino &mdash; the whole board in one OSC bundle</title>
 <style>
   :root {
     --bg: #10131a; --panel: #171b24; --panel-2: #1e2430; --line: #2a3140;
@@ -75,15 +83,20 @@
 <div class="wrap">
   <h1>EsploraOscuino</h1>
   <div class="sub">
-    The entire Esplora state arrives as a single OSC message —
-    <code>/esplora</code> with 18 integers, sampled in one pass — rather than a
-    bundle of twenty. Sent on change, plus a heartbeat so silence still means something. Chrome or Edge, over Web Serial.
+    The entire Esplora state arrives as one OSC bundle — <code>/state</code>
+    plus <code>/btn</code>, <code>/joy</code>, <code>/pot</code>,
+    <code>/light</code>, <code>/temp</code>, <code>/mic</code> and
+    <code>/imu</code>, sampled in one pass — the capability-named address space
+    of ADDRESSES.md, so nothing on the wire is named after the board. Sent on
+    change, plus a heartbeat so silence still means something. Chrome or Edge,
+    over Web Serial.
   </div>
 
   <div class="panel">
     <div class="row">
       <button id="connect" class="primary">Connect</button>
       <button id="disconnect" disabled>Disconnect</button>
+      <button id="hello" title="ask the board for its /enq bundle again">hello</button>
       <span class="dot" id="led"></span>
       <span id="status" style="color:var(--dim)">not connected</span>
       <span class="grow" style="flex:1"></span>
@@ -94,16 +107,19 @@
     <div class="row" style="margin-top:10px">
       <label>rgb</label>
       <input type="color" id="rgb" value="#000000" style="padding:2px; width:52px">
-      <button id="rgbOff">off</button>
+      <button id="rgbOff" title="/rgb/0 0 0 0: the contract's per-pixel form. This board announces /enq/rgb 1, so pixel 0 is that one LED">off</button>
+      <label title="/rgb/bright <i>: 0..255, scales the colour last set">bright</label>
+      <input type="range" id="bright" min="0" max="255" value="255" style="width:96px">
+      <span id="brightv" style="font-family:var(--mono); color:var(--dim); width:28px">255</span>
       <span style="width:14px"></span>
-      <label>tone</label>
+      <label>buzz</label>
       <input type="number" id="freq" value="440" min="0" max="8000" style="width:88px">
       <button id="beep">beep 200ms</button>
       <button id="quiet">stop</button>
       <span style="width:14px"></span>
-      <label>min gap</label>
+      <label title="/rate: floor on the gap between reports; 0 stops the stream">rate</label>
       <select id="rate">
-        <option value="0">none</option>
+        <option value="0">off</option>
         <option value="10">10 ms</option>
         <option value="20" selected>20 ms</option>
         <option value="50">50 ms</option>
@@ -111,12 +127,12 @@
       </select>
     </div>
     <div class="row" style="margin-top:10px">
-      <label>out D3</label>
+      <label title="/d/3 <f>: PWM duty 0..1 on TinkerKit OUT-A, in 1/255 steps">out D3</label>
       <input type="range" id="d3" min="0" max="255" value="0" style="width:110px">
-      <span id="d3v" style="font-family:var(--mono); color:var(--dim); width:30px">0</span>
-      <label>out D11</label>
+      <span id="d3v" style="font-family:var(--mono); color:var(--dim); width:36px">0.00</span>
+      <label title="/d/11 <f>: PWM duty 0..1 on TinkerKit OUT-B, in 1/255 steps">out D11</label>
       <input type="range" id="d11" min="0" max="255" value="0" style="width:110px">
-      <span id="d11v" style="font-family:var(--mono); color:var(--dim); width:30px">0</span>
+      <span id="d11v" style="font-family:var(--mono); color:var(--dim); width:36px">0.00</span>
       <span style="width:14px"></span>
       <label>heartbeat</label>
       <select id="heartbeat">
@@ -191,6 +207,7 @@
         </div>
       </div>
       <div class="panel">
+        <!-- the newest message on each streamed address, as received -->
         <table class="state" id="raw"><tbody></tbody></table>
       </div>
     </div>
@@ -216,7 +233,7 @@
 "use strict";
 
 /* ============================================================
-   1. OSC — decode only what this page needs, plus int encode
+   1. OSC — decode messages and bundles, plus int encode
    ============================================================ */
 const dec = new TextDecoder(), enc = new TextEncoder();
 
@@ -230,6 +247,12 @@ class Reader {
     const s = dec.decode(this.b.subarray(this.pos, e));
     this.pos = (e + 4) & ~3;
     return s;
+  }
+  blob() {
+    const n = this.int32();
+    const v = this.b.subarray(this.pos, this.pos + n);
+    this.pos = (this.pos + n + 3) & ~3;
+    return v;
   }
 }
 
@@ -254,13 +277,40 @@ function decodeMessage(bytes) {
   return { address, args };
 }
 
-function encodeMessage(address, ints) {
+// A SLIP frame holds either one message or a bundle: "#bundle\0", an 8-byte
+// timetag, then each element as a big-endian int32 length and its bytes.
+// Bundles may nest, so this returns a flat list of messages either way.
+function decodePacket(bytes) {
+  if (bytes.length >= 16 && dec.decode(bytes.subarray(0, 7)) === "#bundle") {
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const out = [];
+    let pos = 16;
+    while (pos + 4 <= bytes.length) {
+      const n = dv.getInt32(pos); pos += 4;
+      if (n < 0 || pos + n > bytes.length) break;
+      out.push(...decodePacket(bytes.subarray(pos, pos + n)));
+      pos += n;
+    }
+    return out;
+  }
+  return [decodeMessage(bytes)];
+}
+
+// Arguments encode as int32 unless wrapped by F(), which marks a float32:
+// the contract's /d/<pin> reads an int as a level and a float as a PWM duty,
+// so the two cannot share a JavaScript number.
+const F = v => ({ f: v });
+const isF = a => a !== null && typeof a === "object" && "f" in a;
+
+function encodeMessage(address, args) {
   const parts = [];
   const ostr = s => { const b = enc.encode(s + "\0"); const p = (4 - b.length % 4) % 4;
                       return new Uint8Array([...b, ...new Uint8Array(p)]); };
-  parts.push(ostr(address), ostr("," + "i".repeat(ints.length)));
-  for (const v of ints) {
-    const b = new Uint8Array(4); new DataView(b.buffer).setInt32(0, v | 0); parts.push(b);
+  parts.push(ostr(address), ostr("," + args.map(a => isF(a) ? "f" : "i").join("")));
+  for (const a of args) {
+    const b = new Uint8Array(4), dv = new DataView(b.buffer);
+    if (isF(a)) dv.setFloat32(0, a.f); else dv.setInt32(0, a | 0);
+    parts.push(b);
   }
   const n = parts.reduce((a, p) => a + p.length, 0);
   const out = new Uint8Array(n); let o = 0;
@@ -315,6 +365,8 @@ async function connect() {
   pipeDone = readLoop();
   setConnected(true);
   logLine("", "connected");
+  // The boot /enq is lost to USB enumeration; ask for it.
+  send("/enq", []);
 }
 
 async function readLoop() {
@@ -362,12 +414,12 @@ function padAwayZLP(frame) {
   return out;
 }
 
-async function send(address, ints) {
+async function send(address, args) {
   // After an unplug, writer.write rejects; without this guard every
   // control click surfaced an unhandled rejection.
   try {
     if (!writer) return;
-    await writer.write(padAwayZLP(slipEncode(encodeMessage(address, ints))));
+    await writer.write(padAwayZLP(slipEncode(encodeMessage(address, args))));
   } catch (e) { logLine("!", "send: " + e); }
 }
 
@@ -376,39 +428,52 @@ async function send(address, ints) {
    ============================================================ */
 const $ = id => document.getElementById(id);
 
-// Positional layout of /esplora, mirroring the comment block in the sketch.
-const FIELDS = [
-  "seq", "slider", "light", "mic", "tempC", "tempF",
-  "joyX", "joyY", "joySw", "sw1", "sw2", "sw3", "sw4",
-  "accelX", "accelY", "accelZ",
-  "tinkerA", "tinkerB",          // multiplexer channels 8 and 9
-];
+// The addresses a report bundle carries, in the order the sketch sends them.
+// /btn is sw1 (DOWN), sw2 (LEFT), sw3 (UP), sw4 (RIGHT), joystick click.
+// /pot is the slider, then TinkerKit IN-A (M8) and IN-B (M9).
+// /mic is one envelope reading in both the rms and peak slots, 0..32767.
+// /imu is raw accelerometer counts zeroed at rest, not g (see the sketch).
+const STREAM = ["/state", "/btn", "/joy", "/pot", "/light", "/temp", "/mic", "/imu"];
+const latest = {};                 // address -> args of the newest message
 
 let lastSeq = null, dropped = 0, frames = 0, lastRateAt = performance.now();
 
 function onFrame(bytes) {
-  let pkt; try { pkt = decodeMessage(bytes); } catch { return; }
+  let msgs; try { msgs = decodePacket(bytes); } catch { return; }
 
-  if (pkt.address === "/hello") { logLine("", "hello from " + pkt.args[0]); return; }
-  if (pkt.address !== "/esplora") return;
-
-  if (pkt.args.length !== FIELDS.length) {
-    logLine("warn", `/esplora has ${pkt.args.length} args, expected ${FIELDS.length}` +
-                    " — sketch and page are out of step");
-    return;
+  let hello = null, enq = [], gotState = false;
+  for (const m of msgs) {
+    if (m.address === "/enq") { hello = m.args[0]; continue; }
+    if (m.address.startsWith("/enq/")) {
+      enq.push(m.address.slice(5) + (m.args.length ? " " + m.args.join(" ") : ""));
+      continue;
+    }
+    if (m.address === "/state") {
+      const seq = m.args[0];
+      if (lastSeq !== null && seq !== lastSeq + 1) dropped += Math.max(0, seq - lastSeq - 1);
+      lastSeq = seq;
+      gotState = true;
+    }
+    if (STREAM.includes(m.address)) { latest[m.address] = m.args; continue; }
+    // echoes of /rgb, /buzz, /rate, /d/<pin> reads, and anything else the board says
+    logLine("", m.address + (m.args.length ? " " + m.args.map(fmtArg).join(" ") : ""));
   }
-  const s = {};
-  FIELDS.forEach((k, i) => s[k] = pkt.args[i]);
-
-  if (lastSeq !== null && s.seq !== lastSeq + 1) dropped += Math.max(0, s.seq - lastSeq - 1);
-  lastSeq = s.seq;
-  frames++;
-
-  render(s);
+  if (hello !== null || enq.length) {
+    logLine("", `hello from ${hello ?? "?"}: ${enq.join(", ") || "no capabilities announced"}`);
+  }
+  if (gotState) { frames++; render(); }
 }
 
-function render(s) {
+// One argument of the newest message on an address, 0 if not yet seen.
+const arg = (address, i) => (latest[address] || [])[i] ?? 0;
+
+function render() {
   document.querySelectorAll(".stale").forEach(n => n.classList.remove("stale"));
+
+  const joyX = arg("/joy", 0), joyY = arg("/joy", 1), joySw = arg("/btn", 4);
+  const accX = arg("/imu", 0), accY = arg("/imu", 1), accZ = arg("/imu", 2);
+  const slider = arg("/pot", 0), tinkerA = arg("/pot", 1), tinkerB = arg("/pot", 2);
+  const light = arg("/light", 0), mic = arg("/mic", 0), tempC = arg("/temp", 0);
 
   // Overlay coordinates are in the photo's pixel space. Joystick knob sits at
   // (207,252) with roughly 34 px of usable travel.
@@ -420,42 +485,54 @@ function render(s) {
   // display. Without this the dot mirrors through the centre and bottom-right
   // shows as top-left. The older OSCEsplora example negates both for the same
   // reason. Confirmed on hardware 2026-08-03.
-  $("joyDot").setAttribute("cx", (207 - clamp(s.joyX / 512, -1, 1) * 34).toFixed(1));
-  $("joyDot").setAttribute("cy", (252 + clamp(s.joyY / 512, -1, 1) * 34).toFixed(1));
-  $("joyDot").setAttribute("fill-opacity", s.joySw ? ".85" : ".45");
+  $("joyDot").setAttribute("cx", (207 - clamp(joyX / 512, -1, 1) * 34).toFixed(1));
+  $("joyDot").setAttribute("cy", (252 + clamp(joyY / 512, -1, 1) * 34).toFixed(1));
+  $("joyDot").setAttribute("fill-opacity", joySw ? ".85" : ".45");
 
   for (const n of [1, 2, 3, 4]) {
-    $("sw" + n).setAttribute("fill-opacity", s["sw" + n] ? ".55" : "0");
+    $("sw" + n).setAttribute("fill-opacity", arg("/btn", n - 1) ? ".55" : "0");
   }
 
-  $("accDot").setAttribute("cx", (521 + clamp(s.accelX / 300, -1, 1) * 22).toFixed(1));
-  $("accDot").setAttribute("cy", (262 + clamp(s.accelY / 300, -1, 1) * 22).toFixed(1));
+  // /imu is raw counts zeroed at rest; the same numbers the board-named
+  // message used to carry, now as floats.
+  $("accDot").setAttribute("cx", (521 + clamp(accX / 300, -1, 1) * 22).toFixed(1));
+  $("accDot").setAttribute("cy", (262 + clamp(accY / 300, -1, 1) * 22).toFixed(1));
 
   // potentiometer travel measured off the photo: x 404 (left stop) to 640
-  $("sliderKnob").setAttribute("x", (404 + (s.slider / 1023) * 236).toFixed(1));
+  $("sliderKnob").setAttribute("x", (404 + (slider / 1023) * 236).toFixed(1));
 
-  // passive sensors glow in proportion to their reading
-  $("ringLight").setAttribute("fill-opacity", (clamp(s.light / 1023, 0, 1) * 0.8).toFixed(2));
-  $("ringMic").setAttribute("fill-opacity",   (clamp(s.mic   / 1023, 0, 1) * 0.8).toFixed(2));
-  $("inM8").setAttribute("fill-opacity", (clamp(s.tinkerA / 1023, 0, 1) * 0.55).toFixed(2));
-  $("inM9").setAttribute("fill-opacity", (clamp(s.tinkerB / 1023, 0, 1) * 0.55).toFixed(2));
+  // passive sensors glow in proportion to their reading; /mic is on the
+  // contract's 0..32767 full scale, the 10-bit channels on 0..1023
+  $("ringLight").setAttribute("fill-opacity", (clamp(light / 1023, 0, 1) * 0.8).toFixed(2));
+  $("ringMic").setAttribute("fill-opacity",   (clamp(mic / 32767, 0, 1) * 0.8).toFixed(2));
+  $("inM8").setAttribute("fill-opacity", (clamp(tinkerA / 1023, 0, 1) * 0.55).toFixed(2));
+  $("inM9").setAttribute("fill-opacity", (clamp(tinkerB / 1023, 0, 1) * 0.55).toFixed(2));
 
-  meter("Slider", s.slider / 1023, s.slider);
-  meter("Light",  s.light  / 1023, s.light);
-  meter("Mic",    s.mic    / 1023, s.mic);
-  meter("AccZ",   (s.accelZ + 512) / 1023, s.accelZ);
-  meter("TkA",    s.tinkerA / 1023, s.tinkerA);
-  meter("TkB",    s.tinkerB / 1023, s.tinkerB);
-  $("vTemp").textContent = `${s.tempC} °C / ${s.tempF} °F`;
+  meter("Slider", slider / 1023, slider);
+  meter("Light",  light  / 1023, light);
+  meter("Mic",    mic    / 32767, mic);
+  // Esplora.cpp: readAccelerometer(Z) = analogRead() 0..1023 - 310, so Z
+  // spans -310..713 (X -320..703, Y -330..693)
+  meter("AccZ",   (accZ + 310) / 1023, fmtArg(accZ));
+  meter("TkA",    tinkerA / 1023, tinkerA);
+  meter("TkB",    tinkerB / 1023, tinkerB);
+  // /temp is degrees C; Fahrenheit is derived here for the display
+  $("vTemp").textContent = latest["/temp"]
+    ? `${fmtArg(tempC)} °C / ${fmtArg(tempC * 9 / 5 + 32)} °F` : "–";
 
   const tb = $("raw").tBodies[0];
-  if (tb.rows.length !== FIELDS.length + 1) {
-    tb.innerHTML = FIELDS.map(k => `<tr><td>${k}</td><td id="r_${k}">–</td></tr>`).join("")
+  if (tb.rows.length !== STREAM.length + 1) {
+    tb.innerHTML = STREAM.map(k => `<tr><td>${k}</td><td id="r_${k.slice(1)}">–</td></tr>`).join("")
                  + `<tr><td>dropped</td><td id="r_dropped">0</td></tr>`;
   }
-  for (const k of FIELDS) $("r_" + k).textContent = s[k];
+  for (const k of STREAM) {
+    $("r_" + k.slice(1)).textContent = latest[k] ? latest[k].map(fmtArg).join(" ") : "–";
+  }
   $("r_dropped").textContent = dropped;
 }
+
+// Floats print with at most one decimal and no trailing ".0"; ints unchanged.
+const fmtArg = v => typeof v === "number" ? String(+v.toFixed(1)) : String(v);
 
 function meter(name, frac, value) {
   $("m" + name).style.width = (clamp(frac, 0, 1) * 100).toFixed(1) + "%";
@@ -487,7 +564,7 @@ function logLine(cls, text) {
 setInterval(() => {
   const now = performance.now(), dt = (now - lastRateAt) / 1000;
   if (dt >= 1) {
-    $("rateOut").textContent = `${(frames / dt).toFixed(0)} msg/s   dropped ${dropped}`;
+    $("rateOut").textContent = `${(frames / dt).toFixed(0)} reports/s   dropped ${dropped}`;
     frames = 0; lastRateAt = now;
   }
 }, 1000);
@@ -502,6 +579,7 @@ if (!("serial" in navigator)) {
 
 $("connect").onclick = () => connect().catch(e => logLine("warn", e.message));
 $("disconnect").onclick = () => disconnect();
+$("hello").onclick = () => send("/enq", []);
 $("clear").onclick = () => $("log").textContent = "";
 
 // The colour picker fires oninput continuously while dragging, and every
@@ -510,7 +588,16 @@ $("clear").onclick = () => $("log").textContent = "";
 // input event buries a 32U4 that is also streaming state, and the LED lurches
 // between whatever survives instead of following the picker. Coalesce to the
 // latest colour at ~20 Hz and let onchange deliver the final value exactly.
-let rgbLatest = null, rgbTimer = null;
+let rgbLatest = "#000000", rgbBright = 255, rgbTimer = null, brightTimer = null;
+
+// The board multiplies the colour last set by /rgb/bright before it writes the
+// LED — (c * bright + 127) / 255 — so the overlay shows that product, not the
+// picker's raw colour, and brightness needs no colour to be re-sent.
+function showRgbLed() {
+  const s = i => Math.round((parseInt(rgbLatest.slice(i, i + 2), 16) * rgbBright + 127) / 255)
+                     .toString(16).padStart(2, "0");
+  $("rgbLed").setAttribute("fill", "#" + s(1) + s(3) + s(5));
+}
 function sendRgb(v) {
   send("/rgb", [parseInt(v.slice(1, 3), 16),
                 parseInt(v.slice(3, 5), 16),
@@ -518,29 +605,49 @@ function sendRgb(v) {
 }
 $("rgb").oninput = e => {
   rgbLatest = e.target.value;
-  $("rgbLed").setAttribute("fill", rgbLatest);
+  showRgbLed();
   if (rgbTimer) return;                       // one in flight; newest wins
   rgbTimer = setTimeout(() => { rgbTimer = null; sendRgb(rgbLatest); }, 50);
 };
 $("rgb").onchange = e => {                    // committed value, always sent
   if (rgbTimer) { clearTimeout(rgbTimer); rgbTimer = null; }
   rgbLatest = e.target.value;
-  $("rgbLed").setAttribute("fill", rgbLatest);
+  showRgbLed();
   sendRgb(rgbLatest);
 };
-$("rgbOff").onclick = () => { $("rgb").value = "#000000";
-  send("/rgb", [0, 0, 0]); $("rgbLed").setAttribute("fill", "#000"); };
-$("beep").onclick  = () => send("/tone", [parseInt($("freq").value, 10) || 440, 200]);
-$("quiet").onclick = () => send("/tone", [0]);
+// Off goes out on /rgb/0, the contract's per-pixel address. This board's
+// /enq/rgb is 1, so pixel 0 and "all" are the same LED and the sketch answers
+// on both; using each from one control keeps both spellings exercised.
+$("rgbOff").onclick = () => { $("rgb").value = rgbLatest = "#000000";
+  send("/rgb/0", [0, 0, 0]); showRgbLed(); };
+// Brightness costs the board exactly what a colour does (writeRGB blocks for
+// 15 ms), so the slider is coalesced the same way the picker is.
+$("bright").oninput = e => {
+  rgbBright = parseInt(e.target.value, 10) || 0;
+  $("brightv").textContent = rgbBright;
+  showRgbLed();
+  if (brightTimer) return;
+  brightTimer = setTimeout(() => { brightTimer = null; send("/rgb/bright", [rgbBright]); }, 50);
+};
+$("bright").onchange = () => {                // committed value, always sent
+  if (brightTimer) { clearTimeout(brightTimer); brightTimer = null; }
+  send("/rgb/bright", [rgbBright]);
+};
+$("beep").onclick  = () => send("/buzz", [parseInt($("freq").value, 10) || 440, 200]);
+$("quiet").onclick = () => send("/buzz", [0]);
 $("rate").onchange = e => send("/rate", [parseInt(e.target.value, 10)]);
 $("heartbeat").onchange = e => send("/heartbeat", [parseInt(e.target.value, 10)]);
 $("deadband").onchange  = e => send("/deadband", [parseInt(e.target.value, 10) || 0]);
-$("d3").oninput  = e => { $("d3v").textContent  = e.target.value;
-  $("outD3").setAttribute("fill-opacity", (e.target.value / 255 * 0.6).toFixed(2));
-  send("/d/3",  [+e.target.value]); };
-$("d11").oninput = e => { $("d11v").textContent = e.target.value;
-  $("outD11").setAttribute("fill-opacity", (e.target.value / 255 * 0.6).toFixed(2));
-  send("/d/11", [+e.target.value]); };
+// The output sliders step in the board's own 1/255 PWM quanta but the wire
+// carries the contract's float duty 0..1: an int on /d/<pin> would be a
+// level, and "/d/3 1" would mean HIGH, not 1/255.
+const duty = v => +v / 255;
+$("d3").oninput  = e => { $("d3v").textContent  = duty(e.target.value).toFixed(2);
+  $("outD3").setAttribute("fill-opacity", (duty(e.target.value) * 0.6).toFixed(2));
+  send("/d/3",  [F(duty(e.target.value))]); };
+$("d11").oninput = e => { $("d11v").textContent = duty(e.target.value).toFixed(2);
+  $("outD11").setAttribute("fill-opacity", (duty(e.target.value) * 0.6).toFixed(2));
+  send("/d/11", [F(duty(e.target.value))]); };
 
 markStale();
 

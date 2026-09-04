@@ -15,6 +15,9 @@
   and ESP32. The ESP8266 branch has not been compiled — that core is not
   installed on the development machine — and this has not been run on hardware.
 
+  Addresses renamed onto ADDRESSES.md on 2026-09-03 (/micros + /sequencenumber -> /state <seq> <millis>);
+  that build is compile-checked and has not been re-run on the board.
+
   Adrian Freed
  */
 
@@ -81,7 +84,7 @@ char pass[] = "your-network-password";
 WiFiUDP Udp;
 
 //scratch space for one outgoing OSC packet. What comes back is whatever was
-//sent plus two more messages, so size this for the bundles you expect to echo;
+//sent plus one more message, /state, so size this for the bundles you expect to echo;
 //a larger one is not truncated, it just takes more than one write.
 uint8_t packetbuf[256];
 
@@ -148,9 +151,9 @@ void loop() {
       if (bndl.size() > 0) {
         static intOSC_t sequencenumber = 0;
 
-        // we can sneak an addition onto the end of the bundle
-        bndl.add("/micros").add((intOSC_t)micros()); // (intOSC_t) is the type of OSC Integers
-        bndl.add("/sequencenumber").add(sequencenumber++);
+        // we can sneak an addition onto the end of the bundle: the /state
+        // heartbeat every stream carries (sequence, millis)
+        bndl.add("/state").add(sequencenumber++).add((intOSC_t)millis()); // (intOSC_t) is the type of OSC Integers
 
         Udp.beginPacket(Udp.remoteIP(), outPort);
         //buffered so the reply leaves in one write: on the UNO R4 WiFi and its

@@ -12,6 +12,8 @@
  *         without it Serial is UART0 and the board flashes, verifies and
  *         says nothing (the BRINGUP.md C3 trap).
  * Libs  : U8g2 (the display driver with a dedicated 72x40 constructor)
+ * Page  : EggC3Oscuino.html, generated beside this sketch by extras/webserial
+ *         (extras/webserial/oscuino.html is the same page for any board)
  *
  * Everything hardware below is what the bringup sweep MEASURED on the board
  * (2026-08-30): one I2C device, address 0x3C, on SDA=GPIO5 / SCL=GPIO6 —
@@ -28,16 +30,19 @@
  * boots it; so does a physical replug. To reach download mode manually,
  * hold BOOT (GPIO9) while plugging in.
  *
- * ADDRESSES — the standard Oscuino set (/d /a /tone /s, see template.ino)
- * plus the board's own hardware:
+ * ADDRESSES — the standard Oscuino set (/d /a /tone /s, see ADDRESSES.md)
+ * plus the capabilities this board announces in its /enq bundle:
  *
- *   /egg/b                  -> /egg/b <int>          (1 = BOOT pressed)
- *   /egg/t <string>         a line on the OLED (5 lines of ~14 chars,
- *                           scrolls up; also echoed as /egg/t <1|0> for
- *                           display-present)
+ *   /btn                    -> /btn <int>          (1 = BOOT pressed) [/enq/btn 1]
+ *   /display/text <string>     a line on the OLED (5 lines of ~14 chars,
+ *                           scrolls up; echoed as /display/text <1|0> for
+ *                           display-present)                        [/enq/display 15 5]
  *
- * /hello announces "EggC3Oscuino" plus dispOK, probed by signal (the 0x3C
- * ACK) rather than by a driver's begin() return.
+ * Nothing is named after the board; see ADDRESSES.md for why.
+
+ * /enq answers with the capability bundle; /enq/display appears only when
+ * dispOK, which is probed by signal (the 0x3C ACK) rather than by a
+ * driver's begin() return.
  */
 
 #include <OSCBundle.h>
@@ -63,7 +68,7 @@ U8G2_SSD1306_72X40_ER_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE, PIN_SCL, PIN_SDA);
 
 static bool dispOK = false;
 
-// Five lines of OLED text, scrolled up as /egg/t messages arrive.
+// Five lines of OLED text, scrolled up as /display/text messages arrive.
 #define OLED_LINES 5
 #define OLED_COLS  15
 static char lines[OLED_LINES][OLED_COLS + 1];
@@ -184,18 +189,29 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
   }
 }
 
-// ---- EGG routes ------------------------------------------------------------
-void routeEgg(OSCMessage &msg, int addrOffset) {
-  if (msg.fullMatch("/b", addrOffset)) {
-    bundleOUT.add("/egg/b").add((intOSC_t)(digitalRead(PIN_BOOT_BTN) == LOW));
-    return;
-  }
-  if (msg.fullMatch("/t", addrOffset) && msg.isString(0)) {
+// ---- capability routes -------------------------------------------------------
+static void addEnq() {
+  bundleOUT.add("/enq").add("EggC3Oscuino");
+  bundleOUT.add("/enq/btn").add((intOSC_t)1);
+  if (dispOK) bundleOUT.add("/enq/display").add((intOSC_t)OLED_COLS).add((intOSC_t)OLED_LINES);
+}
+
+void routeEnq(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  addEnq();
+}
+
+void routeBtn(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  bundleOUT.add("/btn").add((intOSC_t)(digitalRead(PIN_BOOT_BTN) == LOW));
+}
+
+void routeDisplay(OSCMessage &msg, int addrOffset) {
+  if (msg.fullMatch("/text", addrOffset) && msg.isString(0)) {
     char text[64];
     msg.getString(0, text, sizeof(text));
     oledLine(text);
-    bundleOUT.add("/egg/t").add((intOSC_t)(dispOK ? 1 : 0));
-    return;
+    bundleOUT.add("/display/text").add((intOSC_t)(dispOK ? 1 : 0));
   }
 }
 
@@ -217,7 +233,7 @@ void setup() {
   }
 
   delay(300);
-  bundleOUT.add("/hello").add("EggC3Oscuino").add((intOSC_t)dispOK);
+  addEnq();
   SLIPSerial.beginPacket();
   bundleOUT.send(SLIPSerial);
   SLIPSerial.endPacket();
@@ -245,7 +261,9 @@ void loop() {
       bundleIN.route("/a", routeAnalog);
       bundleIN.route("/tone", routeTone);
       bundleIN.route("/s", routeSystem);
-      bundleIN.route("/egg", routeEgg);
+      bundleIN.route("/enq", routeEnq);
+      bundleIN.route("/btn",  routeBtn);
+      bundleIN.route("/display", routeDisplay);
     }
     bundleIN.empty();
   }

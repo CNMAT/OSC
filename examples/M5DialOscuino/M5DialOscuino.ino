@@ -46,29 +46,58 @@
 // UID. A tag arriving streams /rfid T with its UID; silence for two polls
 // streams /rfid F. The RC522's own timer bounds every transceive at ~7 ms, so
 // a no-tag poll costs ~12 ms every 250 ms -- invisible next to the 33 Hz
-// /dial stream, where the old version blocked for multiples of that.
+// /state stream, where the old version blocked for multiples of that.
+//
+// Addresses are the capability-named set in ADDRESSES.md; nothing here is
+// spelled by board name.
 //
 // Inbound
-//   /disp/text ,s...      up to 4 lines, centred for the round face
-//   /disp/big ,s          one large centred line
-//   /disp/fill ,iii       r g b
-//   /disp/circle ,iiiiii  x y radius r g b (filled)
-//   /disp/rect ,iiiiiii   x y w h r g b (filled)
-//   /disp/bl ,i           backlight 0..255
-//   /disp/clear
-//   /buzz ,ii             freq ms (M5.Speaker tone)
-//   /enc/zero             reset the encoder position to 0
-//   /rate ,i              report pacing ms, 10..500
-//   /hello
+//   /display/text ,s...      up to 4 lines, centred for the round face
+//   /display/big ,s          one large centred line
+//   /display/fill ,iii       r g b
+//   /display/circle ,iiiiii  x y radius r g b (filled)
+//   /display/rect ,iiiiiii   x y w h r g b (filled)
+//   /display/bl ,i           backlight 0..255
+//   /display/clear
+//   /buzz ,ii                freq ms (M5.Speaker tone)
+//   /enc                     read: answers /enc ,ii position 0 (motion is
+//                            only meaningful in the stream, so delta is 0)
+//   /enc/zero                reset the encoder position to 0
+//   /btn                     read: answers /btn ,i 1 = pressed
+//   /rfid/diag               one instrumented read attempt, answered on /diag
+//   /rate ,i                 stream pacing ms: 0 stops the stream, anything
+//                            else is clamped 10..500; echoed with the value
+//                            in force
+//   /enq                   answered with the enq bundle below
 // Outbound
-//   /hello ,sTTTii  name, dispOK, touchOK, rfidPresent, width, height
+//   enq bundle    /enq ,s "M5DialOscuino", then one /enq line per
+//                   capability actually present: /enq/display ,ii w h ·
+//                   /enq/touch ,ii w h · /enq/enc · /enq/btn ,i 1 ·
+//                   /enq/buzz · /enq/rfid (only when the WS1850S answers its
+//                   version register) · /enq/diag. No booleans: an absent
+//                   capability is announced by its absence.
 //   /rfid ,Ts | ,Fs  present flag + UID as hex text: T "a1b2c3d4" when a
 //                    tag arrives, F with the same UID when it leaves. The
 //                    flag is an OSC boolean (tag T or F, no payload)
-//   /dial ,iiiiiii  seq, encPos, btn, touchDown, x, y, encDelta
-//                   -- one message, sampled in one pass; a state change
-//                   (press, release, touch edge, any encoder motion) always
-//                   sends, otherwise paced by /rate
+//   /diag ,s...     the /rfid/diag verdict, stage by stage; free text
+//   stream bundle   /state ,ii seq millis · /enc ,ii position delta ·
+//                   /btn ,i pressed · /touch ,ii x y, present only while a
+//                   finger is down (a bundle without /touch means up).
+//                   Sampled in one pass; a state change (press, release,
+//                   touch edge, any encoder motion) always sends, otherwise
+//                   paced by /rate. Nothing streams while /rate is 0; the
+//                   direct /enc and /btn reads still answer
+//
+// STATUS: run on the board when added and again after the RFID rework
+// (commits b55fcff 2026-08-22, f101293 2026-08-24): M5.begin() returns and
+// reports the 240x240 panel, the knob tracks clockwise-positive after the A/B
+// swap, and the report stream came back at 32/s once the second I2C driver
+// was removed. Tag reads themselves were NOT confirmed on that bench (no
+// known-good 13.56 MHz tag was presented), so /rfid arrival/departure is
+// implemented but unverified. Addresses renamed onto ADDRESSES.md on
+// 2026-09-03 (/disp/* -> /display/*, the /dial state blob -> a /state + /enc
+// + /btn + /touch bundle, /enq booleans -> /enq/... lines); that build is
+// compile-checked and has not been re-run on the board.
 #include <M5Unified.h>
 
 #include <OSCBundle.h>
@@ -238,17 +267,45 @@ static void routeBuzz(OSCMessage &m) {
 }
 static void routeZero(OSCMessage &) { encPos = 0; }
 static void routeRate(OSCMessage &m) {
-  if (m.size() >= 1 && m.isInt(0)) reportMs = constrain(m.getInt(0), 10, 500);
+  if (m.size() >= 1 && m.isInt(0)) {
+    const int v = m.getInt(0);           // 0 stops the stream (ADDRESSES.md)
+    reportMs = (v <= 0) ? 0 : (uint32_t) constrain(v, 10, 500);
+  }
+  OSCMessage r("/rate");                 // echo the value in force
+  r.add((intOSC_t) reportMs);
+  SLIPSerial.beginPacket(); r.send(SLIPSerial); SLIPSerial.endPacket();
+}
+// Direct reads. The stream carries the same two every /rate ms; these answer
+// a page that asks once.
+static void routeBtn(OSCMessage &) {
+  OSCMessage r("/btn");
+  r.add((intOSC_t) (M5.BtnA.isPressed() ? 1 : 0));
+  SLIPSerial.beginPacket(); r.send(SLIPSerial); SLIPSerial.endPacket();
+}
+static void routeEnc(OSCMessage &) {
+  OSCMessage r("/enc");
+  r.add((intOSC_t) encPos).add((intOSC_t) 0);
+  SLIPSerial.beginPacket(); r.send(SLIPSerial); SLIPSerial.endPacket();
 }
 
-static void sendHello() {
-  OSCMessage h("/hello");
-  h.add("M5DialOscuino").add(dispOK).add(touchOK).add(rfidOK)
-   .add((intOSC_t) (dispOK ? M5.Display.width() : 0))
-   .add((intOSC_t) (dispOK ? M5.Display.height() : 0));
-  SLIPSerial.beginPacket(); h.send(SLIPSerial); SLIPSerial.endPacket();
+// The enq bundle: the name, then one /enq line per capability that is
+// actually present. Presence is what setup() proved, not what the product
+// page promises -- a Dial whose WS1850S never answered announces no rfid.
+static void sendEnq() {
+  OSCBundle b;
+  b.add("/enq").add("M5DialOscuino");
+  if (dispOK)  b.add("/enq/display").add((intOSC_t) M5.Display.width())
+                                    .add((intOSC_t) M5.Display.height());
+  if (touchOK) b.add("/enq/touch").add((intOSC_t) M5.Display.width())
+                                  .add((intOSC_t) M5.Display.height());
+  b.add("/enq/enc");
+  b.add("/enq/btn").add((intOSC_t) 1);
+  b.add("/enq/buzz");
+  if (rfidOK)  b.add("/enq/rfid");
+  b.add("/enq/diag");
+  SLIPSerial.beginPacket(); b.send(SLIPSerial); SLIPSerial.endPacket();
 }
-static void routeHello(OSCMessage &) { sendHello(); }
+static void routeEnq(OSCMessage &) { sendEnq(); }
 
 void setup() {
   pinMode(PIN_HOLD, OUTPUT);
@@ -276,7 +333,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(PIN_ENC_A), encISR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(PIN_ENC_B), encISR, CHANGE);
 
-  sendHello();                           // usually lost; the page asks again
+  sendEnq();                           // usually lost; the page asks again
 }
 
 // Non-blocking receive, the extras/webserial/template.ino pattern:
@@ -377,18 +434,20 @@ void loop() {
 
   if (pollOSC()) {
     if (!inMsg.hasError()) {
-      inMsg.dispatch("/disp/text",   routeText);
-      inMsg.dispatch("/disp/big",    routeBig);
-      inMsg.dispatch("/disp/fill",   routeFill);
-      inMsg.dispatch("/disp/circle", routeCircle);
-      inMsg.dispatch("/disp/rect",   routeRect);
-      inMsg.dispatch("/disp/bl",     routeBl);
-      inMsg.dispatch("/disp/clear",  routeClear);
-      inMsg.dispatch("/buzz",        routeBuzz);
-      inMsg.dispatch("/enc/zero",    routeZero);
-      inMsg.dispatch("/rfid/diag",   routeRfidDiag);
-      inMsg.dispatch("/rate",        routeRate);
-      inMsg.dispatch("/hello",       routeHello);
+      inMsg.dispatch("/display/text",   routeText);
+      inMsg.dispatch("/display/big",    routeBig);
+      inMsg.dispatch("/display/fill",   routeFill);
+      inMsg.dispatch("/display/circle", routeCircle);
+      inMsg.dispatch("/display/rect",   routeRect);
+      inMsg.dispatch("/display/bl",     routeBl);
+      inMsg.dispatch("/display/clear",  routeClear);
+      inMsg.dispatch("/buzz",           routeBuzz);
+      inMsg.dispatch("/enc",            routeEnc);
+      inMsg.dispatch("/enc/zero",       routeZero);
+      inMsg.dispatch("/btn",            routeBtn);
+      inMsg.dispatch("/rfid/diag",      routeRfidDiag);
+      inMsg.dispatch("/rate",           routeRate);
+      inMsg.dispatch("/enq",          routeEnq);
     }
     inMsg.empty();
   }
@@ -401,16 +460,18 @@ void loop() {
 
   const uint32_t now = millis();
   const bool edge = (down != wasDown) || (btn != wasBtn) || (pos != lastPos);
-  if (edge || now - lastSend >= reportMs) {
+  // /rate 0 stops the stream outright, edges included; /enc and /btn asked
+  // directly still answer.
+  if (reportMs && (edge || now - lastSend >= reportMs)) {
     if (down && dispOK) M5.Display.fillCircle(x, y, 3, TFT_GREEN);
-    OSCMessage m("/dial");
-    m.add((intOSC_t) seq++)
-     .add((intOSC_t) pos)
-     .add((intOSC_t) (btn ? 1 : 0))
-     .add((intOSC_t) (down ? 1 : 0))
-     .add((intOSC_t) x).add((intOSC_t) y)
-     .add((intOSC_t) (pos - lastPos));
-    SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
+    // One bundle, one pass: /state is the heartbeat, /touch rides along only
+    // while a finger is down, so a release is the bundle that lacks it.
+    OSCBundle b;
+    b.add("/state").add((intOSC_t) seq++).add((intOSC_t) now);
+    b.add("/enc").add((intOSC_t) pos).add((intOSC_t) (pos - lastPos));
+    b.add("/btn").add((intOSC_t) (btn ? 1 : 0));
+    if (down) b.add("/touch").add((intOSC_t) x).add((intOSC_t) y);
+    SLIPSerial.beginPacket(); b.send(SLIPSerial); SLIPSerial.endPacket();
     lastSend = now;
     lastPos = pos;
   }

@@ -1,5 +1,6 @@
 /*
-* Blink the LED according to incoming OSC on/off rates in quasi-asynchronous way
+* Blink the LED according to incoming OSC on/off rates in quasi-asynchronous way:
+* /s/l <on ms> <off ms>, as SerialSendMessageInfiniteLoop sends
 */
 #include <OSCBoards.h>
 #include <OSCBundle.h>
@@ -64,7 +65,7 @@ void loop()
                 }
 
     if (!bundleIN.hasError())
-        bundleIN.dispatch("/led", LEDcontrol);
+        bundleIN.dispatch("/s/l", LEDcontrol);
     
     if (millis() >= blinkNow) {
         pinMode(LED_BUILTIN, OUTPUT);

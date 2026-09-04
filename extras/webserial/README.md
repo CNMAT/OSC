@@ -65,11 +65,36 @@ patches and any existing `Serial*` example's client. All traffic is an
 | `/s/m` `/s/d` `/s/a` | micros, digital pin count, analog pin count |
 | `/s/l <int>` | set `LED_BUILTIN` |
 
-Each sketch announces `/hello <ExampleName>` once, from `setup()`. On a
-native-USB board `setup()` runs when the board powers up, not when the browser
-opens the port, so you only see the announcement if the page is already
-connected when the board resets — press reset after connecting. Otherwise the
-log stays empty until you send something.
+Boards with hardware beyond pins answer in the capability vocabulary of
+[`ADDRESSES.md`](../../ADDRESSES.md) — `/rgb`, `/display/text`, `/buzz`, `/btn`,
+`/imu`, and the rest — named by what the thing *is* rather than by which board
+it is on. `test/test-namespace.mjs` fails on any address outside that document
+and `make test` runs it, so a new board cannot quietly invent a dialect.
+
+Each sketch announces `/enq <ExampleName>` once, from `setup()`, and answers
+`/enq` again whenever asked — with a bundle naming itself and then one
+`/enq/<capability>` line per thing it actually has, carrying that thing's shape
+(`/enq/rgb 5`, `/enq/display 128 64`, `/enq/imu 6`). Absence is silence: a
+capability the board lacks is simply missing from the bundle. On a native-USB
+board `setup()` runs when the board powers up, not when the browser opens the
+port, so the boot announcement is usually lost — which is why asking is the
+reliable path.
+
+### One page for every board
+
+`oscuino.html` is generated from the same template with no board identity at
+all, and builds itself from whatever the board announces: it sends `/enq`,
+reads the `/enq` lines, and shows a panel per capability, hiding the rest. It
+speaks three transports — Web Serial, Web Bluetooth (Nordic UART Service) and
+HTTP (`POST /osc`, `GET /state`, `GET /enq`) — over one SLIP and OSC codec, so
+the same page drives a board over USB, over the air, or across the network.
+
+The per-board pages remain, generated from the same template with that board's
+chips, USB filters and notes; they are the friendlier front door, and
+`oscuino.html` is the one that works on a board it has never heard of.
+`test/test-panels.mjs` cross-checks the capability table in `ADDRESSES.md`
+against the page's panels, so a capability added to the contract and forgotten
+in the page fails the suite.
 
 Cap-touch and NeoPixel variants are deliberately absent — they need external
 libraries, and an example that will not compile without a second install is a
@@ -141,6 +166,21 @@ for a core with no `tone()`. A `firmware` field (`microbit` or
 `circuitpython`) renders the entry against the matching python template into
 `extras/python/` instead; `fqbn` stays empty and `usbProductId` may be
 omitted from a filter to match a whole vendor.
+
+Three fields exist for boards whose sketch is written by hand:
+
+* `handwritten: true` — generate the page only, never the `.ino`. Boards with
+  real peripherals (a display, a radio, an IMU) have sketches no template can
+  produce, but they still want a generated page; without this the generator
+  would overwrite the sketch and `make check` would demand it back.
+* `sketch` — the sketch folder name, when it is not `<id>Oscuino`. The WiFi and
+  BLE twins use it, since three entries share one board and one `id` cannot.
+* `transport` — `serial` (default), `ble` or `http`: which transport the page
+  selects on load. It is a starting position, not a restriction; the page
+  offers whichever ones the browser supports.
+
+`handwritten` and `firmware` are mutually exclusive — a python firmware is
+always generated — and the generator says so rather than picking one.
 
 ## The one non-obvious firmware detail
 

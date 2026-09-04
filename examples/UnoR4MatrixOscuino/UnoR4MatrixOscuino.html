@@ -26,6 +26,7 @@
                    font-weight:600; }
   label { color:var(--dim); font-size:12px; text-transform:uppercase;
           letter-spacing:.06em; display:block; margin-bottom:6px; }
+  label code { text-transform:none; letter-spacing:0; }   /* addresses are case-sensitive */
   input[type=text] { background:var(--panel-2); color:var(--text);
                      border:1px solid var(--line); border-radius:7px;
                      padding:9px 11px; font-size:15px; width:100%;
@@ -48,11 +49,12 @@
 
 <h1>UNO R4 WiFi — scrolling messages on the LED matrix over OSC</h1>
 <p class="lede">
-  Type a message, send it as an OSC string, and watch the board's 12&times;8
-  matrix scroll it. The panel below is not a simulation: the sketch sends the
-  exact 96 pixels it lit as an OSC blob on every scroll step, and this page
-  draws those. Web Serial needs <code>http://localhost</code> &mdash; a
-  <code>file://</code> URL gets an empty port picker.
+  Type a message, send it as <code>/display/text</code>, and watch the board's
+  12&times;8 matrix scroll it. The panel below is not a simulation: the sketch
+  sends the exact 96 pixels it lit as a <code>/display/frame</code> blob on
+  every scroll step, and this page draws those. Web Serial needs
+  <code>http://localhost</code> &mdash; a <code>file://</code> URL gets an
+  empty port picker.
 </p>
 
 <div class="panel row">
@@ -70,25 +72,31 @@
                      border:1px solid var(--line);border-radius:8px"></canvas>
       <div style="color:var(--dim);font-size:12px;margin-top:8px">
         Every dot is one of the board's 96 LEDs, drawn from the
-        <code>/frame</code> blob the sketch sends after each step.
+        <code>/display/frame</code> blob the sketch sends after each step.
       </div>
     </div>
 
     <div class="panel">
-      <label for="msg">message</label>
+      <label for="msg">message &mdash; <code>/display/text</code></label>
       <input type="text" id="msg" value="OSC" maxlength="60"
              placeholder="type, then press Enter">
       <div class="row" style="margin-top:10px">
         <button id="send" class="primary">Send</button>
-        <button id="pause">Pause</button>
-        <button id="blank">Blank</button>
+        <button id="pause" title="/display/pause 0|1">Pause</button>
+        <button id="blank" title="/display/bl 0|1">Blank</button>
         <span class="chip" data-t="HELLO WORLD">HELLO WORLD</span>
         <span class="chip" data-t="OSC 4.0">OSC 4.0</span>
         <span class="chip" data-t="ARDUINO UNO R4">ARDUINO UNO R4</span>
       </div>
       <div style="margin-top:14px">
-        <label for="rate">scroll step <span id="ratev">90</span> ms/column</label>
+        <label for="rate"><code>/display/scroll</code> <span id="ratev">90</span> ms/column</label>
         <input type="range" id="rate" min="20" max="400" value="90">
+      </div>
+      <div style="color:var(--dim);font-size:12px;margin-top:8px">
+        Pause and Blank send <code>/display/pause</code> and
+        <code>/display/bl</code>; the board echoes each, and the buttons
+        follow the echo. The slider is the scroll step, not a stream rate
+        &mdash; the <code>/state</code> bundle has its own <code>/rate</code>.
       </div>
     </div>
   </div>
@@ -98,12 +106,20 @@
       <label>board</label>
       <table>
         <tr><td class="k">sketch</td><td class="v" id="name">–</td></tr>
-        <tr><td class="k">matrix driver</td><td class="v" id="mok">–</td></tr>
-        <tr><td class="k">message</td><td class="v" id="cur">–</td></tr>
-        <tr><td class="k">column</td><td class="v" id="col">–</td></tr>
+        <tr><td class="k">display</td><td class="v" id="disp">–</td></tr>
+        <tr><td class="k">scroll</td><td class="v" id="cur">–</td></tr>
+        <tr><td class="k">lines drawn</td><td class="v" id="lines">–</td></tr>
+        <tr><td class="k">state</td><td class="v" id="state">–</td></tr>
         <tr><td class="k">frames in</td><td class="v" id="frames">0</td></tr>
         <tr><td class="k">frame rate</td><td class="v" id="hz">–</td></tr>
       </table>
+      <div style="color:var(--dim);font-size:12px;margin-top:10px">
+        <b>display</b> is the <code>/enq/display 12 8</code> line of the
+        <code>/enq</code> bundle: present when the matrix driver started,
+        absent when it failed. The sketch reports the driver, not the panel
+        &mdash; it cannot tell a wired matrix from a bare RA4M1.
+        <b>scroll</b> is the board's <code>/diag</code> line, shown verbatim.
+      </div>
       <div style="color:var(--dim);font-size:12px;margin-top:10px">
         This board's serial port is a real UART bridged to the host by an
         on-board ESP32-S3, not native USB &mdash; so both ends must agree on
@@ -138,8 +154,9 @@ class Reader {
           this.pos+=(n+3)&~3; return v; }
 }
 
-// Every tag this library can emit. Blobs matter especially here -- /frame IS
-// a blob, so an unhandled 'b' would leave the panel permanently dark.
+// Every tag this library can emit. Blobs matter especially here --
+// /display/frame IS a blob, so an unhandled 'b' would leave the panel
+// permanently dark.
 function decodeMessage(bytes){
   const r = new Reader(bytes);
   const address = r.string();
@@ -161,6 +178,27 @@ function decodeMessage(bytes){
     }
   }
   return {address,args};
+}
+
+// A SLIP frame carries either one message or a #bundle: 8 bytes of
+// timetag, then size-prefixed messages. The board sends bundles for
+// everything -- the /enq answer, echoes, each frame and the stream -- so
+// this returns a flat list either way.
+function decodePacket(bytes){
+  if (bytes.length < 8 || dec.decode(bytes.subarray(0, 8)) !== "#bundle\0")
+    return [decodeMessage(bytes)];
+  const out = [];
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let pos = 16;                                   // "#bundle\0" + timetag
+  while (pos + 4 <= bytes.length) {
+    const n = dv.getInt32(pos); pos += 4;
+    if (n <= 0 || pos + n > bytes.length) break;
+    const sub = bytes.subarray(pos, pos + n); pos += n;
+    if (sub.length >= 8 && dec.decode(sub.subarray(0, 8)) === "#bundle\0")
+      out.push(...decodePacket(sub));             // nested, allowed by OSC
+    else out.push(decodeMessage(sub));
+  }
+  return out;
 }
 
 const pad4 = b => { const n=(b.length+3)&~3; const o=new Uint8Array(n);
@@ -245,6 +283,7 @@ function drawMatrix(){
    ============================================================ */
 let port=null, writer=null, reader=null, keepReading=false;
 let frames=0, t0=0;
+let paused=false, blanked=false;
 
 function logLine(tag,s){
   const el=$("log");
@@ -273,41 +312,69 @@ async function send(address, args){
   } catch (e) { logLine("!", "send: " + e); }
 }
 
-function onFrame(payload){
-  let m; try{ m=decodeMessage(payload); }catch{ return; }
-
-  if(m.address==="/frame"){
-    const blob=m.args[0];
-    if(blob instanceof Uint8Array && blob.length===MW*MH){
-      frame = blob; drawMatrix();
-      frames++; if(!t0) t0=performance.now();
-      const secs=(performance.now()-t0)/1000;
-      if(secs>0.5) $("hz").textContent=(frames/secs).toFixed(1)+" Hz";
-      $("frames").textContent=frames;
+function onMessage(m){
+  switch(m.address){
+    case "/display/frame": {                   // the 96 pixels actually lit
+      const blob=m.args[0];
+      if(blob instanceof Uint8Array && blob.length===MW*MH){
+        frame = blob; drawMatrix();
+        frames++; if(!t0) t0=performance.now();
+        const secs=(performance.now()-t0)/1000;
+        if(secs>0.5) $("hz").textContent=(frames/secs).toFixed(1)+" Hz";
+        $("frames").textContent=frames;
+      }
+      return;
     }
-    return;
+    case "/state": {                           // seq, millis -- the stream's heartbeat
+      const [seq,ms]=m.args;
+      if(typeof seq==="number" && typeof ms==="number")
+        $("state").textContent=seq+" @ "+(ms/1000).toFixed(1)+" s";
+      return;
+    }
+    case "/display/text": {                    // lines drawn: the reply, and in the stream
+      if(typeof m.args[0]==="number") $("lines").textContent=m.args[0];
+      return;
+    }
+    case "/diag":                              // free text, never parsed
+      $("cur").textContent=m.args.join(" ");
+      return;
+    case "/display/pause":                     // echo: the board's view wins
+      if(typeof m.args[0]==="number"){
+        paused = m.args[0] !== 0;
+        $("pause").textContent = paused ? "Resume" : "Pause";
+      }
+      return;
+    case "/display/bl":                        // echo
+      if(typeof m.args[0]==="number"){
+        blanked = m.args[0] === 0;
+        $("blank").textContent = blanked ? "Light" : "Blank";
+      }
+      return;
+    case "/enq":
+      // A fresh hello: the /enq lines that follow it in the same bundle say
+      // what is present. Reset first, so a driver that failed reads as absent.
+      $("name").textContent=m.args[0] ?? "–";
+      $("disp").textContent="not announced";
+      $("disp").style.color="var(--err)";
+      logLine("","board: "+m.args.join(" "));
+      return;
+    default:
+      if(m.address.startsWith("/enq/")){
+        logLine("", m.address.slice(5) + (m.args.length ? " " + m.args.join(" ") : ""));
+        if(m.address==="/enq/display"){
+          $("disp").textContent=m.args.join("×");
+          $("disp").style.color="var(--rx)";
+        }
+        return;
+      }
+      // Echoes of what the page just sent: /display/scroll, /rate.
+      logLine("", m.address + " " + m.args.join(" "));
   }
+}
 
-  if(m.address==="/matrix"){
-    const [text,col,total,paused]=m.args;
-    if(typeof text==="string") $("cur").textContent=JSON.stringify(text);
-    if(typeof col==="number" && typeof total==="number")
-      $("col").textContent=col+" / "+total;
-    if(typeof paused==="number")
-      $("pause").textContent = paused ? "Resume" : "Pause";
-    return;
-  }
-
-  if(m.address==="/hello"){
-    const [name,cols,ok]=m.args;
-    $("name").textContent=name ?? "–";
-    // The sketch reports the DRIVER, not the panel -- it cannot tell a wired
-    // matrix from a bare RA4M1, and says so.
-    $("mok").textContent = ok ? "started" : "failed";
-    $("mok").style.color = ok ? "var(--rx)" : "var(--err)";
-    logLine("","board: "+m.args.join(" "));
-    return;
-  }
+function onFrame(payload){
+  let msgs; try{ msgs=decodePacket(payload); }catch{ return; }
+  for(const m of msgs) onMessage(m);
 }
 
 async function readLoop(){
@@ -350,6 +417,8 @@ $("connect").onclick = async () => {
     $("connect").disabled=true; $("disconnect").disabled=false;
     frames=0; t0=0;
     logLine("","connected");
+    // The boot hello is lost to enumeration; ask for it.
+    await send("/enq", []);
   }catch(e){ logLine("!",String(e)); }
 };
 
@@ -366,8 +435,8 @@ $("disconnect").onclick = async () => {
 
 const sendText = () => {
   const t=$("msg").value || " ";
-  send("/matrix/text",[t]);
-  logLine("→","/matrix/text "+JSON.stringify(t));
+  send("/display/text",[t]);
+  logLine("→","/display/text "+JSON.stringify(t));
 };
 $("send").onclick = sendText;
 $("msg").addEventListener("keydown", e => { if(e.key==="Enter") sendText(); });
@@ -376,20 +445,22 @@ document.querySelectorAll(".chip").forEach(c => {
   c.onclick = () => { $("msg").value=c.dataset.t; sendText(); };
 });
 
-let paused=false;
-$("pause").onclick = () => { paused=!paused; send("/matrix/pause",[paused?1:0]); };
-
-let blanked=false;
+// Relabel at once so the click feels immediate, then let the board's echo
+// (see onMessage) have the last word -- a lost packet either way cannot
+// leave the page believing a state the panel is not in.
+$("pause").onclick = () => {
+  paused=!paused; $("pause").textContent = paused ? "Resume" : "Pause";
+  send("/display/pause",[paused?1:0]);
+};
 $("blank").onclick = () => {
-  blanked=!blanked;
-  send("/matrix/bright",[blanked?0:1]);
-  $("blank").textContent = blanked ? "Light" : "Blank";
+  blanked=!blanked; $("blank").textContent = blanked ? "Light" : "Blank";
+  send("/display/bl",[blanked?0:1]);
 };
 
 $("rate").oninput = e => {
   const v=parseInt(e.target.value,10);
   $("ratev").textContent=v;
-  send("/matrix/rate",[v]);
+  send("/display/scroll",[v]);
 };
 
 drawMatrix();

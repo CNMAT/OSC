@@ -76,25 +76,35 @@
 // any of this. The firmware and the schematic agree with each other and not
 // with the table.
 //
+// Addresses are the capability names of ADDRESSES.md, not a /joy dialect.
+//
 // Outbound
-//   /hello ,sTTiii name, joyOK, displayOK, buttonCount, stmFirmwareVersion,
-//                  sdaPin -- the tags are assembled by OSCMessage::add(), not
-//                  written by hand; the two flags are OSC booleans, so those
-//                  positions carry T or F with no payload, NOT i. Firmware
-//                  version 0 means it could not be read. sdaPin is 38 on an
-//                  AtomS3, 45 on an AtomS3R and -1 if nothing answered, which
-//                  is how the page reports which module it is talking to.
-//   /joy ,iiiiiiiii  seq, lx, ly, rx, ry (0..4095), buttons bitmask,
-//                    bat1 mV, bat2 mV, frontBtn
-//                    bitmask: 0 L shoulder, 1 R shoulder,
-//                             2 left click, 3 right click
-//                    One message, sampled in one pass, so the axes belong to
-//                    the same instant; seq makes drops visible.
+//   /enq reply, one bundle: /enq "AtomJoyOscuino", then one /enq line per
+//   capability setup() actually proved present -- no booleans, no flags:
+//     /enq/joy ,i      4        four axes, only if 0x59 answered
+//     /enq/btn ,i      5 or 1   the base's four plus the front button, or the
+//                               front button alone when the base is absent
+//     /enq/bat                  both battery channels, only if 0x59 answered
+//     /enq/display ,ii 128 128  only if the LCD initialised
+//     /enq/diag                 free text follows in a separate /diag packet
+//   /diag ,s...        which internal bus answered (SDA 38 = AtomS3, 45 =
+//                      AtomS3R) and the STM32 firmware version from 0xFE,
+//                      as sentences: a page shows them, it never parses them.
+//   Stream, one bundle every /rate ms, sampled in one pass so every reading
+//   in it belongs to the same instant:
+//     /state ,ii       seq, millis            seq makes drops visible
+//     /joy ,iiii       lx, ly, rx, ry         0..4095, only if the base answered
+//     /btn ,iiiii      L shoulder, R shoulder, L click, R click, front
+//                      1 = pressed; ,i front alone when the base is absent
+//     /bat ,ii         bat1 mV, bat2 mV       only if the base answered
 // Inbound
-//   /joy/screen ,s...   up to five lines on the 128x128 LCD
-//   /joy/rate ,i ms     report interval, 20..2000
-//   /hello              ask again: the boot one is lost to USB
-//                       re-enumeration before the host opens the port
+//   /display/text ,s...  up to five lines on the 128x128 LCD
+//   /rate ,i ms          stream period, 20..2000; 0 stops; echoed
+//   /joy, /btn, /bat     ask for one reading now: answered on the same
+//                        address, in the shape above, whether or not the
+//                        stream is running; /joy and /bat only when announced
+//   /enq               ask again: the boot one is lost to USB
+//                        re-enumeration before the host opens the port
 //
 // STATUS: RUN ON HARDWARE 2026-08-17, on an AtomS3 in a K137 base. What the
 // bench established, as opposed to what the firmware source promised:
@@ -130,6 +140,13 @@
 //   answered on SDA 38, which is the AtomS3 bus, and esptool reports
 //   ESP32-S3 (QFN56) with no PSRAM, which is also AtomS3 rather than the
 //   PICO-package AtomS3R.
+//
+//   Addresses renamed onto ADDRESSES.md on 2026-09-03 (the board-named /joy
+//   blob -> /state + /joy + /btn + /bat; the screen and rate addresses that
+//   sat under the old /joy prefix -> /display/text and /rate; the /enq
+//   booleans -> /enq/joy, /enq/btn, /enq/bat, /enq/display, /enq/diag +
+//   /diag); that build is compile-checked and has not been re-run on the
+//   board.
 //
 // M5Unified is OPT-IN, and off by default, because of a measurement:
 // 2026-08-17, on an AtomS3 seated in the Atom JoyStick base, M5.begin() DOES
@@ -207,7 +224,21 @@ static bool     joyOK = false, dispOK = false;
 static uint8_t  joyFw = 0;     // STM32 firmware version from 0xFE; 2 ships
 static int8_t   joySda = -1;   // which internal bus answered: 38=S3, 45=S3R
 static int32_t  seq = 0;
-static uint32_t reportMs = 50;
+static uint32_t reportMs = 50;   // stream period in ms; 0 = stopped (/rate 0)
+
+// The hello reply and every stream frame are bundles, built here and flushed
+// as one SLIP packet each.
+static OSCBundle bundleOUT;
+
+static void flushBundle() {
+  SLIPSerial.beginPacket();
+  bundleOUT.send(SLIPSerial);
+  SLIPSerial.endPacket();
+  bundleOUT.empty();
+}
+static void sendMessage(OSCMessage &m) {       // a single-message packet
+  SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
+}
 static char     lines[5][22] = { "AtomJoyOscuino", "OSC over USB", "", "", "" };
 
 // Open a candidate internal bus and see whether 0x59 answers on it. Returns
@@ -267,9 +298,33 @@ static void redraw() {
 #endif
 }
 
+/* ---------------------------------------------------------------- readings */
+
+// One message per capability, in the shape the hello announced. The stream
+// and the on-request replies share these, so a reading has one shape
+// whichever way it was asked for.
+static void fillJoy(OSCMessage &m) {           // /joy lx ly rx ry, 0..4095
+  uint16_t lx = 0, ly = 0, rx = 0, ry = 0;
+  joyPair(REG_L_BLOCK, lx, ly);                // two transactions, not four
+  joyPair(REG_R_BLOCK, rx, ry);
+  m.add((intOSC_t) lx).add((intOSC_t) ly).add((intOSC_t) rx).add((intOSC_t) ry);
+}
+static void fillBtn(OSCMessage &m) {           // /btn, 1 = pressed
+  if (joyOK) {                                 // L, R, L click, R click
+    const uint8_t btn = joyButtons();
+    for (uint8_t i = 0; i < 4; i++) m.add((intOSC_t) ((btn >> i) & 1));
+  }
+  m.add((intOSC_t) (digitalRead(BTN_FRONT) == LOW ? 1 : 0));  // the screen itself, last
+}
+static void fillBat(OSCMessage &m) {           // /bat bat1 mV, bat2 mV
+  uint16_t b1 = 0, b2 = 0;
+  joyPair(REG_BAT, b1, b2);
+  m.add((intOSC_t) b1).add((intOSC_t) b2);
+}
+
 /* ----------------------------------------------------------------- inbound */
 
-static void routeScreen(OSCMessage &m) {
+static void routeText(OSCMessage &m) {         // /display/text "a" ["b" ...]
   for (uint8_t i = 0; i < 5; i++) lines[i][0] = '\0';
   const int n = m.size() < 5 ? m.size() : 5;
   for (int i = 0; i < n; i++)
@@ -277,17 +332,62 @@ static void routeScreen(OSCMessage &m) {
   redraw();
 }
 
-static void routeRate(OSCMessage &m) {
-  if (m.size() >= 1 && m.isInt(0)) reportMs = constrain(m.getInt(0), 20, 2000);
+static void routeRate(OSCMessage &m) {         // /rate <ms>, 0 stops; echoed
+  if (m.size() >= 1 && m.isInt(0)) {
+    const int v = m.getInt(0);
+    reportMs = v <= 0 ? 0 : constrain(v, 20, 2000);
+  }
+  OSCMessage r("/rate");
+  r.add((intOSC_t) reportMs);
+  sendMessage(r);
 }
 
-static void sendHello() {
-  OSCMessage h("/hello");
-  h.add("AtomJoyOscuino").add(joyOK).add(dispOK).add((intOSC_t) 4)
-   .add((intOSC_t) joyFw).add((intOSC_t) joySda);
-  SLIPSerial.beginPacket(); h.send(SLIPSerial); SLIPSerial.endPacket();
+// A request for one capability answers on the same address, in the shape the
+// stream uses, whether or not the stream is running. /joy and /bat exist only
+// when the base answered, so they stay silent otherwise -- the hello did not
+// announce them; /btn always has the front button to report.
+static void routeJoy(OSCMessage &) { if (!joyOK) return; OSCMessage r("/joy"); fillJoy(r); sendMessage(r); }
+static void routeBtn(OSCMessage &) {                     OSCMessage r("/btn"); fillBtn(r); sendMessage(r); }
+static void routeBat(OSCMessage &) { if (!joyOK) return; OSCMessage r("/bat"); fillBat(r); sendMessage(r); }
+
+// What setup() proved, and nothing else: no booleans, and no "4 buttons" on
+// a base that never answered. The front button is the AtomS3's own GPIO41,
+// so it is announced even without the base; the base's four buttons, both
+// sticks and both battery channels are announced only if 0x59 answered on
+// one of the internal buses. Firmware version and bus are diagnostics, so
+// they follow as free text in /diag rather than as fields whose positions a
+// page would have to know.
+static void sendEnq() {
+  bundleOUT.add("/enq").add("AtomJoyOscuino");
+  if (joyOK) bundleOUT.add("/enq/joy").add((intOSC_t) 4);
+  bundleOUT.add("/enq/btn").add((intOSC_t) (joyOK ? 5 : 1));
+  if (joyOK) bundleOUT.add("/enq/bat");
+#ifdef JOY_LCD
+  if (dispOK) bundleOUT.add("/enq/display").add((intOSC_t) JOY_LCD.width())
+                                           .add((intOSC_t) JOY_LCD.height());
+#endif
+  bundleOUT.add("/enq/diag");
+  flushBundle();
+
+  // Which internal I2C bus answered also names the module (38 = AtomS3,
+  // 45 = AtomS3R), and 0xFE says whether the v2 button map above applies.
+  // Sentences, not fields: a page displays them and never parses them.
+  OSCMessage d("/diag");
+  char s[64];
+  if (joyOK) {
+    snprintf(s, sizeof s, "joystick 0x59 on SDA %d (%s)", (int) joySda,
+             joySda == JOY_SDA_S3 ? "AtomS3" : joySda == JOY_SDA_S3R ? "AtomS3R" : "?");
+    d.add(s);
+    if (joyFw) snprintf(s, sizeof s, "STM32 fw v%u", (unsigned) joyFw);
+    else       snprintf(s, sizeof s, "STM32 fw unread");
+    d.add(s);
+    if (joyFw != 2) d.add("button map here is the v2 one: verify before trusting");
+  } else {
+    d.add("no joystick at 0x59 on SDA 38 or SDA 45");
+  }
+  sendMessage(d);
 }
-static void routeHello(OSCMessage &) { sendHello(); }
+static void routeEnq(OSCMessage &) { sendEnq(); }
 
 void setup() {
   // USB FIRST. A sketch that cannot report its own failure is undebuggable on
@@ -314,13 +414,13 @@ void setup() {
        || joyBusBegin(JOY_SDA_S3R, JOY_SCL_S3R);         // AtomS3R
 
   // Which firmware answers decides whether the button mapping above is the
-  // v2 one. Reported in /hello rather than assumed: a v1 base would need the
+  // v2 one. Reported in /diag rather than assumed: a v1 base would need the
   // other pinout and a different battery divisor, so the page can say so
   // instead of drawing confident nonsense.
   if (joyOK && !joyRead(REG_FW, &joyFw, 1)) joyFw = 0;
 
   if (dispOK) redraw();
-  sendHello();                         // usually lost; the page asks again
+  sendEnq();                         // usually lost; the page asks again
 }
 
 // Non-blocking receive, the extras/webserial/template.ino pattern. Two rules,
@@ -354,32 +454,28 @@ void loop() {
 
   if (pollOSC()) {
     if (!inMsg.hasError()) {
-      inMsg.dispatch("/joy/screen", routeScreen);
-      inMsg.dispatch("/joy/rate",   routeRate);
-      inMsg.dispatch("/hello",      routeHello);
+      inMsg.dispatch("/display/text", routeText);
+      inMsg.dispatch("/rate",         routeRate);
+      inMsg.dispatch("/joy",          routeJoy);
+      inMsg.dispatch("/btn",          routeBtn);
+      inMsg.dispatch("/bat",          routeBat);
+      inMsg.dispatch("/enq",        routeEnq);
     }
     inMsg.empty();
   }
 
   const uint32_t now = millis();
-  if (now - last < reportMs) return;
+  if (!reportMs || now - last < reportMs) return;
   last = now;
 
-  uint16_t lx = 0, ly = 0, rx = 0, ry = 0, b1 = 0, b2 = 0;
-  uint8_t  btn = 0;
-  if (joyOK) {
-    joyPair(REG_L_BLOCK, lx, ly);      // four transactions, not ten
-    joyPair(REG_R_BLOCK, rx, ry);
-    joyPair(REG_BAT,     b1, b2);
-    btn = joyButtons();
-  }
-
-  OSCMessage m("/joy");
-  m.add((intOSC_t) seq++)
-   .add((intOSC_t) lx).add((intOSC_t) ly)
-   .add((intOSC_t) rx).add((intOSC_t) ry)
-   .add((intOSC_t) btn)
-   .add((intOSC_t) b1).add((intOSC_t) b2)
-   .add((intOSC_t) (digitalRead(BTN_FRONT) == LOW ? 1 : 0));
-  SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
+  // One bundle, sampled in one pass (four I2C transactions, not ten), so
+  // every reading in it belongs to the same instant. /state carries the
+  // sequence number and the millis it was taken at; the rest is one message
+  // per capability, never a board blob, and only the capabilities the hello
+  // announced.
+  bundleOUT.add("/state").add((intOSC_t) seq++).add((intOSC_t) now);
+  if (joyOK) fillJoy(bundleOUT.add("/joy"));
+  fillBtn(bundleOUT.add("/btn"));
+  if (joyOK) fillBat(bundleOUT.add("/bat"));
+  flushBundle();
 }

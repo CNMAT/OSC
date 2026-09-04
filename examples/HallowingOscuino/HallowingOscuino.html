@@ -20,6 +20,13 @@
 
   The HalloWing enumerates as Adafruit 0x239a. "show all ports" drops the
   filter if yours differs.
+
+  Addresses are the repository contract, ADDRESSES.md. On connect the page
+  asks /enq and the board answers a bundle: /enq "HallowingOscuino" then
+  /enq/display 128 128, /enq/buzz, /enq/rgb 1, /enq/light, /enq/cap 4 and,
+  only when the LIS3DH answered at boot, /enq/imu 3. The stream is a bundle
+  of /state <seq> <millis>, /light <i>, /cap <i> x4 and /imu <f> x3 (g).
+  Outbound: /display/text, /display/fill, /display/bl, /buzz, /rgb, /s/l.
 -->
 <html lang="en">
 <head>
@@ -82,10 +89,13 @@
 
 <h1>HalloWing M0 Express</h1>
 <p class="lede">
-  The light sensor, four capacitive pads and the LIS3DH accelerometer arrive as
-  a single <code>/hallowing</code> message, sampled in one pass so every reading
-  belongs to the same instant. Going the other way, the page drives the 128&times;128
-  screen, the DAC speaker, the NeoPixel and the red LED. Chrome or Edge, over
+  The light sensor, four capacitive pads and the LIS3DH accelerometer arrive
+  in one bundle &mdash; <code>/state</code>, <code>/light</code>,
+  <code>/cap</code>, <code>/imu</code> &mdash; sampled in one pass so every
+  reading belongs to the same instant. Going the other way, the page drives the
+  128&times;128 screen (<code>/display/text</code>, <code>/display/fill</code>,
+  <code>/display/bl</code>), the DAC speaker (<code>/buzz</code>), the NeoPixel
+  (<code>/rgb</code>) and the red LED (<code>/s/l</code>). Chrome or Edge, over
   Web Serial.
 </p>
 
@@ -104,7 +114,7 @@
   <div>
     <div class="panel">
       <div class="row">
-        <label>screen</label>
+        <label>display</label>
         <input type="text" id="l1" value="OSC for Arduino" maxlength="20">
         <input type="text" id="l2" value="HalloWing" maxlength="20">
         <button id="settext">show</button>
@@ -117,7 +127,7 @@
         <input type="range" id="lite" min="0" max="255" value="255">
       </div>
       <div class="row">
-        <label>speaker</label>
+        <label>buzz</label>
         <input type="number" id="freq" value="880" min="0" max="8000">
         <label for="ms">ms</label>
         <input type="number" id="ms" value="150" min="10" max="2000">
@@ -128,7 +138,7 @@
         <button data-note="523">C&#8593;</button>
       </div>
       <div class="row">
-        <label>neopixel</label>
+        <label>rgb</label>
         <input type="color" id="px" value="#00c878" style="width:52px;height:36px;background:none;border:1px solid var(--line);border-radius:8px">
         <button id="pxoff">off</button>
         <button id="led">red LED</button>
@@ -137,7 +147,7 @@
 
     <div class="panel">
       <canvas id="tilt" width="300" height="120"></canvas>
-      <div style="color:var(--dim);font-size:13px;margin-top:6px">tilt — accelerometer x/y</div>
+      <div style="color:var(--dim);font-size:13px;margin-top:6px">tilt — /imu x/y, &plusmn;1 g</div>
     </div>
   </div>
 
@@ -152,10 +162,11 @@
       <table style="margin-top:12px">
         <tr><td class="k">light</td><td class="v" id="light">–</td></tr>
         <tr><td colspan="2"><div class="bar"><i id="lightb"></i></div></td></tr>
-        <tr><td class="k">accel x</td><td class="v" id="ax">–</td></tr>
-        <tr><td class="k">accel y</td><td class="v" id="ay">–</td></tr>
-        <tr><td class="k">accel z</td><td class="v" id="az">–</td></tr>
+        <tr><td class="k">accel x (g)</td><td class="v" id="ax">–</td></tr>
+        <tr><td class="k">accel y (g)</td><td class="v" id="ay">–</td></tr>
+        <tr><td class="k">accel z (g)</td><td class="v" id="az">–</td></tr>
         <tr><td class="k">accelerometer</td><td class="v" id="ok">–</td></tr>
+        <tr><td class="k">stream seq</td><td class="v" id="seq">–</td></tr>
       </table>
     </div>
     <div class="panel" style="padding:10px"><div id="log">idle</div></div>
@@ -188,6 +199,12 @@ class Reader {
     this.pos = (e + 4) & ~3;
     return s;
   }
+  blob() {
+    const n = this.int32();
+    const v = this.b.subarray(this.pos, this.pos + n);
+    this.pos += (n + 3) & ~3;
+    return v;
+  }
 }
 
 function decodeMessage(bytes) {
@@ -209,6 +226,27 @@ function decodeMessage(bytes) {
     }
   }
   return { address, args };
+}
+
+// A SLIP frame carries either one message or a #bundle: 8 bytes of
+// timetag, then size-prefixed messages. The board sends bundles for
+// everything -- the /enq answer, echoes, and the stream -- so this
+// returns a flat list either way.
+function decodePacket(bytes) {
+  if (bytes.length < 8 || dec.decode(bytes.subarray(0, 8)) !== "#bundle\0")
+    return [decodeMessage(bytes)];
+  const out = [];
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let pos = 16;                                   // "#bundle\0" + timetag
+  while (pos + 4 <= bytes.length) {
+    const n = dv.getInt32(pos); pos += 4;
+    if (n <= 0 || pos + n > bytes.length) break;
+    const sub = bytes.subarray(pos, pos + n); pos += n;
+    if (sub.length >= 8 && dec.decode(sub.subarray(0, 8)) === "#bundle\0")
+      out.push(...decodePacket(sub));             // nested, allowed by OSC
+    else out.push(decodeMessage(sub));
+  }
+  return out;
 }
 
 const pad4 = b => { const n = (b.length + 3) & ~3; const o = new Uint8Array(n); o.set(b); return o; };
@@ -274,6 +312,8 @@ async function connect() {
   pipeDone = readLoop();
   setConnected(true);
   logLine("", "connected");
+  // The boot /enq is lost to USB re-enumeration, so ask for it.
+  await send("/enq", []);
 }
 
 async function readLoop() {
@@ -330,9 +370,9 @@ function drawTilt() {
   tiltCtx.strokeRect(.5, .5, w - 1, h - 1);
   tiltCtx.beginPath(); tiltCtx.moveTo(w/2, 0); tiltCtx.lineTo(w/2, h);
   tiltCtx.moveTo(0, h/2); tiltCtx.lineTo(w, h/2); tiltCtx.stroke();
-  // LIS3DH at +-4g reads about +-8192 for 1g; clamp to that.
-  const x = w/2 + Math.max(-1, Math.min(1, tiltX / 8192)) * (w/2 - 12);
-  const y = h/2 + Math.max(-1, Math.min(1, tiltY / 8192)) * (h/2 - 12);
+  // /imu is in g; full deflection at 1 g, i.e. the board on its edge.
+  const x = w/2 + Math.max(-1, Math.min(1, tiltX)) * (w/2 - 12);
+  const y = h/2 + Math.max(-1, Math.min(1, tiltY)) * (h/2 - 12);
   tiltCtx.fillStyle = "#c084fc";
   tiltCtx.beginPath(); tiltCtx.arc(x, y, 9, 0, Math.PI * 2); tiltCtx.fill();
 }
@@ -343,36 +383,72 @@ drawTilt();
 // minimum per pad and call it a hit at 1.6x that.
 const padFloor = [1e9, 1e9, 1e9, 1e9];
 
-function onFrame(payload) {
-  let m; try { m = decodeMessage(payload); } catch { return; }
+const fresh = () => document.querySelectorAll(".stale").forEach(n => n.classList.remove("stale"));
+const g3 = v => v.toFixed(3);
 
-  if (m.address === "/hallowing") {
-    const [light, t0, t1, t2, t3, ax, ay, az, ok] = m.args;
-    document.querySelectorAll(".stale").forEach(n => n.classList.remove("stale"));
-    if (typeof light === "number") {
+function onMessage(m) {
+  switch (m.address) {
+    case "/state": {                              // seq, millis -- the stream's heartbeat
+      const [seq] = m.args;
+      if (typeof seq === "number") $("seq").textContent = seq;
+      fresh();
+      return;
+    }
+    case "/light": {
+      const [light] = m.args;
+      if (typeof light !== "number") return;
       $("light").textContent = light;
       $("lightb").style.width = Math.min(100, light / 1023 * 100) + "%";
+      fresh();
+      return;
     }
-    [t0, t1, t2, t3].forEach((v, i) => {
-      if (typeof v !== "number") return;
-      $("p" + i + "v").textContent = v;
-      // The floor must LEAK UPWARD as well as fall: a running minimum that
-      // only falls latches a pad permanently "hit" after one low sample.
-      // Half a count per frame (~10/s at the 20 Hz default) re-adapts to a
-      // genuinely higher resting level in a few seconds without tracking a
-      // real touch, which lasts well under that.
-      padFloor[i] = v < padFloor[i] ? v : padFloor[i] + 0.5;
-      $("p" + i).classList.toggle("hit", v > padFloor[i] * 1.6);
-    });
-    if (typeof ax === "number") { $("ax").textContent = ax; tiltX = ax; }
-    if (typeof ay === "number") { $("ay").textContent = ay; tiltY = ay; }
-    if (typeof az === "number") $("az").textContent = az;
-    if (typeof ok === "boolean") $("ok").textContent = ok ? "ok" : "not found";
-    drawTilt();
-    return;
+    case "/cap": {
+      m.args.slice(0, 4).forEach((v, i) => {
+        if (typeof v !== "number") return;
+        $("p" + i + "v").textContent = v;
+        // The floor must LEAK UPWARD as well as fall: a running minimum that
+        // only falls latches a pad permanently "hit" after one low sample.
+        // Half a count per frame (about 8/s at the sketch's 60 ms default
+        // /rate) re-adapts to a genuinely higher resting level in a few
+        // seconds without tracking a real touch, which lasts well under that.
+        padFloor[i] = v < padFloor[i] ? v : padFloor[i] + 0.5;
+        $("p" + i).classList.toggle("hit", v > padFloor[i] * 1.6);
+      });
+      fresh();
+      return;
+    }
+    case "/imu": {                                // g: x y z
+      // Absence is silence: a board without the LIS3DH sends no /imu at all,
+      // so there is no "missing" case to decode here. Presence comes from
+      // /enq/imu below, reset to "not found" by each /enq.
+      const [ax, ay, az] = m.args;
+      if (typeof ax === "number") { $("ax").textContent = g3(ax); tiltX = ax; }
+      if (typeof ay === "number") { $("ay").textContent = g3(ay); tiltY = ay; }
+      if (typeof az === "number") $("az").textContent = g3(az);
+      $("ok").textContent = "ok";
+      fresh();
+      drawTilt();
+      return;
+    }
+    case "/enq":
+      logLine("", "board: " + m.args.join(" "));
+      // Presence is announced by /enq lines; assume absent until one arrives.
+      $("ok").textContent = "not found";
+      return;
+    default:
+      if (m.address.startsWith("/enq/")) {
+        logLine("", m.address.slice(5) + (m.args.length ? " " + m.args.join(" ") : ""));
+        if (m.address === "/enq/imu") $("ok").textContent = "ok";
+        return;
+      }
+      // Echoes of what the page just sent: /display/*, /buzz, /rgb, /s/l, /rate.
+      logLine("", m.address + " " + m.args.join(" "));
   }
+}
 
-  if (m.address === "/hello") logLine("", "board: " + m.args.join(" "));
+function onFrame(payload) {
+  let msgs; try { msgs = decodePacket(payload); } catch { return; }
+  for (const m of msgs) onMessage(m);
 }
 
 setInterval(() => {
@@ -396,17 +472,17 @@ if (!("serial" in navigator)) {
 
 $("connect").onclick    = () => connect().catch(e => logLine("warn", e.message));
 $("disconnect").onclick = () => disconnect();
-$("settext").onclick    = () => send("/screen/text", [$("l1").value, $("l2").value]);
-$("fill").onclick       = () => send("/screen/fill", hex2rgb($("bg").value));
-$("lite").oninput       = e => send("/screen/backlight", [parseInt(e.target.value, 10)]);
-$("beep").onclick       = () => send("/tone", [parseInt($("freq").value, 10) || 440,
-                                               parseInt($("ms").value, 10) || 150, 140]);
+$("settext").onclick    = () => send("/display/text", [$("l1").value, $("l2").value]);
+$("fill").onclick       = () => send("/display/fill", hex2rgb($("bg").value));
+$("lite").oninput       = e => send("/display/bl", [parseInt(e.target.value, 10)]);
+$("beep").onclick       = () => send("/buzz", [parseInt($("freq").value, 10) || 440,
+                                               parseInt($("ms").value, 10) || 150]);
 document.querySelectorAll("button[data-note]").forEach(b =>
-  b.onclick = () => send("/tone", [parseInt(b.dataset.note, 10), 180, 140]));
-$("px").oninput         = e => send("/pixel", hex2rgb(e.target.value));
-$("pxoff").onclick      = () => send("/pixel", [0, 0, 0]);
+  b.onclick = () => send("/buzz", [parseInt(b.dataset.note, 10), 180]));
+$("px").oninput         = e => send("/rgb", hex2rgb(e.target.value));
+$("pxoff").onclick      = () => send("/rgb", [0, 0, 0]);
 let led = false;
-$("led").onclick        = () => { led = !led; send("/led", [led ? 1 : 0]); };
+$("led").onclick        = () => { led = !led; send("/s/l", [led ? 1 : 0]); };
 
 // The OS-level unplug event: without it the page read "connected" forever
 // after the board vanished, and only a manual click reset the UI.

@@ -3,7 +3,7 @@
   Open Sound Control (OSC) library for the ESP8266/ESP32
 
   Example for receiving open sound control (OSC) messages on the ESP8266/ESP32
-  Send integers '0' or '1' to the address "/led" to turn on/off the built-in LED of the esp8266.
+  Send integers '0' or '1' to the address "/s/l" to turn on/off the built-in LED of the esp8266.
 
   This example code is in the public domain.
 
@@ -77,7 +77,7 @@ void setup() {
 void led(OSCMessage &msg) {
   ledState = msg.getInt(0);
   digitalWrite(BUILTIN_LED, ledState);
-  Serial.print("/led: ");
+  Serial.print("/s/l: ");
   Serial.println(ledState);
 }
 
@@ -93,7 +93,7 @@ void loop() {
       msg.fill((uint8_t)c);
     }
     if (!msg.hasError()) {
-      msg.dispatch("/led", led);
+      msg.dispatch("/s/l", led);
     } else {
       error = msg.getError();
       Serial.print("error: ");

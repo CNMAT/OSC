@@ -40,11 +40,12 @@ void loop(){
     if(!bndl.hasError())
     {
         static intOSC_t sequencenumber=0;
-        // we can sneak an addition onto the end of the bundle
-        bndl.add("/micros").add((intOSC_t)micros()); // (int32_t) is the type of OSC Integers
-        bndl.add("/sequencenumber").add(sequencenumber++);
-        bndl.add("/digital/5").add(digitalRead(5)==HIGH);
-        bndl.add("/lsb").add((sequencenumber &1)==1);
+        // we can sneak additions onto the end of the bundle: the /state
+        // heartbeat every stream carries (sequence, millis), a pin reading,
+        // and a /diag label with a value no page parses
+        bndl.add("/state").add(sequencenumber++).add((intOSC_t)millis()); // (intOSC_t) is the type of OSC Integers
+        bndl.add("/d/5").add((intOSC_t)digitalRead(5));
+        bndl.add("/diag").add("lsb").add((sequencenumber &1)==1);
         SLIPSerial.beginPacket(); // mark the beginning of the OSC Packet
             bndl.send(SLIPSerial);
         SLIPSerial.endPacket();     

@@ -142,7 +142,7 @@ the NUL-carrying raw `POST /osc` body that the old truncation bug killed, and
 `Access-Control-Allow-Origin: *` on both `GET /state` and the OPTIONS preflight.
 
 **Still unverified: the IP shown on the OLED.** The C6 was bare for this run, so
-`/hello` reported `display:false, rtc:false` and the display path never
+`/enq` reported `display:false, rtc:false` and the display path never
 executed. Put the C6 back on the expansion board and that last line closes.
 
 The run also found a fix now in the sketch: the ESP32's default modem power save
@@ -198,7 +198,7 @@ obsolete. The WS1850S turns out to be register-compatible with the MFRC522 and
 is driven over M5Unified's own internal bus. A tag arriving streams `/rfid T`
 with its UID; silence for two polls streams `/rfid F`. The RC522's own timer
 bounds every transceive at ~7 ms, so a missing tag cannot stall the loop, and
-`/hello` gained an `rfidPresent` flag. Encoder direction was measured in the
+`/enq` gained an `rfidPresent` flag. Encoder direction was measured in the
 same commit.
 
 `M5DialOscuino.ino:34` now documents the driver rather than its absence.
@@ -223,6 +223,49 @@ CDC enumeration even with correct firmware, so a failure here would need that
 ruled out before it meant anything about the library.
 
 Landed in `dbff6dd`, after this list was first written.
+---
+
+### 3.11 The address rename — compile-checked, mostly not re-run — **OPEN**
+
+On 2026-09-03 every sketch, firmware and page in the tree moved onto the
+capability address space in `ADDRESSES.md`. That is a change to what each board
+*says*, so every board's STATUS comment now carries a "renamed on 2026-09-03"
+sentence, and for most boards that build has never been on hardware.
+
+Re-verified so far:
+
+| board | evidence |
+|---|---|
+| XIAO MG24 (Sense) | USB, 2026-09-03: `oscprobe` clean, `contractprobe` 9/9, retired `/mg*` silent. BLE half **not** re-run |
+| XIAO ESP32-C6, USB (`XiaoC6ExpOscuino`) | 2026-09-04: `contractprobe` 14/14, retired `/xc6 /led /hello` all silent |
+| XIAO ESP32-C6, WiFi (`XiaoC6ExpWiFi`) | 2026-09-04: 7/7 — UDP 20/20 round trips (median 10 ms), state bundle, CORS, `GET /enq`, `POST /osc` |
+| XIAO ESP32-C6, BLE (`XiaoC6ExpBLE`) | 2026-09-04: greeting, echoes, 12 consecutive `/state` bundles seq 2208..2219 with no gaps at 100 ms, `/rate 0` stops |
+
+The C6 is the first board verified on all three transports since the rename.
+Each pass found real defects rather than confirming a hope: `/rate 0` clamped
+to 20 ms so "stop" streamed faster, actuators never echoed, `/s/m` unanswered,
+display commands answered on a board with no display, and a BLE notification
+race that corrupted every bundle on the air while USB stayed clean.
+
+Everything else in `examples/` is compile-only since the rename. The tool for
+closing this is `test/hardware/contractprobe.py`, which needs no per-board
+knowledge: it asks the board `/enq`, reads the `/enq` lines, and tests exactly
+the capabilities that board claims, against the shapes in `ADDRESSES.md`. The
+retired addresses go on the command line so the negative test is explicit:
+
+```sh
+python3 test/hardware/contractprobe.py /dev/cu.usbmodemXXXX <Name> /old /old/addr --quiet
+```
+
+`--quiet` prints the one line this table wants. Anything that moves — motor,
+servo, relay — is skipped unless `--actuate` is passed, and `--sound` allows an
+audible beep. The probe's own correctness is covered without hardware by
+`test/hardware/test_contractprobe.py`, which runs it against a conformant
+simulated board and a deliberately broken one; CI runs that.
+
+Boards are cheap to re-check and there are many; the honest close condition is a
+row per board in the table above, not a claim that the rename "should" be fine.
+
 ---
 
 ## 4. The STM32 queue remedy is not in any example

@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<!--
+  GENERATED FILE — do not edit directly.
+  Source: extras/webserial/template.html + extras/webserial/boards.json
+  Regenerate:  cd extras/webserial && make generate
+  Verify:      cd extras/webserial && make check
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XiaoC6ExpBLE &mdash; OSC in the browser</title>
+<style>
+  :root {
+    --bg: #10131a;
+    --panel: #171b24;
+    --panel-2: #1e2430;
+    --line: #2a3140;
+    --text: #dde3ec;
+    --dim: #8b95a7;
+    --accent: #5eead4;
+    --tx: #7dd3fc;
+    --rx: #86efac;
+    --err: #fca5a5;
+    --diag: #f5d78e;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  h1 { font-size: 18px; margin: 0 0 2px; font-weight: 600; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 20px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 16px; margin-bottom: 14px;
+  }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .ph { display: flex; gap: 12px; align-items: baseline; margin-bottom: 10px; }
+  label { color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .shape { color: var(--dim); font-family: var(--mono); font-size: 12px; }
+  input, select, button, textarea {
+    font: inherit; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 7px; padding: 8px 10px;
+  }
+  input[type=text], textarea { font-family: var(--mono); font-size: 13px; }
+  input[type=number] { width: 90px; font-family: var(--mono); font-size: 13px; }
+  input[type=range] { width: 140px; padding: 0; }
+  input[type=color] { width: 44px; height: 36px; padding: 2px; }
+  textarea { width: 100%; resize: vertical; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: #06231f; border-color: var(--accent); font-weight: 600; }
+  .grow { flex: 1; min-width: 120px; }
+  .v { font-family: var(--mono); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #555e6e; display: inline-block; }
+  .dot.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .chips button { font-family: var(--mono); font-size: 12px; padding: 5px 9px; }
+  .caps { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .caps span {
+    font-family: var(--mono); font-size: 12px; padding: 2px 9px;
+    border: 1px solid var(--line); border-radius: 12px; color: var(--accent);
+  }
+  .bar { height: 10px; width: 140px; background: var(--panel-2); border-radius: 5px;
+         overflow: hidden; display: inline-block; vertical-align: middle; position: relative; }
+  .bar i { display: block; height: 100%; background: var(--accent); width: 0; position: absolute; left: 0; }
+  .dots { display: flex; gap: 8px; flex-wrap: wrap; }
+  .dots span {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--panel-2);
+    border: 1px solid var(--line); display: inline-flex; align-items: center;
+    justify-content: center; font-size: 11px; color: var(--dim); font-family: var(--mono);
+  }
+  .dots span.on { background: var(--accent); color: #06231f; border-color: var(--accent); }
+  .swatch { width: 28px; height: 28px; border-radius: 6px; padding: 0; font-size: 10px; color: var(--dim); }
+  table.kv { border-collapse: collapse; }
+  table.kv td { padding: 2px 12px 2px 0; }
+  table.kv td.k { color: var(--dim); }
+  canvas { background: #000; border: 4px solid #222; border-radius: 6px; max-width: 100%; display: block; }
+  canvas.round { border-radius: 50%; }
+  #camImg { max-width: 100%; border-radius: 6px; border: 1px solid var(--line); display: block; }
+  #log {
+    font-family: var(--mono); font-size: 12.5px;
+    height: 320px; overflow-y: auto;
+    background: #0c0f15; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; white-space: pre-wrap; word-break: break-word;
+  }
+  .e { padding: 1px 0; }
+  .t { color: #5b6478; }
+  .tx .a { color: var(--tx); }
+  .rx .a { color: var(--rx); }
+  .sys { color: var(--dim); }
+  .err { color: var(--err); }
+  .diag { color: var(--diag); }
+  .hex { color: #6b7488; font-size: 11.5px; }
+  .note { color: var(--dim); font-size: 12.5px; margin-top: 10px; }
+  code { font-family: var(--mono); background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+  .unsupported { border-color: var(--err); }
+  .board { color: var(--accent); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>XiaoC6ExpBLE</h1>
+  <div class="sub">OSC for <span class="board">Seeed XIAO ESP32-C6 + Expansion Board, BLE twin</span> (ESP32-C6) over Bluetooth LE (Nordic UART Service). Browser &harr; OSC &harr; the CNMAT OSC library. Pair with <code>XiaoC6ExpBLE.ino</code>. No server, no dependencies.</div>
+
+  <div class="panel" id="connPanel">
+    <div class="row">
+      <span class="dot" id="dot"></span>
+      <span id="status" class="grow">Not connected</span>
+      <label for="transport">via</label>
+      <select id="transport">
+        <option value="serial">Web Serial</option>
+        <option value="ble">Web Bluetooth</option>
+        <option value="http">HTTP</option>
+      </select>
+      <span class="row" id="serialOpts">
+        <label><input type="checkbox" id="allPorts"> show all ports</label>
+        <label for="baud">Baud</label>
+        <select id="baud">
+          <option>9600</option>
+          <option selected>115200</option>
+          <option>230400</option>
+          <option>460800</option>
+          <option>921600</option>
+        </select>
+      </span>
+      <span class="row" id="httpOpts" hidden>
+        <label for="host">board</label>
+        <input type="text" id="host" value="" placeholder="192.168.1.50" style="width:170px" aria-label="board address">
+      </span>
+      <button id="connect" class="primary">Connect</button>
+      <button id="disconnect" disabled>Disconnect</button>
+    </div>
+    <div class="note" id="support"></div>
+  </div>
+
+  <div class="panel" id="boardPanel">
+    <div class="row">
+      <label>Board</label>
+      <span class="v grow" id="helloName">&ndash;</span>
+      <button id="askHello" disabled>ask /enq</button>
+    </div>
+    <div class="caps" id="capList"><span class="shape" style="border:0;padding:0">no /enq yet</span></div>
+    <div class="row" style="margin-top:12px">
+      <label>Stream</label>
+      <span class="v">seq <span id="seq">&ndash;</span></span>
+      <span class="v">millis <span id="millis">&ndash;</span></span>
+      <span class="v"><span id="pps">0</span> pkt/s</span>
+      <label for="rate">/rate ms</label>
+      <input type="number" id="rate" value="100" min="0" step="10">
+      <button id="rateSet" disabled>Set</button>
+      <button id="rateStop" disabled>Stop</button>
+    </div>
+    <div class="note">
+      The board answers <code>/enq</code> with its name and one <code>/enq/&lt;capability&gt;</code>
+      line per thing it actually has; a panel below appears for each one announced.
+      A stream is a bundle of <code>/state &lt;seq&gt; &lt;millis&gt;</code> plus one message per
+      streamed capability, every <code>/rate</code> ms (0 stops it). Over HTTP the page polls
+      <code>GET /state</code> at that period instead.
+    </div>
+  </div>
+
+  <!-- Capability panels: one per /enq root, hidden until announced. -->
+
+  <div class="panel cap" data-cap="rgb" hidden>
+    <div class="ph"><label>rgb</label><span class="shape" id="rgbShape"></span></div>
+    <div class="row">
+      <input type="color" id="rgbColor" value="#40c0a0" aria-label="colour">
+      <button id="rgbAll">all &rarr; /rgb</button>
+      <button id="rgbOff">off</button>
+      <label for="rgbBright">/rgb/bright</label>
+      <input type="range" id="rgbBright" min="0" max="255" value="255">
+      <span class="v" id="rgbBrightV">255</span>
+    </div>
+    <div class="row" id="rgbPixels" style="margin-top:10px"></div>
+    <div class="note" id="rgbNote"></div>
+  </div>
+
+  <div class="panel cap" data-cap="display" hidden>
+    <div class="ph"><label>display</label><span class="shape" id="displayShape"></span></div>
+    <div class="row" style="align-items:flex-start">
+      <div>
+        <canvas id="displayCanvas" width="240" height="120"></canvas>
+        <div class="note" id="displayDrawn">mirror of what this page sent</div>
+      </div>
+      <div class="grow">
+        <textarea id="displayLines" rows="4" placeholder="one line per row &rarr; /display/text">hello from
+the browser</textarea>
+        <div class="row" style="margin-top:6px">
+          <button id="displayText">/display/text</button>
+          <button id="displayClear">clear</button>
+          <input type="color" id="displayFillColor" value="#202080" aria-label="fill colour">
+          <button id="displayFill">fill</button>
+          <input type="text" id="displayBigText" value="HELLO" style="width:110px" aria-label="big text">
+          <button id="displayBig">big</button>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <label for="displayBl">/display/bl</label>
+          <input type="range" id="displayBl" min="0" max="255" value="255">
+          <span class="v" id="displayBlV">255</span>
+          <label><input type="checkbox" id="displayInvert"> invert</label>
+          <button id="displayNet" hidden>network panel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="buzz" hidden>
+    <div class="ph"><label>buzz</label><span class="shape" id="buzzShape"></span></div>
+    <div class="row">
+      <input type="number" id="buzzHz" value="440" min="0" aria-label="hz"><label>hz</label>
+      <input type="number" id="buzzMs" value="200" min="0" aria-label="ms"><label>ms</label>
+      <button id="buzzPlay">/buzz</button>
+      <button id="buzzStop">stop</button>
+      <span class="chips" id="buzzNotes" style="margin:0"></span>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="btn" hidden>
+    <div class="ph"><label>btn</label><span class="shape" id="btnShape"></span></div>
+    <div class="row">
+      <div class="dots" id="btnDots"></div>
+      <button id="btnRead">/btn</button>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="imu" hidden>
+    <div class="ph"><label>imu</label><span class="shape" id="imuShape"></span></div>
+    <div class="row" style="align-items:flex-start">
+      <table class="kv" id="imuRows"></table>
+      <button id="imuRead">/imu</button>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="mic" hidden>
+    <div class="ph"><label>mic</label><span class="shape">rms, peak &mdash; full scale 32767</span></div>
+    <div class="row">
+      <span class="bar" style="width:200px"><i id="micBar"></i></span>
+      <span class="v" id="micDb">&ndash;</span>
+      <span class="v" id="micPeak" style="color:var(--dim);font-size:12px"></span>
+      <button id="micRead">/mic</button>
+      <label for="micGain">/mic/gain</label>
+      <input type="range" id="micGain" min="0" max="80" value="40">
+      <span class="v" id="micGainV">40</span>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="light" hidden>
+    <div class="ph"><label>light</label></div>
+    <div class="row"><span class="v" id="lightV">&ndash;</span><button id="lightRead">/light</button></div>
+  </div>
+
+  <div class="panel cap" data-cap="temp" hidden>
+    <div class="ph"><label>temp</label></div>
+    <div class="row"><span class="v" id="tempV">&ndash;</span><button id="tempRead">/temp</button></div>
+  </div>
+
+  <div class="panel cap" data-cap="hum" hidden>
+    <div class="ph"><label>hum</label></div>
+    <div class="row"><span class="v" id="humV">&ndash;</span><button id="humRead">/hum</button></div>
+  </div>
+
+  <div class="panel cap" data-cap="bat" hidden>
+    <div class="ph"><label>bat</label></div>
+    <div class="row"><span class="v" id="batV">&ndash;</span><button id="batRead">/bat</button></div>
+  </div>
+
+  <div class="panel cap" data-cap="chg" hidden>
+    <div class="ph"><label>chg</label></div>
+    <div class="row">
+      <span class="v" id="chgV">&ndash;</span>
+      <button id="chgRead">/chg</button>
+      <input type="number" id="chgMa" value="100" min="0" aria-label="mA"><label>mA</label>
+      <button id="chgSet">set</button>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="touch" hidden>
+    <div class="ph"><label>touch</label><span class="shape" id="touchShape"></span></div>
+    <div class="row" style="align-items:flex-start">
+      <canvas id="touchCanvas" width="240" height="240"></canvas>
+      <div>
+        <div class="v" id="touchV">&ndash;</div>
+        <div class="row" style="margin-top:8px">
+          <label>/touch/map</label>
+          <label><input type="checkbox" id="touchSwap"> swap xy</label>
+          <label><input type="checkbox" id="touchMx"> mirror x</label>
+          <label><input type="checkbox" id="touchMy"> mirror y</label>
+        </div>
+        <div class="row" style="margin-top:8px"><button id="touchClear">clear dots</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="cap" hidden>
+    <div class="ph"><label>cap</label><span class="shape" id="capShape"></span></div>
+    <div class="row" style="align-items:flex-start">
+      <table class="kv" id="capRows"></table>
+      <button id="capRead">/cap</button>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="joy" hidden>
+    <div class="ph"><label>joy</label><span class="shape" id="joyShape"></span></div>
+    <div class="row" style="align-items:flex-start">
+      <table class="kv" id="joyRows"></table>
+      <button id="joyRead">/joy</button>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="pot" hidden>
+    <div class="ph"><label>pot</label><span class="shape" id="potShape"></span></div>
+    <div class="row" style="align-items:flex-start">
+      <table class="kv" id="potRows"></table>
+      <button id="potRead">/pot</button>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="enc" hidden>
+    <div class="ph"><label>enc</label></div>
+    <div class="row">
+      <span class="v" id="encV">&ndash;</span>
+      <button id="encRead">/enc</button>
+      <button id="encZero">/enc/zero</button>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="rtc" hidden>
+    <div class="ph"><label>rtc</label></div>
+    <div class="row">
+      <span class="v" id="rtcV">&ndash;</span>
+      <button id="rtcRead">/rtc</button>
+      <button id="rtcSet">set from this computer's clock</button>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="rfid" hidden>
+    <div class="ph"><label>rfid</label></div>
+    <div class="row">
+      <span class="v" id="rfidV">&ndash;</span>
+      <button id="rfidDiag">/rfid/diag</button>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="cam" hidden>
+    <div class="ph"><label>cam</label><span class="shape" id="camShape"></span></div>
+    <div class="row" style="align-items:flex-start">
+      <div style="min-width:160px"><img id="camImg" alt="no frame yet" width="320"></div>
+      <div>
+        <div class="row">
+          <button id="camStream1">/stream 1</button>
+          <button id="camStream0">/stream 0</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <label for="camSize">/cam/size</label>
+          <input type="number" id="camSize" value="0" min="0" aria-label="size index">
+          <button id="camSizeSet">set</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <label for="camQuality">/cam/quality</label>
+          <input type="range" id="camQuality" min="0" max="63" value="12">
+          <span class="v" id="camQualityV">12</span>
+        </div>
+        <div class="note" id="camNote">&ndash;</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="motor" hidden>
+    <div class="ph"><label>motor</label><span class="shape" id="motorShape"></span></div>
+    <div id="motorRows"></div>
+  </div>
+
+  <div class="panel cap" data-cap="servo" hidden>
+    <div class="ph"><label>servo</label><span class="shape" id="servoShape"></span></div>
+    <div id="servoRows"></div>
+  </div>
+
+  <div class="panel cap" data-cap="relay" hidden>
+    <div class="ph"><label>relay</label><span class="shape" id="relayShape"></span></div>
+    <div id="relayRows"></div>
+  </div>
+
+  <div class="panel cap" data-cap="net" hidden>
+    <div class="ph"><label>net</label></div>
+    <table class="kv">
+      <tr><td class="k">ip</td><td class="v" id="netIp">&ndash;</td></tr>
+      <tr><td class="k">rssi</td><td class="v" id="netRssi">&ndash;</td></tr>
+      <tr><td class="k">udp port</td><td class="v" id="netPort">&ndash;</td></tr>
+    </table>
+  </div>
+
+  <!-- The core every sketch speaks: pins and the /s system addresses. -->
+  <div class="panel" id="pinPanel">
+    <div class="ph"><label>pins</label><span class="shape">/d /a /tone /s &mdash; every sketch</span></div>
+    <div class="row">
+      <label for="pin">pin</label>
+      <input type="number" id="pin" value="0" min="0" style="width:70px">
+      <button id="pinReadD">read /d</button>
+      <button id="pinReadU">read /d/u</button>
+      <button id="pinHigh">high</button>
+      <button id="pinLow">low</button>
+      <input type="range" id="pwm" min="0" max="1" step="0.01" value="0.5">
+      <button id="pwmSend">PWM <span class="v" id="pwmV">0.50</span></button>
+      <button id="pinReadA">read /a</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input type="number" id="toneHz" value="440" min="0" aria-label="tone hz"><label>hz</label>
+      <input type="number" id="toneMs" value="200" min="0" aria-label="tone ms"><label>ms</label>
+      <button id="toneSend">/tone/&lt;pin&gt;</button>
+      <button id="toneStop">tone off</button>
+    </div>
+    <div class="chips">
+      <button data-a="/s/m" data-g="">/s/m micros</button>
+      <button data-a="/s/d" data-g="">/s/d pins</button>
+      <button data-a="/s/a" data-g="">/s/a analog pins</button>
+      <button data-a="/s/v" data-g="">/s/v volts</button>
+      <button data-a="/s/l" data-g="1">LED on</button>
+      <button data-a="/s/l" data-g="0">LED off</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <input type="text" id="addr" class="grow" value="/s/m" placeholder="address" aria-label="OSC address">
+      <input type="text" id="args" class="grow" value="" placeholder="args, e.g.  1  0.5  f:1  s:hi  T" aria-label="OSC arguments">
+      <label><input type="checkbox" id="bundle" checked> bundle</label>
+      <button id="send" disabled>Send</button>
+    </div>
+    <div class="chips">
+      <button data-a="/display/text" data-g="s:OSC-over-BLE s:XIAO-ESP32-C6">OLED text</button>
+      <button data-a="/display/clear" data-g="">clear</button>
+      <button data-a="/buzz" data-g="523 200">buzz C5</button>
+      <button data-a="/buzz" data-g="0">silence</button>
+      <button data-a="/s/l" data-g="1">LED on</button>
+      <button data-a="/s/l" data-g="0">LED off</button>
+      <button data-a="/rate" data-g="100">stream 100 ms</button>
+      <button data-a="/rate" data-g="0">stop stream</button>
+    </div>
+    <div class="note">
+      Args are typed automatically: <code>1</code> &rarr; int, <code>0.5</code> &rarr; float, anything else &rarr; string.
+      Force a type with <code>i:</code> <code>f:</code> <code>s:</code>, or use bare <code>T</code> <code>F</code> <code>N</code>.
+      <b>bundle</b> is ticked by default because <code>XiaoC6ExpBLE.ino</code> reads bundles, as do the stock Oscuino examples and the CNMAT Max patches.
+      <br><br>
+      <b>Seeed XIAO ESP32-C6 + Expansion Board, BLE twin.</b> The third twin: the same vocabulary over Bluetooth LE (Nordic UART Service, through the sketch's ble_stream.h adapter) and over USB serial at the same time, so Web Bluetooth and Web Serial both work here. /display/text takes four lines, /display/clear blanks the OLED, /buzz hz ms, /s/l the XIAO's LED (active low on this module), /rate the /state + /btn period. Needs Adafruit SSD1306 + GFX; stock FQBN defaults. The USB filter is Espressif's USB-Serial-JTAG id.
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row" style="margin-bottom:10px">
+      <label class="grow">Traffic</label>
+      <label><input type="checkbox" id="logStreams"> log /state bundles</label>
+      <label><input type="checkbox" id="showHex"> show raw bytes</label>
+      <button id="clear">Clear</button>
+    </div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   0. Board identity — the only generated part of this script
+   ============================================================ */
+
+const BOARD_NAME  = "Seeed XIAO ESP32-C6 + Expansion Board, BLE twin";
+const BOARD_FQBN  = "esp32:esp32:XIAO_ESP32C6";
+const USB_FILTERS = [
+  { usbVendorId: 0x303A, usbProductId: 0x1001 },
+];
+const NATIVE_USB  = true;
+const SUPPORT_HTML = "<b>Seeed XIAO ESP32-C6 + Expansion Board, BLE twin</b> has native USB, so the baud rate above is ignored by the hardware &mdash; Web Serial still requires one. Build for <code>esp32:esp32:XIAO_ESP32C6</code>.";
+const DEFAULT_TRANSPORT = "ble";   // "serial" | "ble" | "http"
+
+/* ============================================================
+   1. OSC 1.0 codec  —  zero dependencies, Uint8Array in/out
+   ------------------------------------------------------------
+   Swap this whole section for osc.js (osc.writePacket /
+   osc.readPacket) if you'd rather use a maintained codec;
+   the sections after it don't care where the bytes come from.
+   ============================================================ */
+
+const TE = new TextEncoder();
+const TD = new TextDecoder();
+
+class Writer {
+  constructor() {
+    this.buf = new Uint8Array(256);
+    this.view = new DataView(this.buf.buffer);
+    this.len = 0;
+  }
+  _grow(extra) {
+    if (this.len + extra <= this.buf.length) return;
+    let cap = this.buf.length;
+    while (cap < this.len + extra) cap *= 2;
+    const next = new Uint8Array(cap);
+    next.set(this.buf.subarray(0, this.len));
+    this.buf = next;
+    this.view = new DataView(next.buffer);
+  }
+  u8(v)      { this._grow(1); this.buf[this.len++] = v; }
+  int32(v)   { this._grow(4); this.view.setInt32(this.len, v, false);   this.len += 4; }
+  float32(v) { this._grow(4); this.view.setFloat32(this.len, v, false); this.len += 4; }
+  raw(bytes) { this._grow(bytes.length); this.buf.set(bytes, this.len); this.len += bytes.length; }
+  pad()      { while (this.len % 4 !== 0) this.u8(0); }
+  // OSC string: contents, at least one NUL, padded to a multiple of 4
+  string(s)  { this.raw(TE.encode(s)); this.u8(0); this.pad(); }
+  // OSC blob: int32 length, contents, padded to a multiple of 4
+  blob(b)    { this.int32(b.length); this.raw(b); this.pad(); }
+  done()     { return this.buf.slice(0, this.len); }
+}
+
+class Reader {
+  constructor(bytes) {
+    this.b = bytes;
+    this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    this.pos = 0;
+  }
+  get left() { return this.b.length - this.pos; }
+  int32()    { const v = this.view.getInt32(this.pos, false);   this.pos += 4; return v; }
+  float32()  { const v = this.view.getFloat32(this.pos, false); this.pos += 4; return v; }
+  int64()    { const v = this.view.getBigInt64(this.pos, false); this.pos += 8; return v; }
+  float64()  { const v = this.view.getFloat64(this.pos, false);  this.pos += 8; return v; }
+  raw(n)     { const v = this.b.slice(this.pos, this.pos + n);  this.pos += n; return v; }
+  string() {
+    const start = this.pos;
+    let end = start;
+    while (end < this.b.length && this.b[end] !== 0) end++;
+    const s = TD.decode(this.b.subarray(start, end));
+    this.pos = start + (((end - start) + 4) & ~3);
+    return s;
+  }
+  blob() {
+    const n = this.int32();
+    const v = this.b.slice(this.pos, this.pos + n);
+    this.pos += (n + 3) & ~3;
+    return v;
+  }
+}
+
+function normalizeArg(a) {
+  if (a && typeof a === "object" && !(a instanceof Uint8Array) && "type" in a) return a;
+  if (typeof a === "number")  return Number.isInteger(a) ? { type: "i", value: a } : { type: "f", value: a };
+  if (typeof a === "string")  return { type: "s", value: a };
+  if (typeof a === "boolean") return { type: a ? "T" : "F" };
+  if (a === null)             return { type: "N" };
+  if (a instanceof Uint8Array) return { type: "b", value: a };
+  throw new Error("unsupported OSC argument: " + a);
+}
+
+function encodeMessage(address, args = []) {
+  const list = args.map(normalizeArg);
+  const w = new Writer();
+  w.string(address);
+  w.string("," + list.map(a => a.type).join(""));
+  for (const a of list) {
+    switch (a.type) {
+      case "i": w.int32(a.value | 0); break;
+      case "f": w.float32(Number(a.value)); break;
+      case "s": w.string(String(a.value)); break;
+      case "b": w.blob(a.value); break;
+      case "T": case "F": case "N": case "I": break; // type tag only, no payload
+      default: throw new Error("unsupported type tag: " + a.type);
+    }
+  }
+  return w.done();
+}
+
+const TIMETAG_IMMEDIATE = new Uint8Array([0, 0, 0, 0, 0, 0, 0, 1]);
+
+function encodeBundle(elements, timetag = TIMETAG_IMMEDIATE) {
+  const w = new Writer();
+  w.string("#bundle");
+  w.raw(timetag);
+  for (const el of elements) { w.int32(el.length); w.raw(el); }
+  return w.done();
+}
+
+function decodePacket(bytes) {
+  // '#' (0x23) at offset 0 means "#bundle"
+  if (bytes.length >= 16 && bytes[0] === 0x23) {
+    const r = new Reader(bytes);
+    r.string();                       // "#bundle"
+    const timetag = r.raw(8);
+    const packets = [];
+    while (r.left >= 4) {
+      const size = r.int32();
+      if (size <= 0 || size > r.left) break;
+      packets.push(decodePacket(r.raw(size)));
+    }
+    return { bundle: true, timetag, packets };
+  }
+  return decodeMessage(bytes);
+}
+
+function decodeMessage(bytes) {
+  const r = new Reader(bytes);
+  const address = r.string();
+  const args = [];
+  if (r.left > 0) {
+    const tags = r.string();
+    if (tags.startsWith(",")) {
+      for (const t of tags.slice(1)) {
+        switch (t) {
+          case "i": args.push({ type: "i", value: r.int32() }); break;
+          case "f": args.push({ type: "f", value: r.float32() }); break;
+          case "s": args.push({ type: "s", value: r.string() }); break;
+          case "b": args.push({ type: "b", value: r.blob() }); break;
+          case "T": args.push({ type: "T", value: true }); break;
+          case "F": args.push({ type: "F", value: false }); break;
+          case "N": args.push({ type: "N", value: null }); break;
+          case "I": args.push({ type: "I", value: Infinity }); break;
+          // h and d are 8-byte payloads this library can emit (int64 via
+          // add(int64_t), double via add(double)); skipping them silently
+          // dropped every argument that followed.
+          case "h": args.push({ type: "h", value: r.int64() }); break;
+          case "d": args.push({ type: "d", value: r.float64() }); break;
+          // Unknown tag: payload size is unknown, so stop rather than misparse.
+          default: args.push({ type: t, value: "<unhandled>" }); return { address, args };
+        }
+      }
+    }
+  }
+  return { address, args };
+}
+
+/* ============================================================
+   2. SLIP framing (RFC 1055) — what CNMAT's SLIPEncodedSerial
+      puts on the wire, over USB and over BLE alike. Encode to
+      bytes, decode as a stream. HTTP bodies carry their own
+      length and skip this section entirely.
+   ============================================================ */
+
+const END = 0xC0, ESC = 0xDB, ESC_END = 0xDC, ESC_ESC = 0xDD;
+
+function slipEncode(data) {
+  const out = new Uint8Array(data.length * 2 + 1);
+  let n = 0;
+  for (let i = 0; i < data.length; i++) {
+    const b = data[i];
+    if (b === END)      { out[n++] = ESC; out[n++] = ESC_END; }
+    else if (b === ESC) { out[n++] = ESC; out[n++] = ESC_ESC; }
+    else                { out[n++] = b; }
+  }
+  out[n++] = END;                     // trailing END only. CNMAT's own
+  return out.slice(0, n);             // beginPacket() also emits a *leading*
+}                                     // END, which is why the decoder below
+                                      // has to tolerate empty frames.
+
+class SlipDecoder {                   // a TransformStream transformer; the BLE
+  constructor() { this.acc = []; this.esc = false; }   // path calls transform() by hand
+  transform(chunk, controller) {
+    for (let i = 0; i < chunk.length; i++) {
+      const b = chunk[i];
+      if (this.esc) {
+        this.acc.push(b === ESC_END ? END : b === ESC_ESC ? ESC : b);
+        this.esc = false;
+      } else if (b === ESC) {
+        this.esc = true;
+      } else if (b === END) {
+        if (this.acc.length) {        // skip empty frames (leading ENDs, line noise)
+          controller.enqueue(Uint8Array.from(this.acc));
+          this.acc.length = 0;
+        }
+      } else {
+        this.acc.push(b);
+      }
+    }
+  }
+  flush() { this.acc.length = 0; }
+}
+
+/* ============================================================
+   3. Capability model — ADDRESSES.md as data, no DOM in here.
+   ------------------------------------------------------------
+   A /enq bundle names the sketch and announces one /enq/<cap>
+   per capability present, with its shape as int parameters. A
+   stream is /state plus one message per streamed capability.
+   This section folds packets into a plain object and says which
+   panels to show; test/test-panels.mjs runs it under node.
+   ============================================================ */
+
+// The panels, in page order. /enq/<name> for anything else is still listed
+// in the capability chips, it just has no panel.
+const PANEL_ORDER = ["rgb", "display", "buzz", "btn", "imu", "mic", "light", "temp",
+  "hum", "bat", "chg", "touch", "cap", "joy", "pot", "enc", "rtc", "rfid", "cam",
+  "motor", "servo", "relay", "net"];
+
+function newModel() {
+  return {
+    name: null,             // /enq <name>
+    caps: null,             // { rgb: [5], display: [128, 64], buzz: [], … } once a hello arrived
+    state: { seq: null, millis: null },
+    rate: null,             // last /rate echo
+    values: {},             // last args per exact root address: values.btn = [0, 1]
+    sub: {},                // last args per sub-address: sub["/mic/gain"] = [50]
+    pixels: {},             // /rgb/<n> echoes, n -> [r, g, b]
+    display: { drawn: null, frame: null },
+    touch: { x: null, y: null, gesture: null },
+    net: { ip: null, rssi: null, port: null },
+    diag: [],
+  };
+}
+
+function flatten(pkt, out = []) {
+  if (pkt.bundle) for (const p of pkt.packets) flatten(p, out);
+  else out.push(pkt);
+  return out;
+}
+
+const rootOf = address => address.split("/")[1] || "";
+const valuesOf = msg => msg.args.map(a => a.value);
+
+// Fold one decoded packet into the model. Returns { hello, updated }: hello
+// when the packet carried /enq or /enq lines (the panel set must be
+// rebuilt), updated the capability roots whose panels need a redraw.
+function applyPacket(model, pkt) {
+  let hello = false;
+  const updated = new Set();
+  for (const m of flatten(pkt)) {
+    const a = m.address, r = rootOf(a), v = valuesOf(m);
+    if (a === "/enq") {
+      model.name = typeof v[0] === "string" ? v[0] : null;
+      model.caps = {};
+      hello = true;
+      continue;
+    }
+    if (r === "enq") {
+      const cap = a.slice("/enq/".length);
+      if (!cap) continue;
+      if (!model.caps) model.caps = {};
+      model.caps[cap] = v;
+      if (cap === "net") model.net = { ip: v[0] ?? null, rssi: v[1] ?? null, port: v[2] ?? null };
+      hello = true;
+      updated.add(cap);
+      continue;
+    }
+    if (a === "/state") { model.state = { seq: v[0] ?? null, millis: v[1] ?? null }; updated.add("state"); continue; }
+    if (a === "/rate")  { model.rate = v[0] ?? null; updated.add("state"); continue; }
+    if (a === "/diag")  { model.diag.push(v.join(" ")); if (model.diag.length > 50) model.diag.shift(); updated.add("diag"); continue; }
+    if (a === "/display/text")  { model.display.drawn = v[0] ?? null; updated.add("display"); continue; }
+    if (a === "/display/frame") { model.display.frame = v[0] instanceof Uint8Array ? v[0] : null; updated.add("display"); continue; }
+    if (a === "/touch") { model.touch = { x: v[0] ?? null, y: v[1] ?? null, gesture: v[2] ?? null }; updated.add("touch"); continue; }
+    const px = /^\/rgb\/(\d+)$/.exec(a);
+    if (px) { model.pixels[+px[1]] = v; updated.add("rgb"); continue; }
+    if (!PANEL_ORDER.includes(r)) continue;          // /d, /a, /s, … : log only
+    if (a === "/" + r) model.values[r] = v;          // the capability's own reply
+    else model.sub[a] = v;                           // an echo of a sub-address
+    updated.add(r);
+  }
+  return { hello, updated };
+}
+
+// Which panels to show: exactly the announced capabilities, in page order.
+// Before any hello, none.
+function panelsFor(model) {
+  if (!model.caps) return [];
+  return PANEL_ORDER.filter(c => c in model.caps);
+}
+
+// dBFS of an rms/peak value on the contract's 0..32767 scale. A quiet room
+// sits near -60 dBFS, which a linear bar pins at the left stop.
+function dbfs(x) { return 20 * Math.log10(Math.max(x, 1) / 32767); }
+
+/* @@CORE-END@@  everything above runs without a browser */
+
+/* ============================================================
+   4. Transports — one interface, three carriers
+   ------------------------------------------------------------
+   Each exposes supported(), connect() → a label, disconnect(),
+   send(bytes) for one OSC packet, and optionally enq() when
+   asking for /enq is not an OSC message on that carrier.
+   Received packets all land in feedFrame() below.
+   ============================================================ */
+
+const NUS    = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";   // Nordic UART Service
+const NUS_RX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";   // central -> board (write)
+const NUS_TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";   // board -> central (notify)
+const BLE_CHUNK = 20;         // the conservative NUS payload before MTU negotiation
+const USB_ENDPOINT = 64;
+const HTTP_MIN_POLL_MS = 20;  // GET /state is polled no faster than this
+
+let rateMs = 100;             // the page's copy of /rate; HTTP polls at this period
+
+// Never hand a USB device a write whose length is an exact multiple of the
+// endpoint size. The host terminates such a transfer with a zero-length packet,
+// and Arduino's ATmega32U4 CDC never releases the endpoint bank a ZLP lands in:
+// USB_Recv() only calls ReleaseRX() `if (len && ...)`, which is false when the
+// bank arrived empty, and USB_Available() never releases at all. The receive
+// endpoint then stalls permanently - transmit keeps working, only a reset
+// clears it. Measured on a LilyPad USB: 63, 100, 127 and 191 byte writes are
+// fine indefinitely; a single 64 or 128 byte write kills reception for good.
+//
+// One extra END byte is a no-op in SLIP - it just closes an empty frame, which
+// every decoder skips - so this costs nothing and is applied on all platforms.
+// Cores with a proper software RX ring buffer (Teensy, and ATUSB_Core, which
+// releases the stuck bank in both available() and read()) do not need it.
+function padAwayZLP(frame) {
+  if (frame.length % USB_ENDPOINT !== 0) return frame;
+  const out = new Uint8Array(frame.length + 1);
+  out.set(frame);
+  out[frame.length] = END;
+  return out;
+}
+
+const serialTransport = {
+  id: "serial", label: "Web Serial",
+  supported: () => "serial" in navigator,
+  unsupportedHtml:
+    '<span class="err">Web Serial is not available in this browser.</span> ' +
+    "Use Chrome/Edge 89+, Firefox 151+, or Chrome for Android 149+. " +
+    "The page must also be served over <code>https://</code> or <code>http://localhost</code> " +
+    "&mdash; opening the file directly with <code>file://</code> will not work.",
+  port: null, writer: null, reader: null, pipeDone: null,
+
+  async connect() {
+    // Filtering narrows the chooser to this board. "show all ports" drops the
+    // filter, so a board whose USB id differs from the table above (a clone, a
+    // bootloader PID, a USB-serial bridge) is still reachable.
+    const allPorts = $("allPorts").checked;
+    const baudRate = parseInt($("baud").value, 10);
+    const opts = allPorts || !USB_FILTERS.length ? {} : { filters: USB_FILTERS };
+    const port = await navigator.serial.requestPort(opts);
+    await port.open({ baudRate, bufferSize: 8192 });
+    this.port = port;
+    this.writer = port.writable.getWriter();
+    const slip = new TransformStream(new SlipDecoder());
+    this.pipeDone = port.readable.pipeTo(slip.writable).catch(() => {});
+    this.reader = slip.readable.getReader();
+    this.readLoop();                   // fire and forget
+    return BOARD_NAME + " at " + baudRate + " baud";
+  },
+
+  async readLoop() {
+    const reader = this.reader;
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        feedFrame(value);
+      }
+    } catch (e) {
+      logLine("err", "read loop ended: " + e.message);
+    }
+  },
+
+  async disconnect() {
+    // Cancel the reader first: a pending read() holds the stream lock, and
+    // port.close() throws on a locked stream, leaving the port open forever.
+    try { await this.reader?.cancel(); } catch {}
+    try { await this.pipeDone; } catch {}
+    try { this.writer?.releaseLock(); } catch {}
+    try { await this.port?.close(); } catch {}
+    this.port = this.writer = this.reader = this.pipeDone = null;
+  },
+
+  async send(bytes) {
+    if (!this.writer) throw new Error("not connected");
+    await this.writer.write(padAwayZLP(slipEncode(bytes)));
+  },
+};
+
+const bleTransport = {
+  id: "ble", label: "Web Bluetooth",
+  supported: () => "bluetooth" in navigator,
+  unsupportedHtml:
+    '<span class="err">Web Bluetooth is not available in this browser.</span> ' +
+    "Use Chrome or Edge, and serve this page over <code>http://localhost</code> or " +
+    "<code>https://</code> &mdash; a <code>file://</code> origin is refused.",
+  device: null, rx: null, tx: null,
+
+  async connect() {
+    // The board advertises the Nordic UART Service; filtering on it means only
+    // boards running an Oscuino BLE sketch appear in the chooser.
+    const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [NUS] }] });
+    this.device = device;
+    device.addEventListener("gattserverdisconnected", () => {
+      if (this.device === device) lost("BLE link dropped");
+    });
+    const server  = await device.gatt.connect();
+    const service = await server.getPrimaryService(NUS);
+    this.rx = await service.getCharacteristic(NUS_RX);
+    this.tx = await service.getCharacteristic(NUS_TX);
+    // A notification is not a packet: a long reply spans several of them, so
+    // the same SLIP decoder as the serial path reassembles across them.
+    const slip = new SlipDecoder(), sink = { enqueue: feedFrame };
+    this.tx.addEventListener("characteristicvaluechanged", ev => {
+      const dv = ev.target.value;
+      slip.transform(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength), sink);
+    });
+    await this.tx.startNotifications();
+    return device.name || "BLE device";
+  },
+
+  async disconnect() {
+    const d = this.device;
+    this.device = this.rx = this.tx = null;
+    if (d && d.gatt.connected) d.gatt.disconnect();
+  },
+
+  // Writes are chunked to the conservative NUS payload. SLIP does not care
+  // where a frame is split, which is the point of framing.
+  async send(bytes) {
+    if (!this.rx) throw new Error("not connected");
+    const framed = slipEncode(bytes);
+    for (let i = 0; i < framed.length; i += BLE_CHUNK)
+      await this.rx.writeValueWithoutResponse(framed.slice(i, i + BLE_CHUNK));
+  },
+};
+
+const httpTransport = {
+  id: "http", label: "HTTP",
+  supported: () => typeof fetch === "function",
+  unsupportedHtml: '<span class="err">fetch() is not available in this browser.</span>',
+  base: null, timer: null,
+
+  // Browsers cannot send UDP, so the WiFi sketches carry a small HTTP bridge:
+  // POST /osc takes the raw OSC bytes an OSC application would have sent as a
+  // datagram, GET /enq returns the enq bundle and GET /state the latest
+  // stream bundle, both as application/octet-stream. No SLIP: an HTTP body
+  // already has a length.
+  async connect() {
+    const h = $("host").value.trim();
+    if (!h) throw new Error("enter the board's address first (it shows it on its display or serial monitor)");
+    this.base = /^https?:\/\//.test(h) ? h.replace(/\/$/, "") : "http://" + h;
+    await this.enq();
+    this.poll();
+    return this.base;
+  },
+
+  async enq() {
+    const r = await fetch(this.base + "/enq", { cache: "no-store" });
+    if (!r.ok) throw new Error("GET /enq answered " + r.status);
+    feedFrame(new Uint8Array(await r.arrayBuffer()));
+  },
+
+  poll() {
+    clearTimeout(this.timer);
+    this.timer = null;
+    if (!this.base || rateMs <= 0) return;         // /rate 0: nothing to poll for
+    this.timer = setTimeout(async () => {
+      if (!this.base) return;
+      try {
+        const r = await fetch(this.base + "/state", { cache: "no-store" });
+        if (r.ok) {
+          const b = new Uint8Array(await r.arrayBuffer());
+          if (b.length) feedFrame(b);
+        }
+      } catch (e) {
+        logLine("err", "GET /state: " + e.message);
+      }
+      this.poll();
+    }, Math.max(HTTP_MIN_POLL_MS, rateMs));
+  },
+
+  rateChanged() { this.poll(); },
+
+  async disconnect() {
+    clearTimeout(this.timer);
+    this.timer = null;
+    this.base = null;
+  },
+
+  async send(bytes) {
+    if (!this.base) throw new Error("not connected");
+    const r = await fetch(this.base + "/osc", {
+      method: "POST", body: bytes, headers: { "content-type": "application/octet-stream" },
+    });
+    if (!r.ok) throw new Error("POST /osc answered " + r.status);
+  },
+};
+
+const TRANSPORTS = { serial: serialTransport, ble: bleTransport, http: httpTransport };
+let transport = null;                 // the connected one, or null
+
+/* ============================================================
+   5. UI
+   ============================================================ */
+
+const $ = id => document.getElementById(id);
+let model = newModel();
+let frames = 0;                       // packets received since the last pkt/s tick
+
+function parseArgs(text) {
+  return text.trim().split(/\s+/).filter(Boolean).map(tok => {
+    const m = /^([ifs]):([\s\S]*)$/.exec(tok);
+    if (m) {
+      if (m[1] === "i") return { type: "i", value: parseInt(m[2], 10) || 0 };
+      if (m[1] === "f") return { type: "f", value: parseFloat(m[2]) || 0 };
+      return { type: "s", value: m[2] };
+    }
+    if (tok === "T") return { type: "T" };
+    if (tok === "F") return { type: "F" };
+    if (tok === "N") return { type: "N" };
+    if (/^-?\d+$/.test(tok)) return { type: "i", value: parseInt(tok, 10) };
+    if (/^-?(\d+\.\d*|\.\d+)([eE][-+]?\d+)?$/.test(tok)) return { type: "f", value: parseFloat(tok) };
+    return { type: "s", value: tok };
+  });
+}
+
+function fmtArg(a) {
+  if (a.type === "f") return "f:" + (+a.value).toFixed(4).replace(/0+$/, "").replace(/\.$/, ".0");
+  if (a.type === "b") return "b:[" + a.value.length + " bytes]";
+  if (a.type === "T" || a.type === "F" || a.type === "N" || a.type === "I") return a.type;
+  return a.type + ":" + a.value;
+}
+
+function hex(bytes) {
+  return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join(" ");
+}
+
+function stamp() {
+  const d = new Date();
+  return d.toTimeString().slice(0, 8) + "." + String(d.getMilliseconds()).padStart(3, "0");
+}
+
+function append(node) {
+  const log = $("log");
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  log.appendChild(node);
+  if (atBottom) log.scrollTop = log.scrollHeight;
+  while (log.childElementCount > 500) log.removeChild(log.firstChild);
+}
+
+function logLine(cls, text) {
+  const el = document.createElement("div");
+  el.className = "e " + cls;
+  el.innerHTML = `<span class="t">${stamp()}</span> `;
+  el.appendChild(document.createTextNode(text));
+  append(el);
+}
+
+function describe(pkt, indent = "") {
+  if (pkt.bundle) {
+    const inner = pkt.packets.map(p => describe(p, indent + "  ")).join("\n");
+    return `${indent}#bundle\n${inner}`;
+  }
+  const args = pkt.args.map(fmtArg).join(" ");
+  return `${indent}${pkt.address}${args ? " " + args : ""}`;
+}
+
+function logPacket(dir, pkt, raw) {
+  const el = document.createElement("div");
+  el.className = "e " + dir;
+  const arrow = dir === "tx" ? "→" : "←";
+  el.innerHTML = `<span class="t">${stamp()} ${arrow}</span> <span class="a"></span>`;
+  el.querySelector(".a").textContent = describe(pkt);
+  if ($("showHex").checked) {
+    const h = document.createElement("div");
+    h.className = "hex";
+    h.textContent = "   " + hex(raw);
+    el.appendChild(h);
+  }
+  append(el);
+}
+
+// Every received packet, whatever carried it, comes through here.
+function feedFrame(bytes) {
+  let pkt;
+  try { pkt = decodePacket(bytes); }
+  catch (e) { logLine("err", "decode failed: " + e.message); return; }
+  frames++;
+  const msgs = flatten(pkt);
+  let res = { hello: false, updated: new Set() };
+  try { res = applyPacket(model, pkt); }
+  catch (e) { logLine("err", "model: " + e.message); }
+  try {
+    if (res.hello) setupPanels();
+    for (const cap of res.updated) if (RENDER[cap]) RENDER[cap](model);
+  } catch (e) {
+    // Contain a render fault to the frame: one bad packet must not stop reception.
+    logLine("err", "render: " + e.message);
+  }
+  for (const m of msgs) if (m.address === "/diag") logLine("diag", "/diag " + valuesOf(m).join(" "));
+  const isStream = msgs.some(m => m.address === "/state");
+  if (!isStream || $("logStreams").checked) logPacket("rx", pkt, bytes);
+}
+
+// Send one message, bundled if the box is ticked, over whatever is connected.
+async function send(address, args = []) {
+  if (!transport) { logLine("err", "not connected"); return; }
+  try {
+    const msg = encodeMessage(address, args);
+    const packet = $("bundle").checked ? encodeBundle([msg]) : msg;
+    await transport.send(packet);
+    logPacket("tx", decodePacket(packet), packet);
+    if (address === "/rate" && args.length) {
+      rateMs = Number(normalizeArg(args[0]).value) || 0;
+      $("rate").value = rateMs;
+      transport.rateChanged?.();
+    }
+  } catch (e) {
+    logLine("err", "send failed: " + e.message);
+  }
+}
+
+function askHello() {
+  if (!transport) return;
+  if (transport.hello) transport.enq().catch(e => logLine("err", "hello: " + e.message));
+  else send("/enq");
+}
+
+// --- capability panels -----------------------------------------
+
+const rgbCss = v => `rgb(${v[0] | 0},${v[1] | 0},${v[2] | 0})`;
+const hexToRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const fmt = (x, d = 2) => typeof x === "number" ? (Number.isInteger(x) ? String(x) : x.toFixed(d)) : String(x);
+
+// Rows of label / value / bar for a vector reading. |x| <= scale fills the
+// bar; a signed reading grows from the centre, an unsigned one from the left.
+function vectorRows(table, labels, values, scale, signed = false, unit = "") {
+  while (table.rows.length > labels.length) table.deleteRow(-1);
+  labels.forEach((name, i) => {
+    let row = table.rows[i];
+    if (!row) {
+      row = table.insertRow();
+      row.innerHTML = '<td class="k"></td><td class="v"></td><td><span class="bar"><i></i></span></td>';
+    }
+    row.cells[0].textContent = name;
+    const x = values ? values[i] : undefined;
+    row.cells[1].textContent = x === undefined ? "–" : fmt(x) + unit;
+    const bar = row.cells[2].querySelector("i");
+    if (typeof x !== "number" || !(scale > 0)) { bar.style.width = "0"; return; }
+    const f = Math.max(-1, Math.min(1, x / scale));
+    if (signed) {
+      bar.style.left = (50 + Math.min(0, f) * 50) + "%";
+      bar.style.width = Math.abs(f) * 50 + "%";
+    } else {
+      bar.style.left = "0";
+      bar.style.width = Math.max(0, f) * 100 + "%";
+    }
+  });
+}
+
+// Mirror of what this page sent to the display. The board holds the real
+// pixels; a /display/frame reply replaces the mirror with the real thing.
+const mirror = { w: 128, h: 64, lines: [], big: "", fill: "#000000", inverted: false };
+
+function drawMirror() {
+  const c = $("displayCanvas"), ctx = c.getContext("2d");
+  const fg = mirror.inverted ? mirror.fill : "#9fe8ff", bg = mirror.inverted ? "#9fe8ff" : mirror.fill;
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.fillStyle = fg;
+  ctx.textBaseline = "top";
+  if (mirror.big) {
+    const px = Math.min(c.height / 2, 48);
+    ctx.font = `${px}px ${getComputedStyle(document.body).getPropertyValue("--mono")}`;
+    const w = ctx.measureText(mirror.big).width;
+    ctx.fillText(mirror.big, Math.max(0, (c.width - w) / 2), (c.height - px) / 2);
+  } else {
+    const px = Math.max(10, Math.min(20, c.height / Math.max(4, mirror.lines.length + 1)));
+    ctx.font = `${px}px ${getComputedStyle(document.body).getPropertyValue("--mono")}`;
+    mirror.lines.forEach((t, i) => ctx.fillText(t, 4, 4 + i * px * 1.25));
+  }
+}
+
+// A /display/frame blob is drawn when it is one byte per pixel (w*h bytes,
+// row-major, 0 = dark); any other size is reported, not guessed at.
+function drawFrame(frame) {
+  const { w, h } = mirror, c = $("displayCanvas"), ctx = c.getContext("2d");
+  if (frame.length !== w * h) {
+    $("displayDrawn").textContent = `/display/frame: ${frame.length} bytes (not ${w}×${h}, not drawn)`;
+    return;
+  }
+  const sx = c.width / w, sy = c.height / h;
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.fillStyle = "#9fe8ff";
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++)
+      if (frame[y * w + x]) ctx.fillRect(x * sx, y * sy, Math.ceil(sx), Math.ceil(sy));
+  $("displayDrawn").textContent = `/display/frame: ${w}×${h}, from the board`;
+}
+
+function sizeCanvas(canvas, w, h, maxW = 240) {
+  const cw = maxW, ch = Math.max(48, Math.min(240, Math.round(maxW * h / Math.max(1, w))));
+  canvas.width = cw; canvas.height = ch;
+  canvas.classList.toggle("round", w === h && w >= 100);   // a round LCD announces a square
+}
+
+// Build a panel's per-count parts from the /enq parameters. Runs on every hello.
+const SETUP = {
+  rgb(p) {
+    const n = p[0] | 0;
+    $("rgbShape").textContent = n + (n === 1 ? " pixel" : " pixels");
+    const box = $("rgbPixels");
+    box.textContent = "";
+    if (n > 1) {
+      for (let i = 0; i < Math.min(n, 64); i++) {
+        const b = document.createElement("button");
+        b.className = "swatch"; b.textContent = i; b.title = "/rgb/" + i;
+        b.onclick = () => send("/rgb/" + i, hexToRgb($("rgbColor").value));
+        box.appendChild(b);
+      }
+      $("rgbNote").textContent = "A numbered swatch sets that pixel alone with /rgb/<n>; swatches take the colour the board echoes.";
+    } else {
+      $("rgbNote").textContent = "";
+    }
+  },
+  display(p) {
+    mirror.w = p[0] | 0 || 128; mirror.h = p[1] | 0 || 64;
+    $("displayShape").textContent = `${mirror.w} × ${mirror.h}`;
+    sizeCanvas($("displayCanvas"), mirror.w, mirror.h);
+    mirror.lines = []; mirror.big = ""; mirror.fill = "#000000"; mirror.inverted = false;
+    $("displayInvert").checked = false;
+    $("displayNet").hidden = !(model.caps && "net" in model.caps);
+    drawMirror();
+  },
+  buzz() { $("buzzShape").textContent = "hz, ms; 0 stops"; },
+  btn(p) {
+    const n = p[0] | 0 || 1;
+    $("btnShape").textContent = n + (n === 1 ? " button" : " buttons");
+    const box = $("btnDots");
+    box.textContent = "";
+    for (let i = 0; i < n; i++) { const s = document.createElement("span"); s.textContent = i; box.appendChild(s); }
+  },
+  imu(p) {
+    const n = p[0] | 0 || 3;
+    $("imuShape").textContent = n === 3 ? "3 axes: g" : n === 6 ? "6 axes: g, then deg/s" : n + " axes";
+    vectorRows($("imuRows"), imuLabels(n), null, 2, true);
+  },
+  touch(p) {
+    const w = p[0] | 0 || 240, h = p[1] | 0 || 240;
+    $("touchShape").textContent = `${w} × ${h}`;
+    const c = $("touchCanvas");
+    sizeCanvas(c, w, h);
+    c.dataset.w = w; c.dataset.h = h;
+    c.getContext("2d").clearRect(0, 0, c.width, c.height);
+  },
+  cap(p) { const n = p[0] | 0 || 1; $("capShape").textContent = n + " pads"; vectorRows($("capRows"), indexLabels("pad", n), null, 0); },
+  joy(p) { const n = p[0] | 0 || 2; $("joyShape").textContent = n + " axes"; vectorRows($("joyRows"), indexLabels("axis", n), null, 0); },
+  pot(p) { const n = p[0] | 0 || 1; $("potShape").textContent = n + (n === 1 ? " pot" : " pots"); vectorRows($("potRows"), indexLabels("pot", n), null, 0); },
+  cam(p) { $("camShape").textContent = `${p[0] | 0} × ${p[1] | 0}`; },
+  motor(p) {
+    const n = p[0] | 0 || 1;
+    $("motorShape").textContent = n + (n === 1 ? " motor" : " motors");
+    const box = $("motorRows");
+    box.textContent = "";
+    for (let i = 0; i < n; i++) {
+      const row = document.createElement("div");
+      row.className = "row"; row.style.marginBottom = "6px";
+      row.innerHTML = `<span class="v">/motor/${i}</span>
+        <input type="range" min="0" max="255" value="0" aria-label="speed"><span class="v speed">0</span>
+        <select aria-label="direction"><option value="0">dir 0</option><option value="1">dir 1</option></select>
+        <button>set</button><button>stop</button>`;
+      const [range, sel] = [row.querySelector("input"), row.querySelector("select")];
+      const [setB, stopB] = row.querySelectorAll("button");
+      range.oninput = () => { row.querySelector(".speed").textContent = range.value; };
+      setB.onclick = () => send("/motor/" + i, [+range.value, +sel.value]);
+      stopB.onclick = () => { range.value = 0; range.oninput(); send("/motor/" + i, [0, +sel.value]); };
+      box.appendChild(row);
+    }
+  },
+  servo(p) {
+    const n = p[0] | 0 || 1;
+    $("servoShape").textContent = n + (n === 1 ? " servo" : " servos");
+    const box = $("servoRows");
+    box.textContent = "";
+    for (let i = 0; i < n; i++) {
+      const row = document.createElement("div");
+      row.className = "row"; row.style.marginBottom = "6px";
+      row.innerHTML = `<span class="v">/servo/${i}</span>
+        <input type="range" min="0" max="180" value="90" aria-label="angle"><span class="v angle">90</span><label>deg</label>`;
+      const range = row.querySelector("input");
+      range.oninput = () => { row.querySelector(".angle").textContent = range.value; };
+      range.onchange = () => send("/servo/" + i, [+range.value]);
+      box.appendChild(row);
+    }
+  },
+  relay(p) {
+    const n = p[0] | 0 || 1;
+    $("relayShape").textContent = n + (n === 1 ? " relay" : " relays");
+    const box = $("relayRows");
+    box.textContent = "";
+    for (let i = 0; i < n; i++) {
+      const row = document.createElement("div");
+      row.className = "row"; row.style.marginBottom = "6px";
+      row.innerHTML = `<span class="v">/relay/${i}</span><button>on</button><button>off</button>`;
+      const [on, off] = row.querySelectorAll("button");
+      on.onclick = () => send("/relay/" + i, [1]);
+      off.onclick = () => send("/relay/" + i, [0]);
+      box.appendChild(row);
+    }
+  },
+};
+
+function imuLabels(n) {
+  const base = ["accel x", "accel y", "accel z", "gyro x", "gyro y", "gyro z"];
+  return Array.from({ length: n }, (_, i) => base[i] || "axis " + i);
+}
+const indexLabels = (word, n) => Array.from({ length: n }, (_, i) => word + " " + i);
+
+let micPeakHold = 0;
+const touchDots = [];
+
+// Redraw a panel from the model. Runs after every packet that touched it.
+const RENDER = {
+  state(m) {
+    $("seq").textContent = m.state.seq ?? "–";
+    $("millis").textContent = m.state.millis ?? "–";
+    if (m.rate !== null) { rateMs = m.rate; $("rate").value = m.rate; }
+  },
+  rgb(m) {
+    const all = m.values.rgb;
+    if (all && all.length >= 3) $("rgbAll").style.background = rgbCss(all);
+    for (const b of $("rgbPixels").children) {
+      const v = m.pixels[+b.textContent] || (all && all.length >= 3 ? all : null);
+      if (v) b.style.background = rgbCss(v);
+    }
+    const br = m.sub["/rgb/bright"];
+    if (br && typeof br[0] === "number") { $("rgbBright").value = br[0]; $("rgbBrightV").textContent = br[0]; }
+  },
+  display(m) {
+    if (m.display.frame) { drawFrame(m.display.frame); m.display.frame = null; return; }
+    if (m.display.drawn !== null) $("displayDrawn").textContent = "/display/text: " + m.display.drawn + " line(s) drawn on the board";
+  },
+  buzz(m) {
+    const v = m.values.buzz;
+    if (v && v.length) $("buzzShape").textContent = "last echo: " + v.join(" ");
+  },
+  btn(m) {
+    const v = m.values.btn || [];
+    [...$("btnDots").children].forEach((s, i) => s.classList.toggle("on", !!v[i]));
+  },
+  imu(m) {
+    const v = m.values.imu;
+    if (!v) return;
+    if (v.length === 1 && v[0] === -1) { $("imuShape").textContent = "board says: no IMU"; return; }
+    const n = v.length;
+    vectorRows($("imuRows"), imuLabels(n), v, 2, true);
+    // gyro rows are deg/s, a different scale: redo their bars against 250
+    const rows = $("imuRows").rows;
+    for (let i = 3; i < Math.min(6, n); i++) {
+      const bar = rows[i].cells[2].querySelector("i"), f = Math.max(-1, Math.min(1, v[i] / 250));
+      bar.style.left = (50 + Math.min(0, f) * 50) + "%"; bar.style.width = Math.abs(f) * 50 + "%";
+      rows[i].cells[1].textContent = fmt(v[i], 1) + " °/s";
+    }
+    for (let i = 0; i < Math.min(3, n); i++) rows[i].cells[1].textContent = fmt(v[i], 3) + " g";
+  },
+  mic(m) {
+    const g = m.sub["/mic/gain"];
+    if (g && typeof g[0] === "number") { $("micGain").value = g[0]; $("micGainV").textContent = g[0]; }
+    const v = m.values.mic;
+    if (!v || v.length < 2 || v[0] < 0) { if (v && v[0] === -1) $("micDb").textContent = "board says: no mic"; return; }
+    // dBFS, not a linear bar: a quiet room sits near -60 dBFS and a linear
+    // scale pins it at the left stop. Floor the display at -70 dB and hold
+    // the peak, with the clip lamp latched to the HELD peak.
+    const [rms, peak] = v, db = dbfs(rms);
+    $("micDb").textContent = db.toFixed(1) + " dBFS";
+    $("micBar").style.width = Math.max(0, Math.min(100, (db + 70) / 70 * 100)) + "%";
+    micPeakHold = Math.max(micPeakHold * 0.97, peak);
+    $("micPeak").textContent = "peak " + dbfs(micPeakHold).toFixed(1) + (micPeakHold >= 32700 ? "  CLIP" : "");
+  },
+  light(m) { const v = m.values.light; if (v) $("lightV").textContent = fmt(v[0]) + " (raw)"; },
+  temp(m)  { const v = m.values.temp;  if (v) $("tempV").textContent = fmt(v[0], 1) + " °C"; },
+  hum(m)   { const v = m.values.hum;   if (v) $("humV").textContent  = fmt(v[0], 1) + " %"; },
+  bat(m)   { const v = m.values.bat;   if (v) $("batV").textContent = fmt(v[0]) + " mV"; },
+  chg(m) {
+    const v = m.values.chg;
+    if (!v || v.length < 2) return;
+    // The current is -1 until /chg sets it: the board's default is in force
+    // and there is no honest number to show before that.
+    $("chgV").textContent = (v[0] ? "charging" : "not charging") + (v[1] < 0 ? " (board default current)" : " @ " + v[1] + " mA");
+  },
+  touch(m) {
+    const t = m.touch;
+    if (t.x === null) return;
+    const c = $("touchCanvas"), ctx = c.getContext("2d");
+    const w = +c.dataset.w || 240, h = +c.dataset.h || 240;
+    ctx.fillStyle = "#22d3ee";
+    ctx.beginPath();
+    ctx.arc(t.x * c.width / w, t.y * c.height / h, 3, 0, 7);
+    ctx.fill();
+    touchDots.push(1);
+    $("touchV").textContent = `x ${t.x}  y ${t.y}` + (t.gesture !== null ? `  gesture ${t.gesture}` : "") + `  (${touchDots.length} points)`;
+  },
+  // Raw counts with no announced range: the bars scale to the largest
+  // reading in the message, so they show shape, not absolute level.
+  cap(m) { const v = m.values.cap; if (v) vectorRows($("capRows"), indexLabels("pad", v.length), v, Math.max(...v.map(Math.abs), 1), v.some(x => x < 0)); },
+  joy(m) { const v = m.values.joy; if (v) vectorRows($("joyRows"), indexLabels("axis", v.length), v, Math.max(...v.map(Math.abs), 1), v.some(x => x < 0)); },
+  pot(m) { const v = m.values.pot; if (v) vectorRows($("potRows"), indexLabels("pot", v.length), v, Math.max(...v.map(Math.abs), 1), v.some(x => x < 0)); },
+  enc(m) { const v = m.values.enc; if (v && v.length >= 2) $("encV").textContent = `position ${v[0]}  delta ${v[1]}`; },
+  rtc(m) {
+    const v = m.values.rtc;
+    if (!v || v.length < 6) return;
+    const p = x => String(x).padStart(2, "0");
+    $("rtcV").textContent = `${v[0]}-${p(v[1])}-${p(v[2])} ${p(v[3])}:${p(v[4])}:${p(v[5])}`;
+  },
+  rfid(m) {
+    const v = m.values.rfid;
+    if (!v) return;
+    $("rfidV").textContent = v[0] ? "tag present  " + (v[1] ?? "") : "no tag";
+  },
+  cam(m) {
+    const v = m.values.cam;
+    if (!v || !(v[0] instanceof Uint8Array)) return;
+    const img = $("camImg");
+    if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+    const url = URL.createObjectURL(new Blob([v[0]], { type: "image/jpeg" }));
+    img.dataset.url = url;
+    img.src = url;
+    $("camNote").textContent = "/cam: " + v[0].length + " bytes JPEG";
+  },
+  motor() {}, servo() {}, relay() {},
+  net(m) {
+    $("netIp").textContent = m.net.ip ?? "–";
+    $("netRssi").textContent = m.net.rssi === null ? "–" : m.net.rssi + " dBm";
+    $("netPort").textContent = m.net.port ?? "–";
+  },
+  diag() {},                            // /diag lines go to the log, styled
+};
+
+// Show exactly the announced panels and rebuild their per-count parts.
+function setupPanels() {
+  const show = new Set(panelsFor(model));
+  for (const el of document.querySelectorAll(".cap")) el.hidden = !show.has(el.dataset.cap);
+  $("helloName").textContent = model.name ?? "–";
+  const list = $("capList");
+  list.textContent = "";
+  const caps = Object.keys(model.caps || {});
+  if (!caps.length) {
+    list.innerHTML = '<span class="shape" style="border:0;padding:0">nothing announced beyond the pin core</span>';
+  }
+  for (const c of caps) {
+    const s = document.createElement("span");
+    s.textContent = c + (model.caps[c].length ? " " + model.caps[c].join(" ") : "");
+    list.appendChild(s);
+  }
+  for (const cap of show) if (SETUP[cap]) SETUP[cap](model.caps[cap]);
+  for (const cap of show) if (RENDER[cap]) RENDER[cap](model);
+}
+
+// --- wiring: capability controls --------------------------------
+
+$("rgbAll").onclick = () => send("/rgb", hexToRgb($("rgbColor").value));
+$("rgbOff").onclick = () => send("/rgb", [0, 0, 0]);
+$("rgbBright").oninput = () => { $("rgbBrightV").textContent = $("rgbBright").value; };
+$("rgbBright").onchange = () => send("/rgb/bright", [+$("rgbBright").value]);
+
+$("displayText").onclick = () => {
+  const lines = $("displayLines").value.split("\n").map(s => s.trimEnd()).filter((s, i, a) => s || i < a.length - 1);
+  mirror.lines = lines; mirror.big = "";
+  drawMirror();
+  send("/display/text", lines.map(s => ({ type: "s", value: s })));
+};
+$("displayClear").onclick = () => { mirror.lines = []; mirror.big = ""; mirror.fill = "#000000"; drawMirror(); send("/display/clear"); };
+$("displayFill").onclick = () => {
+  const rgb = hexToRgb($("displayFillColor").value);
+  mirror.fill = $("displayFillColor").value; mirror.lines = []; mirror.big = "";
+  drawMirror();
+  send("/display/fill", rgb);
+};
+$("displayBig").onclick = () => { mirror.big = $("displayBigText").value; drawMirror(); send("/display/big", [{ type: "s", value: mirror.big }]); };
+$("displayBl").oninput = () => { $("displayBlV").textContent = $("displayBl").value; };
+$("displayBl").onchange = () => send("/display/bl", [+$("displayBl").value]);
+$("displayInvert").onchange = () => { mirror.inverted = $("displayInvert").checked; drawMirror(); send("/display/invert", [mirror.inverted ? 1 : 0]); };
+$("displayNet").onclick = () => send("/display/net");
+
+$("buzzPlay").onclick = () => send("/buzz", [+$("buzzHz").value, +$("buzzMs").value]);
+$("buzzStop").onclick = () => send("/buzz", [0]);
+for (const [name, hz] of [["C5", 523], ["E5", 659], ["G5", 784], ["C6", 1047], ["G6", 1568]]) {
+  const b = document.createElement("button");
+  b.textContent = name;
+  b.onclick = () => { $("buzzHz").value = hz; send("/buzz", [hz, +$("buzzMs").value]); };
+  $("buzzNotes").appendChild(b);
+}
+
+$("btnRead").onclick = () => send("/btn");
+$("imuRead").onclick = () => send("/imu");
+$("micRead").onclick = () => send("/mic");
+$("micGain").oninput = () => { $("micGainV").textContent = $("micGain").value; };
+$("micGain").onchange = () => send("/mic/gain", [+$("micGain").value]);
+$("lightRead").onclick = () => send("/light");
+$("tempRead").onclick = () => send("/temp");
+$("humRead").onclick  = () => send("/hum");
+$("batRead").onclick = () => send("/bat");
+$("chgRead").onclick = () => send("/chg");
+$("chgSet").onclick = () => send("/chg", [+$("chgMa").value]);
+for (const id of ["touchSwap", "touchMx", "touchMy"])
+  $(id).onchange = () => send("/touch/map", [+$("touchSwap").checked, +$("touchMx").checked, +$("touchMy").checked]);
+$("touchClear").onclick = () => {
+  const c = $("touchCanvas");
+  c.getContext("2d").clearRect(0, 0, c.width, c.height);
+  touchDots.length = 0;
+  $("touchV").textContent = "–";
+};
+$("capRead").onclick = () => send("/cap");
+$("joyRead").onclick = () => send("/joy");
+$("potRead").onclick = () => send("/pot");
+$("encRead").onclick = () => send("/enc");
+$("encZero").onclick = () => send("/enc/zero");
+$("rtcRead").onclick = () => send("/rtc");
+$("rtcSet").onclick = () => {
+  const d = new Date();
+  send("/rtc", [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds()]);
+};
+$("rfidDiag").onclick = () => send("/rfid/diag");
+$("camStream1").onclick = () => send("/stream", [1]);
+$("camStream0").onclick = () => send("/stream", [0]);
+$("camSizeSet").onclick = () => send("/cam/size", [+$("camSize").value]);
+$("camQuality").oninput = () => { $("camQualityV").textContent = $("camQuality").value; };
+$("camQuality").onchange = () => send("/cam/quality", [+$("camQuality").value]);
+
+// --- wiring: pins, stream, raw send ------------------------------
+
+const pin = () => Math.max(0, parseInt($("pin").value, 10) || 0);
+$("pinReadD").onclick = () => send("/d/" + pin());
+$("pinReadU").onclick = () => send(`/d/${pin()}/u`);
+$("pinHigh").onclick = () => send("/d/" + pin(), [1]);
+$("pinLow").onclick = () => send("/d/" + pin(), [0]);
+$("pwm").oninput = () => { $("pwmV").textContent = (+$("pwm").value).toFixed(2); };
+$("pwmSend").onclick = () => send("/d/" + pin(), [{ type: "f", value: +$("pwm").value }]);
+$("pinReadA").onclick = () => send("/a/" + pin());
+$("toneSend").onclick = () => send("/tone/" + pin(), [+$("toneHz").value, +$("toneMs").value]);
+$("toneStop").onclick = () => send("/tone/" + pin(), [0]);
+
+$("rateSet").onclick = () => send("/rate", [Math.max(0, parseInt($("rate").value, 10) || 0)]);
+$("rateStop").onclick = () => send("/rate", [0]);
+$("askHello").onclick = askHello;
+
+async function doSend(address, argText) {
+  if (!address.startsWith("/")) { logLine("err", "address must start with /"); return; }
+  let args;
+  try { args = parseArgs(argText); } catch (e) { logLine("err", "bad args: " + e.message); return; }
+  await send(address, args);
+}
+
+$("send").onclick = () => doSend($("addr").value, $("args").value);
+$("args").addEventListener("keydown", e => { if (e.key === "Enter") $("send").click(); });
+$("addr").addEventListener("keydown", e => { if (e.key === "Enter") $("send").click(); });
+
+for (const b of document.querySelectorAll(".chips button[data-a]")) {
+  b.onclick = () => {
+    $("addr").value = b.dataset.a;
+    $("args").value = b.dataset.g;
+    if (!$("send").disabled) $("send").click();
+  };
+}
+
+$("clear").onclick = () => { $("log").textContent = ""; };
+
+// --- wiring: connection ------------------------------------------
+
+function setConnected(on, label = "") {
+  $("dot").classList.toggle("on", on);
+  $("status").textContent = on ? "Connected: " + label : "Not connected";
+  $("connect").disabled = on;
+  $("disconnect").disabled = !on;
+  for (const id of ["send", "askHello", "rateSet", "rateStop"]) $(id).disabled = !on;
+  for (const id of ["transport", "baud", "allPorts", "host"]) $(id).disabled = on;
+}
+
+function transportSupportHtml(t) {
+  if (!t.supported()) return t.unsupportedHtml;
+  if (t.id === "serial") return SUPPORT_HTML;
+  if (t.id === "ble")
+    return "Click Connect and pick the board in the chooser: it advertises the Nordic UART Service, " +
+      "and this page filters on it, so only boards running an Oscuino BLE sketch appear. " +
+      "Writes go out in " + BLE_CHUNK + "-byte chunks; replies are reassembled from notifications by SLIP.";
+  return "Enter the address the board shows on its display or serial monitor, then Connect. " +
+    "OSC bytes go by <code>POST /osc</code>, <code>GET /enq</code> fetches the enq bundle and " +
+    "<code>GET /state</code> is polled at the <code>/rate</code> period. The board must send " +
+    "<code>Access-Control-Allow-Origin</code>, which the WiFi sketches here do.";
+}
+
+function showTransport() {
+  const t = TRANSPORTS[$("transport").value];
+  $("serialOpts").hidden = t.id !== "serial";
+  $("httpOpts").hidden = t.id !== "http";
+  $("support").innerHTML = transportSupportHtml(t);
+  $("connPanel").classList.toggle("unsupported", !t.supported());
+  $("connect").disabled = !t.supported();
+}
+
+for (const opt of $("transport").options) {
+  const t = TRANSPORTS[opt.value];
+  if (!t.supported()) opt.textContent += " (unavailable here)";
+}
+$("transport").value = TRANSPORTS[DEFAULT_TRANSPORT] ? DEFAULT_TRANSPORT : "serial";
+$("transport").onchange = showTransport;
+
+function lost(why) {
+  if (!transport) return;
+  const t = transport;
+  transport = null;
+  t.disconnect().catch(() => {});
+  setConnected(false);
+  logLine("err", why);
+}
+
+$("connect").onclick = async () => {
+  const t = TRANSPORTS[$("transport").value];
+  rateMs = Math.max(0, parseInt($("rate").value, 10) || 0);
+  try {
+    const label = await t.connect();
+    transport = t;
+    model = newModel();
+    setupPanels();
+    setConnected(true, label);
+    logLine("sys", t.label + ": " + label);
+    // Ask for /enq rather than hoping to have caught the boot one: on a
+    // native-USB board it went out before the port was open. Over HTTP
+    // connect() already fetched it.
+    if (!t.hello) setTimeout(() => { if (transport === t) askHello(); }, 300);
+  } catch (e) {
+    try { await t.disconnect(); } catch {}
+    if (e.name === "NotFoundError") {
+      logLine("sys", t.id === "serial" && USB_FILTERS.length && !$("allPorts").checked
+        ? "no matching port picked — if the board is plugged in but absent from the list, tick “show all ports”"
+        : "nothing picked");
+    } else {
+      logLine("err", "connect failed: " + e.message);
+    }
+  }
+};
+
+$("disconnect").onclick = async () => {
+  const t = transport;
+  transport = null;
+  if (t) await t.disconnect();
+  setConnected(false);
+  logLine("sys", "disconnected");
+};
+
+navigator.serial?.addEventListener("disconnect", () => {
+  if (transport === serialTransport) lost("device unplugged");
+});
+
+setInterval(() => { $("pps").textContent = frames; frames = 0; }, 1000);
+
+showTransport();
+setConnected(false);
+drawMirror();
+logLine("sys", "ready for " + BOARD_NAME + " — pick a transport and click Connect");
+</script>
+</body>
+</html>

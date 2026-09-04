@@ -1,5 +1,5 @@
 /*
-* Control a servo according to incoming OSC control
+* Control a servo according to incoming OSC control: /servo/0 <angle>
 * 
 */
 #include <OSCBundle.h>
@@ -52,7 +52,7 @@ void loop(){
      }
   
   if(!bundleIN.hasError())
-   bundleIN.dispatch("/servo", servoControl);
+   bundleIN.dispatch("/servo/0", servoControl);
 
 }
 

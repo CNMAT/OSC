@@ -1,6 +1,9 @@
 // Seeed XIAO ESP32-C6 on the XIAO Expansion Board: OLED, buzzer and button
 // over OSC on WiFi.
 //
+//   Page: XiaoC6ExpWiFi.html, generated beside this sketch by extras/webserial;
+//   pick HTTP there (extras/webserial/oscuino.html is the same page for any board).
+//
 // The twin of XiaoC6ExpOscuino. Same board, same peripherals, same OSC
 // vocabulary -- only the transport differs, and comparing the two side by
 // side is the point:
@@ -25,8 +28,10 @@
 //                     Replies go to whoever asked (Udp.remoteIP()), so
 //                     nothing needs configuring here.
 //   HTTP port 80      for the browser page, which cannot send UDP. POST the
-//                     same OSC bytes to /osc; GET /state for the latest
-//                     /xc6. CORS is open so the page can be served from
+//                     same OSC bytes to /osc; GET /state for the latest state
+//                     bundle; GET /enq for the greeting, as OSC bytes rather
+//                     than a JSON shape of its own, so the page needs one
+//                     decoder. CORS is open so the page can be served from
 //                     localhost while the board lives elsewhere.
 //
 // Both paths hand bytes to one handler, so the two cannot drift apart.
@@ -34,12 +39,21 @@
 // FQBN: esp32:esp32:XIAO_ESP32C6 with STOCK DEFAULTS -- see the note in the
 // serial twin about not carrying another ESP32 board's CDCOnBoot over.
 //
-// STATUS: compiles clean (81% of flash) and shares its OSC handlers with the
-// serial twin, which IS verified on hardware -- but the WiFi and HTTP paths
-// themselves have NOT been run: no credentials were available on the bench.
-// Untested here specifically: association, the UDP listener and its reply to
-// Udp.remoteIP(), the three HTTP routes and their CORS headers, and the IP
-// shown on the OLED. Treat those as written-to-the-API until someone runs it.
+// STATUS -- VERIFIED ON HARDWARE, 2026-09-04, on a XIAO ESP32-C6
+// (MAC 10:bd:a3:9f:ef:ac), 7 of 7 checks:
+//   association, and the board reported its own address on the USB log
+//     (OSC/UDP on 192.168.0.240:8000);
+//   UDP 20/20 round trips, median 8 ms, worst 29 ms, each replying to
+//     Udp.remoteIP() with the state bundle (/state + /btn);
+//   /rate 0 still answers over UDP -- the reply is the answer to the request,
+//     not a tick of the stream, so stopping the stream does not go silent;
+//   GET /state returns the same OSC bytes with Access-Control-Allow-Origin: *;
+//   GET /enq returns the greeting as OSC: name XiaoC6ExpWiFi, capabilities
+//     btn, buzz, net;
+//   POST /osc accepts a raw OSC body containing NUL bytes.
+// NOT verified: the IP shown on the OLED. This C6 was bare, so displayOK came
+// back false and the display addresses answered without driving anything --
+// which is itself the capability design working: it announced no /enq/display.
 //
 // SET YOUR CREDENTIALS BELOW. The OLED shows the IP once connected, which is
 // the whole reason this sketch bothers with the display first: on WiFi a
@@ -70,6 +84,7 @@
 #include <Adafruit_SSD1306.h>
 
 #include <OSCMessage.h>
+#include <OSCBundle.h>
 
 // ---------------------------------------------------------------------------
 // CREDENTIALS LIVE OUTSIDE THIS FILE, and outside the repository.
@@ -118,11 +133,11 @@ static uint32_t buzzUntil = 0;
 static char     lines[4][22] = { "XIAO ESP32-C6", "WiFi OSC", "", "" };
 static char     bigLine[12]  = "";
 static bool     bigMode   = false;
-static bool     showNet   = true;      // until /disp/* overrides it
+static bool     showNet   = true;      // until /display/* overrides it
 
 // The last state packet, kept encoded so GET /state and the UDP reply are
 // byte-identical rather than two encoders that might disagree.
-static uint8_t  stateBuf[64];
+static uint8_t  stateBuf[96];
 static size_t   stateLen = 0;
 
 static bool i2cPresent(uint8_t addr) {
@@ -204,7 +219,12 @@ static void routeLed(OSCMessage &m) {
 }
 
 static void routeRate(OSCMessage &m) {
-  if (m.size() >= 1 && m.isInt(0)) reportMs = constrain(m.getInt(0), 20, 2000);
+  // 0 STOPS the stream (ADDRESSES.md). constrain(v, 20, 2000) turns 0 into 20,
+  // so asking the board to be quiet made it stream faster -- measured on the
+  // serial twin, 2026-09-04, and the same line was here.
+  if (!(m.size() >= 1 && m.isInt(0))) return;
+  const int32_t v = m.getInt(0);
+  reportMs = (v <= 0) ? 0 : (uint32_t) constrain(v, 20, 2000);
 }
 
 // One entry point for both transports. Whatever arrives -- datagram payload or
@@ -213,13 +233,13 @@ static void handlePacket(const uint8_t *data, size_t len) {
   OSCMessage m;
   m.fill((uint8_t *) data, (int) len);
   if (m.hasError()) return;
-  m.dispatch("/disp/text",   routeText);
-  m.dispatch("/disp/big",    routeBig);
-  m.dispatch("/disp/clear",  routeClear);
-  m.dispatch("/disp/net",    routeNet);
-  m.dispatch("/disp/invert", routeInvert);
+  m.dispatch("/display/text",   routeText);
+  m.dispatch("/display/big",    routeBig);
+  m.dispatch("/display/clear",  routeClear);
+  m.dispatch("/display/net",    routeNet);
+  m.dispatch("/display/invert", routeInvert);
   m.dispatch("/buzz",        routeBuzz);
-  m.dispatch("/led",         routeLed);
+  m.dispatch("/s/l",         routeLed);
   m.dispatch("/rate",        routeRate);
 }
 
@@ -229,13 +249,11 @@ static void handlePacket(const uint8_t *data, size_t len) {
 // every poll consumed numbers, and the page's gap arithmetic dutifully
 // reported the phantom drops. Only the periodic tick in loop() advances it.
 static void buildState() {
-  OSCMessage m("/xc6");
-  m.add((intOSC_t) seq)
-   .add((intOSC_t) (digitalRead(PIN_BTN) == LOW ? 1 : 0))
-   .add((intOSC_t) millis())
-   .add((intOSC_t) (buzzUntil ? 1 : 0));
+  OSCBundle m;
+  m.add("/state").add((intOSC_t) seq).add((intOSC_t) millis());
+  m.add("/btn").add((intOSC_t) (digitalRead(PIN_BTN) == LOW ? 1 : 0));
   stateLen = 0;
-  const int n = m.bytes();
+  const int n = 96;                      // a bundle of these two is under that
   if (n > 0 && n <= (int) sizeof stateBuf) {
     // OSCMessage has no encode-to-buffer, so send() it into a tiny Print
     // that captures bytes -- the same encoder both transports then reuse.
@@ -296,15 +314,23 @@ static void httpState() {                     // GET /state -> the /xc6 packet
   http.send_P(200, "application/octet-stream", (const char *) stateBuf, stateLen);
 }
 
-static void httpHello() {                     // GET /hello -> board facts
+static void httpEnq() {                     // GET /enq -> the /enq bundle
   cors();
-  char j[160];
-  snprintf(j, sizeof j,
-           "{\"name\":\"XiaoC6ExpWiFi\",\"display\":%s,\"rtc\":%s,"
-           "\"ip\":\"%s\",\"rssi\":%d,\"udp\":%d}",
-           displayOK ? "true" : "false", rtcOK ? "true" : "false",
-           WiFi.localIP().toString().c_str(), (int) WiFi.RSSI(), OSC_PORT);
-  http.send(200, "application/json", j);
+  OSCBundle b;
+  b.add("/enq").add("XiaoC6ExpWiFi");
+  b.add("/enq/btn").add((intOSC_t) 1);
+  b.add("/enq/buzz");
+  if (displayOK) b.add("/enq/display").add((intOSC_t) OLED_W).add((intOSC_t) OLED_H);
+  b.add("/enq/net").add(WiFi.localIP().toString().c_str())
+                   .add((intOSC_t) WiFi.RSSI()).add((intOSC_t) OSC_PORT);
+  static uint8_t buf[160];
+  struct Cap : public Print {
+    uint8_t *b; size_t n, cap;
+    size_t write(uint8_t c) override { if (n < cap) b[n++] = c; return 1; }
+  } cap;
+  cap.b = buf; cap.n = 0; cap.cap = sizeof buf;
+  b.send(cap);
+  http.send_P(200, "application/octet-stream", (const char *) buf, cap.n);
 }
 
 #endif  // XC6_HTTP_BRIDGE
@@ -351,7 +377,7 @@ void setup() {
     http.on("/osc",   HTTP_POST,    httpOsc, httpOscRaw);
     http.on("/osc",   HTTP_OPTIONS, httpOsc);
     http.on("/state", HTTP_GET,     httpState);
-    http.on("/hello", HTTP_GET,     httpHello);
+    http.on("/enq", HTTP_GET,     httpEnq);
     http.begin();
 #endif
     Serial.print("OSC/UDP on "); Serial.print(WiFi.localIP());
@@ -390,7 +416,7 @@ void loop() {
 
   if (buzzUntil && now >= buzzUntil) { noTone(PIN_BUZZ); buzzUntil = 0; }
 
-  if (now - lastReport >= reportMs) {
+  if (reportMs != 0 && now - lastReport >= reportMs) {
     lastReport = now;
     seq++;                                    // the one place seq advances
     buildState();                             // keeps /state fresh for HTTP

@@ -1,7 +1,9 @@
 // Seeed XIAO ESP32-C6 on the XIAO Expansion Board: OLED, buzzer and button
 // over OSC on USB serial.
 //
-//   http://localhost/XiaoC6ExpOscuino.html   (Web Serial; not file://)
+//   Page: XiaoC6ExpOscuino.html, generated beside this sketch by
+//   extras/webserial (serve it over http://localhost, not file://);
+//   extras/webserial/oscuino.html is the same page for any board.
 //
 // There is a WiFi twin of this sketch, XiaoC6ExpWiFi, speaking the same OSC
 // vocabulary over UDP instead of SLIP-on-serial. Everything below about the
@@ -20,29 +22,33 @@
 // (GPIO1), active LOW, so it wants INPUT_PULLUP.
 //
 // Inbound
-//   /disp/text ,s...   up to four lines; each string is one row
-//   /disp/big ,s       one large-font line, centred
-//   /disp/clear
-//   /disp/invert ,i 0|1
-//   /buzz ,ii freq ms  passive buzzer via tone(); freq 0 stops it
-//   /led ,i 0|1        the XIAO's own LED (GPIO15)
-//   /rate ,i ms        state reporting interval, 20..2000
-//   /hello             ask for /hello again -- see below, this matters
+//   /display/text ,s...   up to four lines; each string is one row
+//   /display/big ,s       one large-font line, centred
+//   /display/clear
+//   /display/invert ,i 0|1
+//   /buzz ,ii freq ms  passive buzzer via tone(); freq 0 stops it. Echoed.
+//   /s/l ,i 0|1        the XIAO's own LED (GPIO15). Echoed.
+//   /rate ,i ms        state reporting interval, 20..2000; 0 STOPS. Echoed.
+//   /btn               ask for the button
+//   /s/m /s/d /s/a     micros, digital pin count, analog pin count
+//   /enq               ask for the greeting again -- see below, this matters
 // Outbound
-//   /hello ,sTTi  name, displayOK, rtcOK, ledPin
-//                -- displayOK and rtcOK are OSC booleans: tag T or F with
-//                   no payload, NOT i
-//   /xc6 ,iiii    seq, button (1 = pressed), millis, buzzing
+//   /enq ,s            the sketch name, followed by one /enq/<capability>
+//                      line per thing actually present: /enq/btn ,i 1,
+//                      /enq/buzz, and /enq/display ,ii w h only when the
+//                      OLED answered on the bus. Absence is silence: a bare
+//                      XIAO simply announces a shorter list (ADDRESSES.md).
+//   /state ,ii    seq, millis -- with /btn ,i beside it in the same bundle
 //
 // The sequence counter is what makes drops visible; without it a gap in the
 // stream is indistinguishable from a board that simply went quiet.
 //
-// /hello IS ALSO AN INBOUND ADDRESS, and on a native-USB board it has to be.
+// /enq IS ALSO AN INBOUND ADDRESS, and on a native-USB board it has to be.
 // setup() sends one, but nothing is listening yet: the board resets, the USB
 // device re-enumerates, and the host only opens the port some hundreds of
 // milliseconds later. Anything written before that is discarded -- on the
 // ESP32's HWCDC the transmit path simply drops when no host is attached.
-// Measured here: the boot /hello was never once seen by a probe that opened
+// Measured here: the boot /enq was never once seen by a probe that opened
 // the port straight after flashing. So the page asks for it on connect
 // instead of hoping to catch it, and any client should do the same.
 #include <Wire.h>
@@ -130,27 +136,76 @@ static void routeBuzz(OSCMessage &m) {
   if (m.size() < 1 || !m.isInt(0)) return;
   const int32_t freq = m.getInt(0);
   const int32_t ms   = (m.size() > 1 && m.isInt(1)) ? m.getInt(1) : 150;
-  if (freq <= 0) { noTone(PIN_BUZZ); buzzUntil = 0; return; }
-  tone(PIN_BUZZ, (unsigned int) freq);
-  buzzUntil = millis() + (uint32_t) constrain(ms, 10, 5000);
+  if (freq <= 0) {
+    noTone(PIN_BUZZ);
+    buzzUntil = 0;
+  } else {
+    tone(PIN_BUZZ, (unsigned int) freq);
+    buzzUntil = millis() + (uint32_t) constrain(ms, 10, 5000);
+  }
+  OSCMessage e("/buzz"); e.add((intOSC_t) (freq > 0 ? freq : 0)); reply(e);
+}
+
+// Everything below answers on the address it was asked on. ADDRESSES.md marks
+// /s/l, /rate and /buzz "echoed", and the echo is not decoration: a probe
+// cannot see a photon or hear a buzzer, so the echo is the only evidence the
+// write landed. Measured on hardware 2026-09-04: without these, every actuator
+// on this board reported as failing.
+static void reply(OSCMessage &m) {
+  SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
 }
 
 static void routeLed(OSCMessage &m) {
-  if (m.size() >= 1 && m.isInt(0)) digitalWrite(LED_BUILTIN, m.getInt(0) ? LOW : HIGH);
+  if (!(m.size() >= 1 && m.isInt(0))) return;
+  const int32_t v = m.getInt(0);
+  digitalWrite(LED_BUILTIN, v ? LOW : HIGH);
+  OSCMessage e("/s/l"); e.add((intOSC_t) v); reply(e);
+}
+
+// The core /s/* set of ADDRESSES.md. This sketch is hand-written rather than
+// generated from template.ino, and answered none of them until 2026-09-04.
+static void routeMicros(OSCMessage &) {
+  OSCMessage e("/s/m"); e.add((intOSC_t) micros()); reply(e);
+}
+static void routeDigitalCount(OSCMessage &) {
+  OSCMessage e("/s/d"); e.add((intOSC_t) NUM_DIGITAL_PINS); reply(e);
+}
+static void routeAnalogCount(OSCMessage &) {
+  OSCMessage e("/s/a"); e.add((intOSC_t) NUM_ANALOG_INPUTS); reply(e);
+}
+
+// /enq/btn in the enq bundle is a promise that a client can ASK for the
+// button, not merely that it rides along in the stream (ADDRESSES.md).
+static void routeBtn(OSCMessage &) {
+  OSCMessage b("/btn");
+  b.add((intOSC_t) (digitalRead(PIN_BTN) == LOW ? 1 : 0));
+  SLIPSerial.beginPacket(); b.send(SLIPSerial); SLIPSerial.endPacket();
 }
 
 static void routeRate(OSCMessage &m) {
-  if (m.size() >= 1 && m.isInt(0)) reportMs = constrain(m.getInt(0), 20, 2000);
+  if (!(m.size() >= 1 && m.isInt(0))) return;
+  const int32_t v = m.getInt(0);
+  // 0 STOPS the stream (ADDRESSES.md). constrain(v, 20, 2000) turned 0 into
+  // 20, so asking this board to be quiet made it stream twice as fast --
+  // measured on hardware 2026-09-04, and the reason /rate 0 could never be
+  // verified here.
+  reportMs = (v <= 0) ? 0 : (uint32_t) constrain(v, 20, 2000);
+  OSCMessage e("/rate"); e.add((intOSC_t) reportMs); reply(e);
 }
 
-static void sendHello() {
-  OSCMessage hello("/hello");
-  hello.add("XiaoC6ExpOscuino").add(displayOK).add(rtcOK)
-       .add((intOSC_t) LED_BUILTIN);
-  SLIPSerial.beginPacket(); hello.send(SLIPSerial); SLIPSerial.endPacket();
+// The capability bundle of ADDRESSES.md: name, then one /cap per thing that
+// is actually here. Booleans became presence, so a base-less XIAO answers a
+// shorter list rather than a false one.
+static void sendEnq() {
+  OSCBundle b;
+  b.add("/enq").add("XiaoC6ExpOscuino");
+  b.add("/enq/btn").add((intOSC_t) 1);
+  b.add("/enq/buzz");
+  if (displayOK) b.add("/enq/display").add((intOSC_t) OLED_W).add((intOSC_t) OLED_H);
+  SLIPSerial.beginPacket(); b.send(SLIPSerial); SLIPSerial.endPacket();
 }
 
-static void routeHello(OSCMessage &) { sendHello(); }
+static void routeEnq(OSCMessage &) { sendEnq(); }
 
 void setup() {
   SLIPSerial.begin(115200);
@@ -172,7 +227,7 @@ void setup() {
     redraw();
   }
 
-  sendHello();          // usually lost -- see the note above; ask for it
+  sendEnq();          // usually lost -- see the note above; ask for it
 }
 
 // Non-blocking receive, the extras/webserial/template.ino pattern. Two rules,
@@ -202,14 +257,18 @@ void loop() {
 
   if (pollOSC()) {
     if (!inMsg.hasError()) {
-      inMsg.dispatch("/disp/text",   routeText);
-      inMsg.dispatch("/disp/big",    routeBig);
-      inMsg.dispatch("/disp/clear",  routeClear);
-      inMsg.dispatch("/disp/invert", routeInvert);
+      inMsg.dispatch("/display/text",   routeText);
+      inMsg.dispatch("/display/big",    routeBig);
+      inMsg.dispatch("/display/clear",  routeClear);
+      inMsg.dispatch("/display/invert", routeInvert);
       inMsg.dispatch("/buzz",        routeBuzz);
-      inMsg.dispatch("/led",         routeLed);
+      inMsg.dispatch("/s/l",         routeLed);
       inMsg.dispatch("/rate",        routeRate);
-      inMsg.dispatch("/hello",       routeHello);
+      inMsg.dispatch("/btn",         routeBtn);
+      inMsg.dispatch("/s/m",         routeMicros);
+      inMsg.dispatch("/s/d",         routeDigitalCount);
+      inMsg.dispatch("/s/a",         routeAnalogCount);
+      inMsg.dispatch("/enq",       routeEnq);
     }
     inMsg.empty();
   }
@@ -218,13 +277,11 @@ void loop() {
 
   if (buzzUntil && now >= buzzUntil) { noTone(PIN_BUZZ); buzzUntil = 0; }
 
-  if (now - lastReport >= reportMs) {
+  if (reportMs != 0 && now - lastReport >= reportMs) {
     lastReport = now;
-    OSCMessage m("/xc6");
-    m.add((intOSC_t) seq++)
-     .add((intOSC_t) (digitalRead(PIN_BTN) == LOW ? 1 : 0))
-     .add((intOSC_t) now)
-     .add((intOSC_t) (buzzUntil ? 1 : 0));
-    SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
+    OSCBundle b;
+    b.add("/state").add((intOSC_t) seq++).add((intOSC_t) now);
+    b.add("/btn").add((intOSC_t) (digitalRead(PIN_BTN) == LOW ? 1 : 0));
+    SLIPSerial.beginPacket(); b.send(SLIPSerial); SLIPSerial.endPacket();
   }
 }

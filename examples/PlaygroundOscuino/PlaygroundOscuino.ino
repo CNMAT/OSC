@@ -177,7 +177,7 @@ void setup() {
   // Native-USB boards enumerate after begin(); give the host a moment, then say
   // hello so the browser log shows something the instant it connects.
   delay(300);
-  bundleOUT.add("/hello").add("PlaygroundOscuino");
+  bundleOUT.add("/enq").add("PlaygroundOscuino");
   SLIPSerial.beginPacket();
   bundleOUT.send(SLIPSerial);
   SLIPSerial.endPacket();

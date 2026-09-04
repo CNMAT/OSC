@@ -1,4 +1,4 @@
-// DeskPi PicoMate: every sensor on the board, in one OSC message.
+// DeskPi PicoMate: every sensor on the board, in one OSC bundle.
 //
 //   http://localhost/PicoMateOscuino.html   (Web Serial; not file://)
 //
@@ -28,37 +28,89 @@
 // it once, as one active-low input, and reports one flag. Do not write code
 // that claims to tell the two apart.
 //
-// Outbound
-//   /hello ,sTTTTTT name + a found flag per sensor (imu, mag, sht, ltr,
-//                   oled, mic), so the page hides panels for anything absent
-//                   instead of drawing zeros. The flags are OSC booleans:
-//                   each tag is T or F with no payload, NOT i
-//   /pm ,iiii ffffff fff ff iiiiiii
-//        seq, button, pir, encoder,
-//        ax ay az (g), gx gy gz (dps),
-//        mx my mz (uT),
-//        tempC, humidity (%),
-//        ir, green, red, blue (counts), lux,
-//        micRms, micPeak (full scale, 0..32767)
+// The address space is ADDRESSES.md: capability names, not board names, so
+// the same page can drive any Oscuino sketch that has the same parts.
 //
-//   One message, sampled in one pass, so every value belongs to the same
-//   instant -- with a bundle of separate messages the IMU and the light
-//   sensor can be milliseconds apart and a receiver cannot tell which
-//   readings were simultaneous. The sequence counter makes drops visible.
+// Outbound
+//   /enq, at boot and whenever asked, is answered with ONE BUNDLE:
+//     /enq ,s            "PicoMateOscuino"
+//     /enq/btn ,i 1        GP26 push button (shared with the encoder switch)
+//     /enq/enc             GP7/GP6 quadrature encoder
+//     /enq/rgb ,i 1        the WS2812 on GP22
+//     /enq/buzz            passive buzzer on GP27
+//     /enq/display ,ii 128 64   only when the SSD1315 answered its probe
+//     /enq/imu ,i 6        only when the LSM6DS3TR-C answered: accel + gyro
+//     /enq/temp            only when the SHT30 answered
+//     /enq/hum             the same SHT30: it measures both, and the contract
+//                          makes humidity its own capability
+//     /enq/light           only when the LTR-381 answered
+//     /enq/mic             only when the PDM library started
+//     /enq/diag            only when the MMC5603 answered -- see below
+//   A part that did not answer has no /enq line, so the page hides its
+//   panel instead of drawing zeros. Presence is proven at boot, not assumed.
+//
+//   Every /rate ms, one bundle, sampled in one pass:
+//     /state ,ii           seq, millis
+//     /btn ,i              1 = pressed
+//     /d/28 ,i             the AS312 PIR, 1 = motion. ADDRESSES.md has no
+//                          motion capability, so the pin's own digital-read
+//                          reply carries it; it is not announced by /enq
+//     /enc ,ii             position, delta since the previous bundle
+//     /imu ,ffffff         ax ay az (g), gx gy gz (deg/s)
+//     /temp ,f             degrees C
+//     /hum ,f              relative humidity, per cent
+//     /light ,i            the LTR-381's raw ALS count, which is what the
+//                          contract's one-int light reply asks for
+//     /mic ,ii             rms, peak, full scale 0..32767
+//
+//   One bundle, sampled in one pass, so every value belongs to the same
+//   instant -- with separate packets the IMU and the light sensor can be
+//   milliseconds apart and a receiver cannot tell which readings were
+//   simultaneous. The /state sequence counter makes drops visible.
+//
+//   TWO PARTS ARE READ BUT NOT STREAMED, because ADDRESSES.md has no
+//   capability for either and the contract's own rule is that a reply keeps
+//   its documented shape rather than growing arguments:
+//     - the MMC5603 magnetometer. /enq/imu's axis count is 3 or 6, so there
+//       is no way to announce a compass and no honest way to hang three more
+//       floats off /imu. The board says it is fitted in a /diag line -- free
+//       text, never parsed -- and the page greys the compass.
+//     - the LTR-381's lux conversion and its red/green/blue/IR counts.
+//       /light is one int, so the raw ALS count goes out and the rest stays
+//       on the board.
+//   Both are in the migration report as contract gaps: if a mag capability
+//   or a colour capability is added, three lines here restore them.
 //
 // Inbound
-//   /pm/rgb ,iii r g b     the WS2812 on GP22 (one pixel)
-//   /pm/buzz ,ii freq ms   passive buzzer on GP27, via tone()
-//   /pm/oled ,s...         up to four lines on the SSD1315
-//   /pm/rate ,i ms         report interval, 20..2000
-//   /hello                 ask for /hello again: the boot one is always lost,
-//                          because USB re-enumerates before the host listens
+//   /rgb ,iii r g b        the WS2812 on GP22 (one pixel); echoed
+//   /rgb/0 ,iii r g b      the same pixel by index; echoed
+//   /rgb/bright ,i         0..255; echoed
+//   /buzz ,i[i] hz [ms]    passive buzzer on GP27, via tone(); 0 stops; echoed
+//   /display/text ,s...    up to four lines on the SSD1315; replies
+//                          /display/text <i> lines drawn
+//   /display/clear         blank the panel
+//   /enc/zero              zero the encoder count
+//   /rate ,i ms            bundle period, 20..2000; 0 stops; echoed
+//   /enq                 ask for the enq bundle again: the boot one is
+//                          always lost, because USB re-enumerates before the
+//                          host listens
 //
 // MEASURED on this board: all five I2C parts answer, gravity reads +0.999 g
 // on Z, the magnetometer sees ~51 uT total, 23.2 C / 57 % RH, and the light
 // sensor reports 105 lx indoors. One thing NOT characterised: the LTR-381's
 // R/G/B channel counts read very low at the library's default gain while lux
 // is sensible, so treat the raw colour ratio as uncalibrated.
+//
+// STATUS: run on the board when added and reworked (commits cea1d3d to
+// 263fd5c, 2026-08-13/14); the measurements above and the microphone response
+// below were taken with that build, which spoke /pm. Addresses renamed onto
+// ADDRESSES.md on 2026-09-03 (/pm/rgb -> /rgb, /pm/buzz -> /buzz, /pm/oled ->
+// /display/text, /pm/rate -> /rate, the /pm blob -> /state + /btn, /d/28,
+// /enc, /imu, /temp, /hum, /light, /mic, the /enq booleans -> /enq lines);
+// that build is compile-checked and has not been re-run on the board. The
+// compass and the colour channels the /pm blob carried are no longer on the
+// wire at all, for the reason given above, so a board run would show the
+// magnetometer and the RGB counts missing rather than wrong.
 //
 // The ZTS6531S PDM microphone (GP9 clock, GP8 data) uses the arduino-pico
 // core's own PDM library -- PIO-based, so any pin pair works and no
@@ -101,7 +153,7 @@ SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 #define PIN_BTN    26      // shared with the encoder switch; active LOW
 #define PIN_ENC_A   7
 #define PIN_ENC_B   6
-#define PIN_PIR    28      // AS312, active HIGH
+#define PIN_PIR    28      // AS312, active HIGH; streamed as /d/28
 #define PIN_RGB    22      // WS2812, one pixel
 #define PIN_BUZZ   27      // passive, PWM
 #define PIN_MIC_CLK 9      // ZTS6531S PDM
@@ -114,6 +166,9 @@ SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 #define ADDR_SHT  0x44
 #define ADDR_OLED 0x3C
 
+#define OLED_W 128
+#define OLED_H 64
+
 // Every part here uses a stock Library Manager driver, the LTR-381 included:
 // Arduino_LTR381RGB is an official arduino-libraries release and it computes
 // lux for you, which hand-rolled register reads do not.
@@ -121,7 +176,7 @@ SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 Adafruit_LSM6DS3TRC imu;
 Adafruit_MMC5603     mag = Adafruit_MMC5603(0x5603);
 Adafruit_SHT31       sht = Adafruit_SHT31(&Wire1);  // bus goes in the ctor here
-Adafruit_SSD1306     oled(128, 64, &Wire, -1);
+Adafruit_SSD1306     oled(OLED_W, OLED_H, &Wire, -1);
 Adafruit_NeoPixel    pixel(1, PIN_RGB, NEO_GRB + NEO_KHZ800);
 LTR381RGBClass       ltr(Wire1, ADDR_LTR);
 
@@ -129,7 +184,19 @@ static bool imuOK = false, magOK = false, shtOK = false, ltrOK = false, oledOK =
 static int32_t  seq = 0;
 static uint32_t reportMs = 50, buzzUntil = 0;
 static volatile int32_t encPos = 0;
+static int32_t  encLast = 0;                 // for the delta in /enc
 static char lines[4][22] = { "PicoMate", "OSC over USB", "", "" };
+
+// Everything outbound goes through one bundle: the hello, the stream, and
+// the echoes, each flushed as its own SLIP packet.
+static OSCBundle bundleOUT;
+
+static void flush() {
+  SLIPSerial.beginPacket();
+  bundleOUT.send(SLIPSerial);
+  SLIPSerial.endPacket();
+  bundleOUT.empty();
+}
 
 // ---- PDM microphone --------------------------------------------------------
 // The scaling here is the PyBadge microphone's lessons applied up front rather
@@ -176,42 +243,101 @@ static void redraw() {
 
 /* ----------------------------------------------------------------- inbound */
 
-static void routeRgb(OSCMessage &m) {
-  if (m.size() < 3) return;
+// /rgb and /rgb/0 both drive the one pixel; each echoes on its own address.
+static bool setRgb(OSCMessage &m) {
+  if (m.size() < 3 || !m.isInt(0) || !m.isInt(1) || !m.isInt(2)) return false;
   pixel.setPixelColor(0, pixel.Color(m.getInt(0) & 0xFF,
                                      m.getInt(1) & 0xFF,
                                      m.getInt(2) & 0xFF));
   pixel.show();
+  return true;
+}
+static void echoRgb(const char *addr, OSCMessage &m) {
+  bundleOUT.add(addr).add((intOSC_t) (m.getInt(0) & 0xFF))
+                     .add((intOSC_t) (m.getInt(1) & 0xFF))
+                     .add((intOSC_t) (m.getInt(2) & 0xFF));
+  flush();
+}
+static void routeRgb(OSCMessage &m)  { if (setRgb(m)) echoRgb("/rgb", m); }
+static void routeRgb0(OSCMessage &m) { if (setRgb(m)) echoRgb("/rgb/0", m); }
+
+static void routeRgbBright(OSCMessage &m) {
+  if (m.size() < 1 || !m.isInt(0)) return;
+  const int32_t b = constrain(m.getInt(0), 0, 255);
+  pixel.setBrightness((uint8_t) b);
+  pixel.show();
+  bundleOUT.add("/rgb/bright").add((intOSC_t) b);
+  flush();
 }
 
 static void routeBuzz(OSCMessage &m) {
   if (m.size() < 1 || !m.isInt(0)) return;
   const int32_t f = m.getInt(0);
   const int32_t ms = (m.size() > 1 && m.isInt(1)) ? m.getInt(1) : 150;
-  if (f <= 0) { noTone(PIN_BUZZ); buzzUntil = 0; return; }
-  tone(PIN_BUZZ, (unsigned int) f);
-  buzzUntil = millis() + (uint32_t) constrain(ms, 10, 5000);
+  if (f <= 0) { noTone(PIN_BUZZ); buzzUntil = 0; }
+  else {
+    tone(PIN_BUZZ, (unsigned int) f);
+    buzzUntil = millis() + (uint32_t) constrain(ms, 10, 5000);
+  }
+  bundleOUT.add("/buzz").add((intOSC_t) f).add((intOSC_t) ms);
+  flush();
 }
 
-static void routeOled(OSCMessage &m) {
+static void routeText(OSCMessage &m) {
+  // Absence is silence (ADDRESSES.md): with no OLED there is no /enq/display
+  // in the greeting, so answering here would claim a screen that is not there.
+  if (!oledOK) return;
   for (uint8_t i = 0; i < 4; i++) lines[i][0] = '\0';
   const int n = m.size() < 4 ? m.size() : 4;
   for (int i = 0; i < n; i++)
     if (m.isString(i)) m.getString(i, lines[i], sizeof lines[i]);
   redraw();
+  bundleOUT.add("/display/text").add((intOSC_t) n);
+  flush();
+}
+
+static void routeClear(OSCMessage &) {
+  for (uint8_t i = 0; i < 4; i++) lines[i][0] = '\0';
+  redraw();
+}
+
+static void routeEncZero(OSCMessage &) {
+  encPos = 0;
+  encLast = 0;
 }
 
 static void routeRate(OSCMessage &m) {
-  if (m.size() >= 1 && m.isInt(0)) reportMs = constrain(m.getInt(0), 20, 2000);
+  if (m.size() < 1 || !m.isInt(0)) return;
+  const int32_t v = m.getInt(0);
+  reportMs = v <= 0 ? 0 : (uint32_t) constrain(v, 20, 2000);   // 0 stops
+  bundleOUT.add("/rate").add((intOSC_t) reportMs);
+  flush();
 }
 
-static void sendHello() {
-  OSCMessage h("/hello");
-  h.add("PicoMateOscuino").add(imuOK).add(magOK).add(shtOK).add(ltrOK)
-   .add(oledOK).add(micOK);
-  SLIPSerial.beginPacket(); h.send(SLIPSerial); SLIPSerial.endPacket();
+// The enq bundle: the name, then one /enq line per capability this board
+// proved it has. The probes in setup() decide which lines appear.
+static void sendEnq() {
+  bundleOUT.add("/enq").add("PicoMateOscuino");
+  bundleOUT.add("/enq/btn").add((intOSC_t) 1);
+  bundleOUT.add("/enq/enc");
+  bundleOUT.add("/enq/rgb").add((intOSC_t) 1);
+  bundleOUT.add("/enq/buzz");
+  if (oledOK) bundleOUT.add("/enq/display").add((intOSC_t) OLED_W).add((intOSC_t) OLED_H);
+  if (imuOK)  bundleOUT.add("/enq/imu").add((intOSC_t) 6);   // accel + gyro
+  if (shtOK) { bundleOUT.add("/enq/temp"); bundleOUT.add("/enq/hum"); }
+  if (ltrOK)  bundleOUT.add("/enq/light");
+  if (micOK)  bundleOUT.add("/enq/mic");
+  // The magnetometer is fitted and working but has no capability to be
+  // announced under, so it is said in free text instead of being faked into
+  // /imu's axis count. /diag is never parsed: this is for the human.
+  if (magOK) {
+    bundleOUT.add("/enq/diag");
+    bundleOUT.add("/diag").add("MMC5603 magnetometer present; not streamed, "
+                               "ADDRESSES.md has no magnetometer capability");
+  }
+  flush();
 }
-static void routeHello(OSCMessage &) { sendHello(); }
+static void routeEnq(OSCMessage &) { sendEnq(); }
 
 void setup() {
   SLIPSerial.begin(115200);
@@ -251,8 +377,102 @@ void setup() {
     oledOK = oled.begin(SSD1306_SWITCHCAPVCC, ADDR_OLED);
   if (oledOK) { oled.setTextColor(SSD1306_WHITE); oled.cp437(true); redraw(); }
 
-  sendHello();          // nearly always lost -- the page asks again
+  sendEnq();          // nearly always lost -- the page asks again
 }
+
+// ---- one reading, two callers ------------------------------------------------
+// Each capability this board announces in /enq has to answer when it is
+// asked, not only when the stream happens to tick: ADDRESSES.md says a request
+// that reads something answers on the same address, and a /enq line is a
+// promise that the request will work. Streaming and answering therefore share
+// one function per capability rather than duplicating the sensor code, so the
+// two can never drift into reporting different things.
+
+static int      lightRaw = 0;             // the one value /light carries
+static uint32_t lastLtr  = 0;
+
+static void addBtn() {
+  bundleOUT.add("/btn").add((intOSC_t) (digitalRead(PIN_BTN) == LOW ? 1 : 0));
+}
+
+static void addEnc() {
+  const int32_t pos = encPos;
+  bundleOUT.add("/enc").add((intOSC_t) pos).add((intOSC_t) (pos - encLast));
+  encLast = pos;                          // delta is "since the last report"
+}
+
+static void addImu() {
+  if (!imuOK) return;
+  sensors_event_t a, g, t;
+  imu.getEvent(&a, &g, &t);
+  OSCMessage &m = bundleOUT.add("/imu");
+  m.add(a.acceleration.x / 9.80665f)       // report in g, not m/s^2
+   .add(a.acceleration.y / 9.80665f)
+   .add(a.acceleration.z / 9.80665f)
+   .add(g.gyro.x * 57.2957795f)            // rad/s -> deg/s
+   .add(g.gyro.y * 57.2957795f)
+   .add(g.gyro.z * 57.2957795f);
+  // Six axes, no more: /enq/imu said 6, and the contract's axis counts are
+  // 3 and 6. The magnetometer's three axes are not appended here -- see the
+  // note at the top of the file.
+}
+
+// Two capabilities, one part: the SHT30 measures both and the contract gives
+// humidity its own address, so the two readings go out separately rather than
+// as a second argument on /temp.
+static void addTemp() { if (shtOK) bundleOUT.add("/temp").add(sht.readTemperature()); }
+static void addHum()  { if (shtOK) bundleOUT.add("/hum").add(sht.readHumidity()); }
+
+// readAllSensors() polls the LTR-381's status register with delay(50) loops
+// inside the library -- around 100 ms, 200 worst case -- which blocked every
+// report and quietly stretched a 50 ms /rate to 150+. Light changes slowly;
+// read it on its own 500 ms cadence and reuse the cached value in between, so
+// the report period is honest again. A request gets that same cached value:
+// answering must not be slower than streaming.
+static void pollLight() {
+  const uint32_t now = millis();
+  if (!ltrOK || now - lastLtr < 500) return;
+  lastLtr = now;
+  // The contract's /light reply is one int, the raw ALS count. The colour
+  // channels and the library's lux conversion are read and left on the board
+  // rather than sent as extra arguments -- a five-argument /light is a private
+  // dialect wearing a contract address, which is what this namespace exists
+  // to stop.
+  int rd = 0, gr = 0, bl = 0, lux = 0, ir = 0;
+  ltr.readAllSensors(rd, gr, bl, lightRaw, lux, ir);
+}
+static void addLight() { if (ltrOK) bundleOUT.add("/light").add((intOSC_t) lightRaw); }
+
+static void drainMic() {
+  if (!micReady) return;
+  const int n = micSamples;
+  uint64_t sumsq = 0;
+  int32_t  pk = 0;
+  for (int i = 0; i < n; i++) {
+    const int32_t v = micBuf[i];
+    sumsq += (uint32_t)(v * v);
+    const int32_t a = v < 0 ? -v : v;
+    if (a > pk) pk = a;
+  }
+  micReady = false;                               // release for the next ISR
+  if (n > 0) {
+    micRms  = (int32_t) sqrtf((float) sumsq / (float) n);
+    micPeak = pk;
+  }
+}
+static void addMic() {
+  if (micOK) bundleOUT.add("/mic").add((intOSC_t) micRms).add((intOSC_t) micPeak);
+}
+
+// The request handlers. Each answers on the address it was asked on, and the
+// reply leaves in the next flush() alongside anything else queued.
+static void routeBtn(OSCMessage &)   { addBtn(); }
+static void routeEnc(OSCMessage &)   { addEnc(); }
+static void routeImu(OSCMessage &)   { addImu(); }
+static void routeTemp(OSCMessage &)  { addTemp(); }
+static void routeHum(OSCMessage &)   { addHum(); }
+static void routeLight(OSCMessage &) { pollLight(); addLight(); }
+static void routeMic(OSCMessage &)   { drainMic(); addMic(); }
 
 // Non-blocking receive, the extras/webserial/template.ino pattern. Two rules,
 // both learned the hard way there: endofPacket() must be called BEFORE
@@ -281,84 +501,45 @@ void loop() {
 
   if (pollOSC()) {
     if (!inMsg.hasError()) {
-      inMsg.dispatch("/pm/rgb",  routeRgb);
-      inMsg.dispatch("/pm/buzz", routeBuzz);
-      inMsg.dispatch("/pm/oled", routeOled);
-      inMsg.dispatch("/pm/rate", routeRate);
-      inMsg.dispatch("/hello",   routeHello);
+      inMsg.dispatch("/rgb",           routeRgb);
+      inMsg.dispatch("/rgb/0",         routeRgb0);
+      inMsg.dispatch("/rgb/bright",    routeRgbBright);
+      inMsg.dispatch("/buzz",          routeBuzz);
+      inMsg.dispatch("/display/text",  routeText);
+      inMsg.dispatch("/display/clear", routeClear);
+      inMsg.dispatch("/enc/zero",      routeEncZero);
+      inMsg.dispatch("/rate",          routeRate);
+      inMsg.dispatch("/enq",         routeEnq);
+      inMsg.dispatch("/btn",           routeBtn);
+      inMsg.dispatch("/enc",           routeEnc);
+      inMsg.dispatch("/imu",           routeImu);
+      inMsg.dispatch("/temp",          routeTemp);
+      inMsg.dispatch("/hum",           routeHum);
+      inMsg.dispatch("/light",         routeLight);
+      inMsg.dispatch("/mic",           routeMic);
+      flush();                          // a request is answered now, not at
+                                        // the next stream tick
+
     }
     inMsg.empty();
   }
 
   const uint32_t now = millis();
   if (buzzUntil && now >= buzzUntil) { noTone(PIN_BUZZ); buzzUntil = 0; }
-  if (now - last < reportMs) return;
+  if (reportMs == 0 || now - last < reportMs) return;
   last = now;
 
-  float ax = 0, ay = 0, az = 0, gx = 0, gy = 0, gz = 0;
-  if (imuOK) {
-    sensors_event_t a, g, t;
-    imu.getEvent(&a, &g, &t);
-    ax = a.acceleration.x / 9.80665f;     // report in g, not m/s^2
-    ay = a.acceleration.y / 9.80665f;
-    az = a.acceleration.z / 9.80665f;
-    gx = g.gyro.x * 57.2957795f;          // rad/s -> deg/s
-    gy = g.gyro.y * 57.2957795f;
-    gz = g.gyro.z * 57.2957795f;
-  }
+  bundleOUT.add("/state").add((intOSC_t) seq++).add((intOSC_t) now);
+  addBtn();
+  bundleOUT.add("/d/28").add((intOSC_t) (digitalRead(PIN_PIR) == HIGH ? 1 : 0));
+  addEnc();
+  addImu();
+  addTemp();
+  addHum();
+  pollLight();
+  addLight();
+  drainMic();
+  addMic();
 
-  float mx = 0, my = 0, mz = 0;
-  if (magOK) {
-    sensors_event_t e;
-    mag.getEvent(&e);
-    mx = e.magnetic.x; my = e.magnetic.y; mz = e.magnetic.z;
-  }
-
-  float tempC = 0, humid = 0;
-  if (shtOK) { tempC = sht.readTemperature(); humid = sht.readHumidity(); }
-
-  // readAllSensors() polls the LTR-381's status register with delay(50)
-  // loops inside the library -- around 100 ms, 200 worst case -- which
-  // blocked every report and quietly stretched a 50 ms /pm/rate to 150+.
-  // Light changes slowly; read it on its own 500 ms cadence and reuse the
-  // cached values in between, so the report period is honest again.
-  static int ir = 0, gr = 0, rd = 0, bl = 0, lux = 0;
-  static uint32_t lastLtr = 0;
-  if (ltrOK && now - lastLtr >= 500) {
-    lastLtr = now;
-    int rawlux = 0;
-    ltr.readAllSensors(rd, gr, bl, rawlux, lux, ir);
-  }
-
-  if (micReady) {
-    const int n = micSamples;
-    uint64_t sumsq = 0;
-    int32_t  pk = 0;
-    for (int i = 0; i < n; i++) {
-      const int32_t v = micBuf[i];
-      sumsq += (uint32_t)(v * v);
-      const int32_t a = v < 0 ? -v : v;
-      if (a > pk) pk = a;
-    }
-    micReady = false;                               // release for the next ISR
-    if (n > 0) {
-      micRms  = (int32_t) sqrtf((float) sumsq / (float) n);
-      micPeak = pk;
-    }
-  }
-
-  OSCMessage m("/pm");
-  m.add((intOSC_t) seq++)
-   .add((intOSC_t) (digitalRead(PIN_BTN) == LOW ? 1 : 0))
-   .add((intOSC_t) (digitalRead(PIN_PIR) == HIGH ? 1 : 0))
-   .add((intOSC_t) encPos)
-   .add(ax).add(ay).add(az)
-   .add(gx).add(gy).add(gz)
-   .add(mx).add(my).add(mz)
-   .add(tempC).add(humid)
-   .add((intOSC_t) ir).add((intOSC_t) gr)
-   .add((intOSC_t) rd).add((intOSC_t) bl)
-   .add((intOSC_t) lux)
-   .add((intOSC_t) micRms).add((intOSC_t) micPeak);
-  SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
+  flush();
 }

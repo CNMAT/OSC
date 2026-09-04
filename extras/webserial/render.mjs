@@ -9,6 +9,7 @@ const HERE = new URL("./", import.meta.url);
 export const BOARDS = JSON.parse(readFileSync(new URL("boards.json", HERE), "utf8")).boards;
 export const EXAMPLES_DIR = new URL("../../examples/", HERE);
 export const PYTHON_DIR = new URL("../python/", HERE);
+export const WEBSERIAL_DIR = HERE;
 
 const TEMPLATE_HTML = readFileSync(new URL("template.html", HERE), "utf8");
 const TEMPLATE_INO = readFileSync(new URL("template.ino", HERE), "utf8");
@@ -32,6 +33,14 @@ const FIRMWARES = {
   microbit: { pairFile: "main.py", name: "MicroPython" },
   circuitpython: { pairFile: "code.py", name: "CircuitPython", bootPy: true },
   fruitjam: { pairFile: "code.py", name: "CircuitPython", bootPy: true },
+};
+
+// The carriers the page offers. boards.json picks the default with
+// `transport`; the page still lets a user switch to any the browser has.
+export const TRANSPORTS = {
+  serial: "Web Serial",
+  ble: "Web Bluetooth",
+  http: "HTTP",
 };
 
 const esc = s => String(s)
@@ -64,9 +73,9 @@ function usbFiltersJs(filters = []) {
   return parts.length ? `[\n  ${parts.join(",\n  ")},\n]` : "[]";
 }
 
-// The line under the Connect button. Rendered here rather than branched in page
-// JS so a python firmware can say something true about its own deployment
-// without every page carrying every variant.
+// The line under the Connect button when Web Serial is selected. Rendered
+// here rather than branched in page JS so a python firmware can say something
+// true about its own deployment without every page carrying every variant.
 function supportHtml(board) {
   const b = `<b>${board.name}</b>`;
   if (board.firmware === "microbit")
@@ -77,11 +86,39 @@ function supportHtml(board) {
     return b + ": native USB, so the baud rate is ignored. Copy <code>boot.py</code> and " +
       "<code>code.py</code> to the CIRCUITPY drive and press reset, then pick the board's " +
       "<i>second</i> serial port here — the data channel boot.py adds.";
+  if (!board.fqbn)
+    return b + ": pick the board's serial port. The baud rate is ignored by native-USB boards " +
+      "and must match <code>SLIPSerial.begin()</code> on a board behind a USB-serial bridge.";
   return board.nativeUSB
     ? b + " has native USB, so the baud rate above is ignored by the hardware " +
       "&mdash; Web Serial still requires one. Build for <code>" + board.fqbn + "</code>."
     : b + " talks through a USB-serial bridge, so the baud rate must match " +
       "<code>SLIPSerial.begin()</code> in the sketch exactly. Build for <code>" + board.fqbn + "</code>.";
+}
+
+// The line under the title.
+function subHtml(board, name, pairFile, fwName) {
+  if (board.universal)
+    return "The one page for every Oscuino sketch: it asks <code>/enq</code>, reads back the " +
+      "capability list and shows a panel per capability the board announced (ADDRESSES.md). " +
+      "Web Serial, Web Bluetooth or HTTP &mdash; whichever the sketch and the browser have. " +
+      "No server, no dependencies.";
+  const via = { serial: "USB serial", ble: "Bluetooth LE (Nordic UART Service)", http: "WiFi (HTTP bridge)" }[board.transport || "serial"];
+  return `OSC for <span class="board">${esc(board.name)}</span> (${esc(board.mcu)}) over ${via}. ` +
+    `Browser &harr; OSC &harr; ${fwName}. Pair with <code>${esc(pairFile)}</code>. ` +
+    "No server, no dependencies.";
+}
+
+function bundleNote(board, pairFile) {
+  if (board.universal)
+    return "<b>bundle</b> wraps the message in a #bundle. Every sketch here reads a bare message; " +
+      "the OSCBundle-based ones read bundles too, the OSCMessage-based WiFi and " +
+      "expansion-board twins do not, so it starts unticked here.";
+  return board.bundles === false
+    ? `<b>bundle</b> is unticked because <code>${esc(pairFile)}</code> parses each packet as one ` +
+      "OSCMessage and would drop a bundle."
+    : `<b>bundle</b> is ticked by default because <code>${esc(pairFile)}</code> reads bundles, ` +
+      "as do the stock Oscuino examples and the CNMAT Max patches.";
 }
 
 function pinClamp(board) {
@@ -153,26 +190,38 @@ function squeezeForV1(py, templateName) {
   ].concat(body).join("\n") + "\n";
 }
 
-export function render(board) {
-  const name = sketchName(board);
-  const fw = FIRMWARES[board.firmware];
-  if (board.firmware && !fw) throw new Error(`unknown firmware '${board.firmware}' on ${board.id}`);
-  const pairFile = fw ? fw.pairFile : `${name}.ino`;
-
-  const html = fill(TEMPLATE_HTML, {
-    ID: board.id,
-    BOARD_NAME: esc(board.name),
-    MCU: esc(board.mcu),
-    NOTE: esc(board.note),
-    CHIPS: chipHtml(board.chips),
-    PAIR_FILE: pairFile,
-    FIRMWARE_NAME: fw ? fw.name : "the CNMAT OSC library",
+function renderHtml(board, name, pairFile, fwName) {
+  const transport = board.transport || "serial";
+  if (!(transport in TRANSPORTS)) throw new Error(`unknown transport '${transport}' on ${board.id}`);
+  return fill(TEMPLATE_HTML, {
+    SKETCH: esc(name),
+    SUB_HTML: subHtml(board, name, pairFile, fwName),
+    CHIPS: chipHtml(board.chips || []),
+    NOTE_HTML: board.universal
+      ? "Chips and notes for a particular board live on that board's own generated page; " +
+        "this one carries only what every sketch shares."
+      : `<b>${esc(board.name)}.</b> ${esc(board.note)}`,
+    BUNDLE_CHECKED: board.universal || board.bundles === false ? "" : " checked",
+    BUNDLE_NOTE: bundleNote(board, pairFile),
     BOARD_NAME_JS: JSON.stringify(board.name),
     FQBN_JS: JSON.stringify(board.fqbn),
     USB_FILTERS: usbFiltersJs(board.usbFilters),
     NATIVE_USB: board.nativeUSB ? "true" : "false",
     SUPPORT_HTML_JS: JSON.stringify(supportHtml(board)),
+    DEFAULT_TRANSPORT_JS: JSON.stringify(transport),
   });
+}
+
+export function render(board) {
+  const name = sketchName(board);
+  const fw = FIRMWARES[board.firmware];
+  if (board.firmware && !fw) throw new Error(`unknown firmware '${board.firmware}' on ${board.id}`);
+  if (board.firmware && board.handwritten)
+    throw new Error(`${board.id}: handwritten is for Arduino sketches, python firmwares are always generated`);
+  const pairFile = fw ? fw.pairFile : `${name}.ino`;
+  const fwName = fw ? fw.name : "the CNMAT OSC library";
+
+  const html = renderHtml(board, name, pairFile, fwName);
 
   if (fw) {
     let code = fill(TEMPLATE_PY[board.firmware], {
@@ -189,6 +238,11 @@ export function render(board) {
         files[file] = squeezeForV1(body, `template-microbit-${file.replace(".py", "")}.py`);
     return { html, code, pairFile, files };
   }
+
+  // A hand-written sketch keeps its .ino: only the page is generated beside
+  // it, so the demos with real peripherals get the same page as everyone.
+  if (board.handwritten)
+    return { html, ino: null, code: null, pairFile, files: { [`${name}.html`]: html } };
 
   const ino = fill(TEMPLATE_INO, {
     ID: board.id,
@@ -215,27 +269,49 @@ export function outputs(board) {
   const { files } = render(board);
   const root = board.firmware ? PYTHON_DIR : EXAMPLES_DIR;
   const relRoot = board.firmware ? "extras/python" : "examples";
-  const list = Object.entries(files).map(([file, body]) => ({
+  return Object.entries(files).map(([file, body]) => ({
     file,
     rel: `${relRoot}/${name}/${file}`,
     url: new URL(`${name}/${file}`, root),
     dir: new URL(`${name}/`, root),
     body,
   }));
-  // A python-firmware board with a hand-written Arduino twin in examples/
-  // gets the same generated page beside that sketch, so both stay in step
-  // and the page travels with whichever folder is copied out.
-  if (board.firmware && board.inoTwin) {
-    const html = files[`${name}.html`];
-    list.push({
-      file: `${name}.html`,
-      rel: `examples/${name}/${name}.html`,
-      url: new URL(`${name}/${name}.html`, EXAMPLES_DIR),
-      dir: new URL(`${name}/`, EXAMPLES_DIR),
-      body: html,
-    });
-  }
+}
+
+// The board-less page: no chips, no port filter, any transport. Rendered
+// from the same template so it cannot drift from the per-board pages.
+export const UNIVERSAL = {
+  id: "Oscuino",
+  universal: true,
+  name: "any Oscuino board",
+  mcu: "",
+  fqbn: "",
+  nativeUSB: true,
+  usbFilters: [],
+  chips: [],
+  note: "",
+  transport: "serial",
+};
+
+export function universalOutput() {
+  const html = renderHtml(UNIVERSAL, "Oscuino", "any Oscuino sketch", "the CNMAT OSC library");
+  return {
+    file: "oscuino.html",
+    rel: "extras/webserial/oscuino.html",
+    url: new URL("oscuino.html", WEBSERIAL_DIR),
+    dir: WEBSERIAL_DIR,
+    body: html,
+  };
+}
+
+// Everything the generator writes: every board's files, then the universal page.
+export function allOutputs() {
+  const list = [];
+  for (const board of BOARDS) list.push(...outputs(board));
+  list.push(universalOutput());
   return list;
 }
 
-export const sketchName = board => `${board.id}Oscuino`;
+// `sketch` names the folder and basename when a hand-written sketch does not
+// follow the <Id>Oscuino convention (EggC3WiFi, XiaoC6ExpBLE, …).
+export const sketchName = board => board.sketch || `${board.id}Oscuino`;

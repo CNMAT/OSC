@@ -296,6 +296,46 @@ missing and whose write path turned out to be dropping bytes on the host.
 codec round-trips, and `write_all()` against an fd that guarantees short
 writes, with a negative control proving the old broken pattern fails it.
 
+**`contractprobe.py <port> [Name] [/old/addr ...]`** probes the core of the
+address-space contract (ADDRESSES.md) on any board: `/enq` answers with the
+name and its `/enq/...` capability lines, `/state` carries a sequence and
+millis, `/s/l` echoes, `/rate 50` streams `/state` with a strictly increasing
+sequence and `/rate 0` stops it (checked by reading for half a second
+afterwards), and every retired address passed on the command line must get no
+reply at all. That negative test is what proves a board-named dialect is gone
+rather than merely undocumented.
+
+It works out **what** to probe by asking the board. Every `/enq/<capability>`
+line in the `/enq` answer selects the matching row of the capability table in
+ADDRESSES.md, transcribed once at the top of the probe: a board that says
+`/enq/imu 6` gets six values checked, and checked as *floats*, because the
+contract says `/imu` is in g; a board that never mentions an IMU is never asked
+for one. There is no per-board script and no per-board knowledge — adding a
+capability to the contract is what adds it to every board's test. The stream is
+checked the same way: every message riding in it must be one the board
+announced.
+
+Actuators are written with harmless values — `/rgb 0 0 0`, the stop form of
+`/buzz` — and checked for their echo. Anything that *moves* (`/motor`,
+`/servo`, `/relay`) is skipped unless you pass `--actuate`, because a servo
+attached to something is not a safe thing to sweep unasked. `--sound` allows an
+audible beep; `--quiet` prints one summary line for the ledger in `TODO.md`
+§3.11.
+
+**`test_contractprobe.py`** is the probe's own test and needs no hardware: it
+runs a simulated board on a pseudo-terminal, once conformant and once
+deliberately broken (it announces `/enq/imu 6`, then answers three ints). The
+conformant board must pass and the broken one must be caught — a probe that
+passes both is not checking anything. Measured: 21 checks pass on the
+conformant board; the broken one fails on exactly its two lies, arity and type,
+with no other check disturbed. CI runs it in the host job.
+
+First hardware run: XIAO MG24 (Sense), 2026-09-03, the renamed `XiaoMG24BLE`
+build, with `/mg /mg/led /mg/rate` as the retired set — 9 passed, 0 failed, 21
+`/state` packets in about a second at 50 ms. That board announces no
+capabilities, so the sweep had nothing to select; the core and the negative
+test are what ran.
+
 ## Probe F takes an analog address
 
 Not every variant defines `A0` — the M5Stack NanoC6 starts at `A1` — so the

@@ -10,6 +10,9 @@
  *         library index. Pin map per the Seeed wiki's Setup501: hardware
  *         SPI on D8/D9/D10, CS=D1, DC=D3, BL=D6, touch INT=D7, CHSC6X at
  *         I2C 0x2E, RTC at 0x51.
+ * Page  : XiaoRoundOscuino.html, generated beside this sketch by
+ *         extras/webserial (extras/webserial/oscuino.html is the same page
+ *         for any board)
  *
  *         Seeed's own wiki stack (Seeed_GFX / LVGL) is NOT used: the wiki
  *         itself lists the XIAO SAMD21 as "may not be compatible ... due to
@@ -20,17 +23,19 @@
  *         direct 5-byte I2C read, the protocol from Seeed's own
  *         lv_xiao_round_screen.h.
  *
- * ADDRESSES — the standard Oscuino set (/d /a /tone /s, see template.ino)
- * plus the round display:
+ * ADDRESSES — the standard Oscuino set (/d /a /tone /s, see ADDRESSES.md)
+ * plus the capabilities this board announces in its /enq bundle:
  *
- *   /rd/t <s> [...]     up to 4 strings, centered on the circle
- *   /rd/fill <r> <g> <b>  flood the screen, 0..255 each
- *   /rd/rtc             -> /rd/rtc <yy> <mo> <dd> <hh> <mm> <ss>
- *   /rd/rtc <6 ints>    sets the RTC (year month day hour min sec)
- *   /rd/rate <ms>       touch-poll pacing, 10..500 (default 30)
+ *   /display/text <s> [...]   up to 4 strings, centered on the circle [/enq/display 240 240]
+ *   /display/fill <r> <g> <b> flood the screen, 0..255 each
+ *   /rtc                   -> /rtc <yy> <mo> <dd> <hh> <mm> <ss>    [/enq/rtc]
+ *   /rtc <6 ints>          sets the RTC (year month day hour min sec)
+ *   /rate <ms>             touch-poll pacing, 10..500 (default 30)
  *
+ * Nothing is named after the board; see ADDRESSES.md for why.
+
  * Touch is streamed, not polled: while a finger is down the sketch sends
- *   /rd/touch <x> <y>   (240x240 coordinates, paced by /rd/rate)
+ *   /touch <x> <y>      (240x240 coordinates, paced by /rate)   [/enq/touch]
  * and draws a dot at the point, so the finger paints on the glass while
  * the page mirrors it.
  *
@@ -44,7 +49,7 @@
  * without a cell the RTC wakes with garbage (a 2110-00-01 date, measured)
  * and loses the time when power is pulled.
  *
- * /hello carries touchOK and rtcOK, probed by I2C ACK at 0x2E and 0x51.
+ * /enq carries touchOK and rtcOK, probed by I2C ACK at 0x2E and 0x51.
  * touchOK deserves a caveat the hardware taught: the CHSC6X only answers
  * I2C while a finger is on the glass, so at boot it reads absent even when
  * present — the touch stream therefore never gates on it, and rtcOK (0x51,
@@ -204,9 +209,24 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
 #endif
 }
 
-// ---- round display routes --------------------------------------------------
-void routeRound(OSCMessage &msg, int addrOffset) {
-  if (msg.fullMatch("/t", addrOffset)) {
+// ---- capability routes -------------------------------------------------------
+static void addEnq() {
+  bundleOUT.add("/enq").add("XiaoRoundOscuino");
+  bundleOUT.add("/enq/display").add((intOSC_t)240).add((intOSC_t)240);
+  // /enq/touch is unconditional: the CHSC6X only answers I2C while a finger
+  // is down, so a boot probe cannot see it (measured, see the header), and
+  // this sketch exists for the display it is mounted on.
+  bundleOUT.add("/enq/touch").add((intOSC_t)240).add((intOSC_t)240);
+  if (rtcOK) bundleOUT.add("/enq/rtc");
+}
+
+void routeEnq(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  addEnq();
+}
+
+void routeDisplay(OSCMessage &msg, int addrOffset) {
+  if (msg.fullMatch("/text", addrOffset)) {
     tft.fillScreen(GC9A01A_BLACK);
     tft.setTextColor(GC9A01A_WHITE);
     const int n = msg.size() < 4 ? msg.size() : 4;
@@ -216,39 +236,44 @@ void routeRound(OSCMessage &msg, int addrOffset) {
       msg.getString(i, line, sizeof line);
       drawCentered(line, 120 - 14 * n + 28 * i, 2);
     }
-    bundleOUT.add("/rd/t").add((intOSC_t)n);
+    bundleOUT.add("/display/text").add((intOSC_t)n);
     return;
   }
   if (msg.fullMatch("/fill", addrOffset) &&
       msg.isInt(0) && msg.isInt(1) && msg.isInt(2)) {
     tft.fillScreen(tft.color565(msg.getInt(0), msg.getInt(1), msg.getInt(2)));
-    bundleOUT.add("/rd/fill")
+    bundleOUT.add("/display/fill")
         .add((intOSC_t)msg.getInt(0)).add((intOSC_t)msg.getInt(1))
         .add((intOSC_t)msg.getInt(2));
     return;
   }
-  if (msg.fullMatch("/rtc", addrOffset)) {
-    if (msg.isInt(0) && msg.isInt(5)) {      // six ints: set
-      I2C_BM8563_DateTypeDef d;
-      I2C_BM8563_TimeTypeDef t;
-      d.year = msg.getInt(0); d.month = msg.getInt(1); d.date = msg.getInt(2);
-      t.hours = msg.getInt(3); t.minutes = msg.getInt(4); t.seconds = msg.getInt(5);
-      rtc.setDate(&d);
-      rtc.setTime(&t);
-    }
+}
+
+void routeRtc(OSCMessage &msg, int addrOffset) {
+  (void)addrOffset;
+  if (msg.isInt(0) && msg.isInt(5)) {      // six ints: set
     I2C_BM8563_DateTypeDef d;
     I2C_BM8563_TimeTypeDef t;
-    rtc.getDate(&d);
-    rtc.getTime(&t);
-    bundleOUT.add("/rd/rtc")
-        .add((intOSC_t)d.year).add((intOSC_t)d.month).add((intOSC_t)d.date)
-        .add((intOSC_t)t.hours).add((intOSC_t)t.minutes).add((intOSC_t)t.seconds);
-    return;
+    d.year = msg.getInt(0); d.month = msg.getInt(1); d.date = msg.getInt(2);
+    t.hours = msg.getInt(3); t.minutes = msg.getInt(4); t.seconds = msg.getInt(5);
+    rtc.setDate(&d);
+    rtc.setTime(&t);
   }
-  if (msg.fullMatch("/rate", addrOffset) && msg.isInt(0)) {
-    touchMs = constrain(msg.getInt(0), 10, 500);
-    return;
-  }
+  I2C_BM8563_DateTypeDef d;
+  I2C_BM8563_TimeTypeDef t;
+  rtc.getDate(&d);
+  rtc.getTime(&t);
+  bundleOUT.add("/rtc")
+      .add((intOSC_t)d.year).add((intOSC_t)d.month).add((intOSC_t)d.date)
+      .add((intOSC_t)t.hours).add((intOSC_t)t.minutes).add((intOSC_t)t.seconds);
+}
+
+void routeRate(OSCMessage &msg, int addrOffset) {
+  (void)addrOffset;
+  if (!msg.isInt(0)) return;
+  const int32_t v = msg.getInt(0);   // 0 stops the touch stream (ADDRESSES.md)
+  touchMs = (v <= 0) ? 0 : (uint32_t) constrain(v, 10, 500);
+  bundleOUT.add("/rate").add((intOSC_t)touchMs);
 }
 
 // -----------------------------------------------------------------------------
@@ -272,8 +297,7 @@ void setup() {
   drawCentered("OSC/SLIP/USB", 136, 2);
 
   delay(300);
-  bundleOUT.add("/hello").add("XiaoRoundOscuino")
-      .add((intOSC_t)touchOK).add((intOSC_t)rtcOK);
+  addEnq();
   SLIPSerial.beginPacket();
   bundleOUT.send(SLIPSerial);
   SLIPSerial.endPacket();
@@ -301,23 +325,26 @@ void loop() {
       bundleIN.route("/a", routeAnalog);
       bundleIN.route("/tone", routeTone);
       bundleIN.route("/s", routeSystem);
-      bundleIN.route("/rd", routeRound);
+      bundleIN.route("/enq", routeEnq);
+      bundleIN.route("/display", routeDisplay);
+      bundleIN.route("/rtc",  routeRtc);
+      bundleIN.route("/rate", routeRate);
     }
     bundleIN.empty();
   }
 
-  // Touch stream: while a finger is down, send paced /rd/touch and paint.
+  // Touch stream: while a finger is down, send paced /touch and paint.
   // NOT gated on the boot-time I2C probe: the CHSC6X only acknowledges I2C
   // while a touch is active (measured — 0x2E was silent at boot with the
   // panel attached), so a boot ACK can never be required. The fork's
   // getTouch() checks the INT line first, exactly as Seeed's own driver does.
   static uint32_t lastTouch = 0;
-  if (millis() - lastTouch >= touchMs) {
+  if (touchMs != 0 && millis() - lastTouch >= touchMs) {
     lastTouch = millis();
     int x = 0, y = 0;
     if (readTouch(&x, &y)) {
       tft.fillCircle(x, y, 3, GC9A01A_CYAN);
-      bundleOUT.add("/rd/touch").add((intOSC_t)x).add((intOSC_t)y);
+      bundleOUT.add("/touch").add((intOSC_t)x).add((intOSC_t)y);
     }
   }
 

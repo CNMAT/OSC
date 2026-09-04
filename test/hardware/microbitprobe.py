@@ -1,6 +1,6 @@
 """micro:bit extension probes, on top of oscprobe's port and codec.
 
-Covers what the generic hardware suite does not: /mb/a /mb/b /mb/t, /s/l,
+Covers what the generic hardware suite does not: /imu /btn /display/text, /s/l,
 /d/5 (button A pin), /tone/0, and finally /s/q -- which must land us back at
 a REPL prompt, proving the escape hatch.
 """
@@ -37,13 +37,13 @@ def ask(p, payload, label, want_reply=True, settle=0.6):
 p = oscprobe.Port(PORT)
 print('port %s' % PORT)
 
-ask(p, bundle([msg('/mb/b')]), '/mb/b buttons')
-ask(p, bundle([msg('/mb/a')]), '/mb/a accelerometer')
+ask(p, bundle([msg('/btn')]), '/btn buttons')
+ask(p, bundle([msg('/imu')]), '/imu accelerometer')
 ask(p, bundle([msg('/s/l', [1])]), '/s/l 1 display on')
 time.sleep(0.5)
 ask(p, bundle([msg('/s/l', [0])]), '/s/l 0 display off')
 ask(p, bundle([msg('/d/5', [])]), '/d/5 button A pin read')
-ask(p, bundle([msg('/mb/t', ['OSC'])]), '/mb/t scroll (no reply)', want_reply=False)
+ask(p, bundle([msg('/display/text', ['OSC'])]), '/display/text scroll (no reply)', want_reply=False)
 time.sleep(2.5)
 ask(p, bundle([msg('/tone/0', [440])]), '/tone/0 440 (no reply)', want_reply=False)
 time.sleep(0.4)

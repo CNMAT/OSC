@@ -58,7 +58,7 @@ OSCBundle bundleOUT;
  * called when the address matches "/a"
  * 
  * format:
- * /analog/(pin)
+ * /a/(pin)
  *   /u = analogRead with pullup
  * 
  **/
@@ -69,37 +69,37 @@ void routeAnalog(OSCMessage &msg, int addrOffset ){
     if(pinMatched){   
       if (msg.fullMatch("/u", pinMatched+addrOffset)) pinMode(analogInputToDigitalPin(0), INPUT_PULLUP); //set the pullup
         //do the analog read and send the results
-        bundleOUT.add("/analog/0").add((intOSC_t)analogRead(0));         
+        bundleOUT.add("/a/0").add((intOSC_t)analogRead(0));         
      }
     pinMatched = msg.match("/1", addrOffset);
     if(pinMatched){   
       if (msg.fullMatch("/u", pinMatched+addrOffset)) pinMode(analogInputToDigitalPin(1), INPUT_PULLUP); //set the pullup
         //do the analog read and send the results
-        bundleOUT.add("/analog/1").add((intOSC_t)analogRead(1));         
+        bundleOUT.add("/a/1").add((intOSC_t)analogRead(1));         
      }
     pinMatched = msg.match("/2", addrOffset);
     if(pinMatched){   
       if (msg.fullMatch("/u", pinMatched+addrOffset)) pinMode(analogInputToDigitalPin(2), INPUT_PULLUP); //set the pullup
         //do the analog read and send the results
-        bundleOUT.add("/analog/2").add((intOSC_t)analogRead(2));         
+        bundleOUT.add("/a/2").add((intOSC_t)analogRead(2));         
      }
     pinMatched = msg.match("/3", addrOffset);
     if(pinMatched){   
       if (msg.fullMatch("/u", pinMatched+addrOffset)) pinMode(analogInputToDigitalPin(3), INPUT_PULLUP); //set the pullup
         //do the analog read and send the results
-        bundleOUT.add("/analog/3").add((intOSC_t)analogRead(3));         
+        bundleOUT.add("/a/3").add((intOSC_t)analogRead(3));         
      }
     pinMatched = msg.match("/4", addrOffset);
     if(pinMatched){   
       if (msg.fullMatch("/u", pinMatched+addrOffset)) pinMode(analogInputToDigitalPin(4), INPUT_PULLUP); //set the pullup
         //do the analog read and send the results
-        bundleOUT.add("/analog/4").add((intOSC_t)analogRead(4));         
+        bundleOUT.add("/a/4").add((intOSC_t)analogRead(4));         
      }
     pinMatched = msg.match("/5", addrOffset);
     if(pinMatched){   
       if (msg.fullMatch("/u", pinMatched+addrOffset)) pinMode(analogInputToDigitalPin(5), INPUT_PULLUP); //set the pullup
         //do the analog read and send the results
-        bundleOUT.add("/analog/5").add((intOSC_t)analogRead(5));         
+        bundleOUT.add("/a/5").add((intOSC_t)analogRead(5));         
      }
 }
 
@@ -134,7 +134,7 @@ void loop(){
         //a single bundle element larger than OSC_MAX_INCOMING raises
         //BUFFER_FULL; an errored bundle is not dispatched
         if(!bundleIN.hasError())
-              bundleIN.route("/analog", routeAnalog);
+              bundleIN.route("/a", routeAnalog);
 
         // send the response bundle back to where the request came from
         Udp.beginPacket(Udp.remoteIP(), outPort); 

@@ -92,7 +92,7 @@ CORPUS = [
     ('/x', (192, 219, 220, 221)),          # END, ESC, ESC_END, ESC_ESC as ints
     ('/d/9', (0.5,)),
     ('/f', (-1.25, 0.0)),
-    ('/hello', ('MicrobitOscuino',)),
+    ('/enq', ('MicrobitOscuino',)),
     ('/s', ('', 'abc', 'abcd')),           # padding at every remainder
     ('/blob', (b'\xc0\xdb\x00\x01',)),
     ('/blob', (b'',)),

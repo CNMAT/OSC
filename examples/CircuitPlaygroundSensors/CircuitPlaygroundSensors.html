@@ -20,10 +20,16 @@
   reload (Cmd-Shift-R) after changing it.
 
   Connect lists only boards matching CPX_FILTERS (0x239A/0x8018 for the
-  sketch, 0x0018 for the bootloader). Tick "show all ports" to drop the
+  sketch, 0x0019 for the bootloader). Tick "show all ports" to drop the
   filter -- if ports appear only then, the board's USB ids are not stock.
   Double-tapping reset puts the board in the bootloader, which enumerates
   under the second id and does not speak OSC.
+
+  The addresses are the ones in ADDRESSES.md, and only those. The board
+  answers /enq with a bundle naming its capabilities (/enq/rgb 10,
+  /enq/btn 3, /enq/cap 7, ...) and streams one bundle per report: /state
+  plus one message per capability. This page draws those capabilities over
+  the photograph; the sketch's header lists the exact shape of each.
 
   The indicators are drawn over circuitplayground.jpg, a photograph of the
   author's own board, so every reading lights up where its part actually is.
@@ -40,7 +46,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CircuitPlaygroundSensors &mdash; the whole board in one OSC message</title>
+<title>CircuitPlaygroundSensors &mdash; the whole board in one OSC bundle</title>
 <style>
   :root {
     --bg: #10131a; --panel: #171b24; --panel-2: #1e2430; --line: #2a3140;
@@ -71,8 +77,8 @@
   @media (max-width: 820px) { .cols { grid-template-columns: 1fr; } }
   table.state { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12.5px; }
   table.state td { padding:2px 6px; border-bottom:1px solid #222836; }
-  table.state td:first-child { color:var(--dim); }
-  table.state td:last-child { text-align:right; }
+  table.state td:first-child { color:var(--dim); white-space:nowrap; }
+  table.state td:last-child { text-align:right; word-break:break-word; }
   .stale { opacity:.45; }
   .meter { height:9px; background:#0c0f15; border:1px solid var(--line);
            border-radius:5px; overflow:hidden; }
@@ -91,10 +97,12 @@
 <div class="wrap">
   <h1>CircuitPlaygroundSensors</h1>
   <div class="sub">
-    The entire Circuit Playground Express state arrives as a single OSC message —
-    <code>/cpx</code> with 17 arguments, sampled in one pass — rather than a bundle
-    of seventeen. Sent on change, plus a heartbeat so silence still means something.
-    Click a pixel to paint it. Chrome or Edge, over Web Serial.
+    The entire Circuit Playground Express arrives as one OSC bundle per report —
+    <code>/state</code> plus one message per capability (<code>/btn</code>,
+    <code>/light</code>, <code>/temp</code>, <code>/imu</code>, <code>/cap</code>,
+    and <code>/mic</code> when it is built in), sampled in one pass. Sent on change,
+    plus a heartbeat so silence still means something. Click a pixel to paint it
+    (<code>/rgb/&lt;n&gt;</code>). Chrome or Edge, over Web Serial.
   </div>
 
   <div class="panel">
@@ -111,40 +119,41 @@
     <div class="row" style="margin-top:10px">
       <label>paint</label>
       <input type="color" id="paint" value="#5eead4" style="padding:2px; width:52px">
-      <button id="fill">all</button>
-      <button id="clear">off</button>
+      <button id="fill" title="/rgb r g b">all</button>
+      <button id="clear" title="/rgb 0 0 0">off</button>
       <span style="width:8px"></span>
       <label>bright</label>
-      <input type="range" id="bright" min="0" max="255" value="40" style="width:110px">
+      <input type="range" id="bright" min="0" max="255" value="40" style="width:110px" title="/rgb/bright">
       <span id="brightV" style="font-family:var(--mono); color:var(--dim); width:30px">40</span>
       <span style="width:8px"></span>
-      <button id="sweep">sweep</button>
-      <button id="tilt">tilt</button>
-      <button id="redled">red LED</button>
+      <button id="sweep" title="/rgb/pixels, one frame per packet">sweep</button>
+      <button id="tilt" title="/rgb/pixels driven by /imu">tilt</button>
+      <button id="redled" title="/s/l">red LED</button>
     </div>
     <div class="row" style="margin-top:10px">
-      <label>tone</label>
+      <label>buzz</label>
       <input type="number" id="freq" value="440" min="0" max="8000" style="width:88px">
-      <button id="beep">beep 200ms</button>
-      <button id="quiet">stop</button>
+      <button id="beep" title="/buzz hz 200">beep 200ms</button>
+      <button id="quiet" title="/buzz 0">stop</button>
       <span style="width:8px"></span>
-      <label>min gap</label>
-      <select id="rate">
-        <option value="0">none</option>
+      <label>rate</label>
+      <select id="rate" title="/rate — streaming period in ms; 0 stops the stream. The board reports on change, so a non-zero value is the floor on the gap between reports, not a fixed period">
+        <option value="0">stop</option>
+        <option value="1">fastest</option>
         <option value="10">10 ms</option>
         <option value="20" selected>20 ms</option>
         <option value="50">50 ms</option>
         <option value="200">200 ms</option>
       </select>
       <label>heartbeat</label>
-      <select id="heartbeat">
+      <select id="heartbeat" title="/heartbeat">
         <option value="0">off</option>
         <option value="500">0.5 s</option>
         <option value="2000" selected>2 s</option>
         <option value="5000">5 s</option>
       </select>
       <label>deadband</label>
-      <input type="number" id="deadband" value="4" min="0" max="64" style="width:66px">
+      <input type="number" id="deadband" value="4" min="0" max="64" style="width:66px" title="/deadband">
     </div>
   </div>
 
@@ -168,16 +177,16 @@
         <image href="circuitplayground.jpg" x="0" y="0" width="832" height="900"
                clip-path="url(#boardClip)"/>
 
-        <g id="pads"></g>     <!-- seven touch pads, filled by script -->
-        <g id="ring"></g>     <!-- ten NeoPixels, filled by script -->
+        <g id="pads"></g>     <!-- seven touch pads (/cap), filled by script -->
+        <g id="ring"></g>     <!-- ten NeoPixels (/rgb), filled by script -->
 
-        <!-- buttons A and B, over the real switches -->
+        <!-- buttons A and B (/btn), over the real switches -->
         <circle id="btnA" cx="250" cy="392" r="46" fill="var(--accent)" fill-opacity="0"
                 stroke="var(--accent)" stroke-opacity=".55" stroke-width="3"/>
         <circle id="btnB" cx="568" cy="388" r="46" fill="var(--accent)" fill-opacity="0"
                 stroke="var(--accent)" stroke-opacity=".55" stroke-width="3"/>
 
-        <!-- slide switch, bottom centre: the bar leans to the side that reads 1 -->
+        <!-- slide switch, bottom centre (the third /btn): the bar leans to the side that reads 1 -->
         <g>
           <rect id="slideBox" x="358" y="536" width="104" height="52" rx="10" fill="none"
                 stroke="var(--accent)" stroke-opacity=".5" stroke-width="3"/>
@@ -185,13 +194,13 @@
                 fill="var(--accent)" fill-opacity=".55"/>
         </g>
 
-        <!-- passive sensors: rings that brighten with their reading -->
+        <!-- passive sensors: rings that brighten with their reading (/light, /mic) -->
         <circle id="ringLight" cx="282" cy="292" r="30" fill="var(--accent)" fill-opacity="0"
                 stroke="var(--accent)" stroke-opacity=".55" stroke-width="3"/>
         <circle id="ringMic" cx="588" cy="468" r="28" fill="var(--rx)" fill-opacity="0"
                 stroke="var(--rx)" stroke-opacity=".55" stroke-width="3"/>
 
-        <!-- thermistor: the reading sits beside the sensor it comes from -->
+        <!-- thermistor (/temp): the reading sits beside the sensor it comes from -->
         <circle id="ringTemp" cx="545" cy="262" r="26" fill="none"
                 stroke="var(--accent)" stroke-opacity=".45" stroke-width="3"/>
         <!-- paint-order puts the dark stroke behind the glyphs, which is what
@@ -199,7 +208,7 @@
         <text id="tempText" x="405" y="330" text-anchor="middle" style="font-size:34px"
               fill="var(--text)" stroke="#0b0e14" stroke-width="7" paint-order="stroke">–</text>
 
-        <!-- accelerometer bubble, over the LIS3DH -->
+        <!-- accelerometer bubble (/imu), over the LIS3DH -->
         <circle cx="405" cy="445" r="54" fill="none" stroke="var(--accent)"
                 stroke-opacity=".35" stroke-dasharray="5 7" stroke-width="2"/>
         <circle id="accDot" cx="405" cy="445" r="17" fill="var(--rx)" fill-opacity=".85"/>
@@ -209,7 +218,7 @@
     <div>
       <div class="panel">
         <div class="mrow"><span>light</span><div class="meter"><i id="mLight"></i></div><span id="vLight">–</span></div>
-        <div class="mrow"><span>sound</span><div class="meter"><i id="mSound"></i></div><span id="vSound">–</span></div>
+        <div class="mrow"><span>mic</span><div class="meter"><i id="mSound"></i></div><span id="vSound">–</span></div>
         <div class="mrow"><span>accel Z</span><div class="meter"><i id="mAccZ"></i></div><span id="vAccZ">–</span></div>
         <div class="row" style="margin-top:4px; justify-content:space-between">
           <span style="color:var(--dim); font-size:12px">temperature</span>
@@ -221,6 +230,7 @@
         </div>
       </div>
       <div class="panel">
+        <!-- one row per message in the last report bundle, as received -->
         <table class="state" id="raw"><tbody></tbody></table>
       </div>
     </div>
@@ -240,7 +250,7 @@
 "use strict";
 
 /* ============================================================
-   1. OSC — decode only what this page needs, plus int encode
+   1. OSC — decode messages and bundles, encode int messages
    ============================================================ */
 const dec = new TextDecoder(), enc = new TextEncoder();
 
@@ -255,28 +265,57 @@ class Reader {
     this.pos = (e + 4) & ~3;
     return s;
   }
+  raw(n) { const v = this.b.subarray(this.pos, this.pos + n); this.pos += n; return v; }
+  blob() { const n = this.int32(); const v = this.raw(n); this.pos = (this.pos + 3) & ~3; return v; }
 }
 
+// A message comes back with its type tags as well as its values, so the raw
+// table can format by declared type rather than by what a value happens to
+// look like: a temperature of exactly 23.0 is still a float and should not
+// print as "23".
 function decodeMessage(bytes) {
   const r = new Reader(bytes);
   const address = r.string();
   const args = [];
+  let tags = "";
   if (r.left > 0) {
-    const tags = r.string();
-    if (tags.startsWith(",")) {
-      for (const t of tags.slice(1)) {
-        if (t === "i") args.push(r.int32());
-        else if (t === "f") args.push(r.float32());
-        else if (t === "s") args.push(r.string());
-        else if (t === "b") args.push(r.blob());
-        else if (t === "T") args.push(true);
-        else if (t === "F") args.push(false);
-        else return { address, args };   // unknown tag: payload size unknown
+    const t = r.string();
+    if (t.startsWith(",")) {
+      tags = t.slice(1);
+      for (const c of tags) {
+        if (c === "i") args.push(r.int32());
+        else if (c === "f") args.push(r.float32());
+        else if (c === "s") args.push(r.string());
+        else if (c === "b") args.push(r.blob());
+        else if (c === "T") args.push(true);
+        else if (c === "F") args.push(false);
+        else break;                       // unknown tag: payload size unknown
       }
     }
   }
-  return { address, args };
+  return { address, tags, args };
 }
+
+// '#' (0x23) at offset 0 means "#bundle": a timetag, then size-prefixed
+// elements, each of which may itself be a bundle.
+function decodePacket(bytes) {
+  if (bytes.length >= 16 && bytes[0] === 0x23) {
+    const r = new Reader(bytes);
+    r.string();                           // "#bundle"
+    const timetag = r.raw(8);
+    const packets = [];
+    while (r.left >= 4) {
+      const size = r.int32();
+      if (size <= 0 || size > r.left) break;
+      packets.push(decodePacket(r.raw(size)));
+    }
+    return { bundle: true, timetag, packets };
+  }
+  return decodeMessage(bytes);
+}
+
+// Flattens a packet — a bare message or a bundle, nested or not — into its messages.
+function messagesOf(pkt) { return pkt.bundle ? pkt.packets.flatMap(messagesOf) : [pkt]; }
 
 // Everything this page sends is integers — pixel indices, colour components,
 // frequencies, milliseconds — so an int-only encoder is the whole requirement.
@@ -337,8 +376,9 @@ let port = null, writer = null, reader = null, pipeDone = null;
 async function connect() {
   const opts = $("allPorts").checked ? {} : { filters: CPX_FILTERS };
   port = await navigator.serial.requestPort(opts);
-  // Chrome's default read buffer is 255 bytes and one /cpx frame is a little
-  // over 100, so the default holds barely two. The board can send fifty a
+  // Chrome's default read buffer is 255 bytes and one report bundle is 196
+  // bytes on the wire (220 with the microphone; the contract test counts
+  // them), so the default holds barely one. The board can send fifty a
   // second; give it room to absorb a slow paint without dropping any.
   await port.open({ baudRate: 115200, bufferSize: 8192 });
   writer = port.writable.getWriter();
@@ -350,8 +390,8 @@ async function connect() {
   // The board's startup hello went out 300 ms after it was plugged in, long
   // before anyone clicked Connect, so ask for a fresh one rather than waiting
   // for a message that has already been and gone. The reply is where the
-  // accelerometer's address — or its absence — is reported.
-  send("/hello", []);
+  // capability list — and whether the accelerometer answered — is reported.
+  send("/enq", []);
 }
 
 async function readLoop() {
@@ -478,24 +518,64 @@ class PadBaseline {
 }
 
 /* ============================================================
-   5. State display
+   5. The stream — one bundle per report, one message per capability
+   ============================================================ */
+
+// What each streamed message contributes to a sample. The keys are the
+// addresses the sketch's header documents under STREAM, in the same order;
+// extras/webserial/test/test-cpx-contract.mjs holds the two lists to each
+// other, and to what the sketch's addReadings() actually sends.
+const STREAM = {
+  "/state": (a, s) => { s.seq = a[0]; s.millis = a[1]; },
+  "/btn":   (a, s) => { s.buttonA = a[0]; s.buttonB = a[1]; s.slide = a[2]; },
+  "/light": (a, s) => { s.light = a[0]; },
+  "/temp":  (a, s) => { s.tempC = a[0]; },
+  "/mic":   (a, s) => { s.sound = a[0]; s.peak = a[1]; },
+  "/imu":   (a, s) => { s.accelX = a[0]; s.accelY = a[1]; s.accelZ = a[2]; },
+  "/cap":   (a, s) => { s.touch = a.slice(); },
+};
+
+// The arity each message must have for its unpacker above to be meaningful;
+// a sketch and page out of step show up here as a warning, not as a wrong
+// reading silently drawn in the right place.
+const STREAM_ARITY = { "/state": 2, "/btn": 3, "/light": 1, "/temp": 1, "/mic": 2, "/imu": 3 };
+
+// A report is a bundle carrying /state. A capability the board lacks is simply
+// absent from it, so the sample starts with null for the optional ones.
+function unpackStream(msgs) {
+  if (!msgs.some(m => m.address === "/state")) return null;
+  const s = { sound: null, peak: null, accelX: null, accelY: null, accelZ: null,
+              touch: [], messages: msgs, bad: [] };
+  for (const m of msgs) {
+    const f = STREAM[m.address];
+    if (!f) continue;
+    const want = STREAM_ARITY[m.address];
+    if (want !== undefined && m.args.length !== want) { s.bad.push(m.address); continue; }
+    f(m.args, s);
+  }
+  return s;
+}
+
+// The enq bundle: /enq <name>, then one /enq/<capability> [shape] per
+// capability the board could prove, and any /diag free text.
+function unpackHello(msgs) {
+  const hello = msgs.find(m => m.address === "/enq");
+  if (!hello) return null;
+  const enq = {};
+  for (const m of msgs) if (m.address.startsWith("/enq/")) enq[m.address.slice(5)] = m.args;
+  const diag = msgs.filter(m => m.address === "/diag").map(m => m.args.join(" "));
+  return { name: hello.args[0], enq, diag };
+}
+
+/* ============================================================
+   6. State display
    ============================================================ */
 const $ = id => document.getElementById(id);
 const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
 
-// Positional layout of /cpx, mirroring the comment block in the sketch.
-const FIELDS = [
-  "seq", "buttonA", "buttonB", "slide", "light", "tempC", "sound",
-  "accelX", "accelY", "accelZ",
-  "touch1", "touch2", "touch3", "touch4", "touch5", "touch6", "touch7",
-];
-// The sketch's type tag string, so the raw table can format by declared type
-// rather than by what a value happens to look like: a temperature of exactly
-// 23.0 is still a float and should not print as "23".
-const FIELD_TYPES = "iiiiififffiiiiiii";
-
 let lastSeq = null, dropped = 0, frames = 0, lastRateAt = performance.now();
 let latest = null;                       // most recent sample, for the tilt demo
+let haveImu = false, haveMic = false;    // from the hello's /enq list
 
 /* ---- geometry, measured off the photograph rather than assumed -------------
  *
@@ -525,9 +605,9 @@ let latest = null;                       // most recent sample, for the tilt dem
  * numbering running counter-clockwise from it. That is an inference from the
  * board, not an observation of it: the on-board light sensor cannot settle it
  * (a single pixel moves it by less than a count against an ambient that drifts
- * by tens), so it wants ten seconds of a human eye. Send /pix 0 255 0 0 and see
- * whether the pixel that turns red is the one beside D8; if the ring lights up
- * mirrored or rotated, reorder PIXEL_XY and nothing else changes.
+ * by tens), so it wants ten seconds of a human eye. Send /rgb/0 255 0 0 and
+ * see whether the pixel that turns red is the one beside D8; if the ring
+ * lights up mirrored or rotated, reorder PIXEL_XY and nothing else changes.
  */
 const CX = 408, CY = 422;        // the LED ring's centre, for bearings
 
@@ -582,23 +662,20 @@ function buildBoard() {
 }
 
 function onFrame(bytes) {
-  let pkt; try { pkt = decodeMessage(bytes); } catch { return; }
+  let pkt; try { pkt = decodePacket(bytes); } catch { return; }
+  const msgs = messagesOf(pkt);
 
-  if (pkt.address === "/hello") {
-    logLine("", `hello from ${pkt.args[0]} — ${pkt.args[1]} args, ${pkt.args[2]} pixels, ` +
-                (pkt.args[3] ? "accelerometer at 0x" + Number(pkt.args[3]).toString(16)
-                             : "NO ACCELEROMETER FOUND"));
+  const hello = unpackHello(msgs);
+  if (hello) { onHello(hello); return; }
+
+  const s = unpackStream(msgs);
+  if (!s) {
+    // Not a report: the answer to an ask, or something new. Show it.
+    for (const m of msgs) logLine("", m.address + " " + m.args.map(String).join(" "));
     return;
   }
-  if (pkt.address !== "/cpx") return;
-
-  if (pkt.args.length !== FIELDS.length) {
-    logLine("warn", `/cpx has ${pkt.args.length} args, expected ${FIELDS.length}` +
-                    " — sketch and page are out of step");
-    return;
-  }
-  const s = {};
-  FIELDS.forEach((k, i) => s[k] = pkt.args[i]);
+  for (const a of s.bad)
+    logLine("warn", `${a} arrived with the wrong number of arguments — sketch and page are out of step`);
 
   if (lastSeq !== null && s.seq !== lastSeq + 1) dropped += Math.max(0, s.seq - lastSeq - 1);
   lastSeq = s.seq;
@@ -607,6 +684,20 @@ function onFrame(bytes) {
 
   render(s);
   if (tiltOn) followTilt(s);
+}
+
+function onHello(h) {
+  const caps = Object.entries(h.enq)
+    .map(([k, a]) => k + (a.length ? " " + a.join(" ") : "")).join(", ");
+  logLine("", `hello from ${h.name} — ${caps}`);
+  for (const d of h.diag) logLine("", d);
+  haveImu = "imu" in h.enq;
+  haveMic = "mic" in h.enq;
+  if (!haveImu) logLine("warn", "no /enq/imu: the accelerometer did not answer, so tilt has nothing to follow");
+  // The drawing has a fixed number of pixels and pads; say so if the board differs.
+  const rgb = (h.enq.rgb || [])[0], cap = (h.enq.cap || [])[0];
+  if (rgb !== PIXELS) logLine("warn", `/enq/rgb says ${rgb} pixels; this page draws ${PIXELS}`);
+  if (cap !== PADS)   logLine("warn", `/enq/cap says ${cap} pads; this page draws ${PADS}`);
 }
 
 function render(s) {
@@ -618,22 +709,25 @@ function render(s) {
   $("slideKnob").setAttribute("x", s.slide ? 414 : 366);
 
   $("ringLight").setAttribute("fill-opacity", (clamp(s.light / 1023, 0, 1) * 0.85).toFixed(2));
-  // sound is -1 when the sketch was built without the microphone
-  const haveMic = s.sound >= 0;
-  $("ringMic").setAttribute("fill-opacity", haveMic ? (clamp(s.sound / 1023, 0, 1) * 0.85).toFixed(2) : "0");
+  // /mic is absent when the sketch was built without the microphone. Full
+  // scale is 0..32767 per the contract.
+  const mic = s.sound !== null;
+  $("ringMic").setAttribute("fill-opacity", mic ? (clamp(s.sound / 32767, 0, 1) * 0.85).toFixed(2) : "0");
 
-  // The accelerometer reads in g. +-1 g of tilt covers the well.
-  $("accDot").setAttribute("cx", (405 + clamp(s.accelX, -1, 1) * 40).toFixed(1));
-  $("accDot").setAttribute("cy", (445 + clamp(s.accelY, -1, 1) * 40).toFixed(1));
+  // The accelerometer reads in g. +-1 g of tilt covers the well. No /imu
+  // means no accelerometer answered: the bubble sits at the centre.
+  const imu = s.accelX !== null;
+  $("accDot").setAttribute("cx", (405 + (imu ? clamp(s.accelX, -1, 1) * 40 : 0)).toFixed(1));
+  $("accDot").setAttribute("cy", (445 + (imu ? clamp(s.accelY, -1, 1) * 40 : 0)).toFixed(1));
 
-  for (let i = 0; i < PADS; i++) {
-    const excursion = padBase.update(i, s["touch" + (i + 1)]);
+  for (let i = 0; i < PADS && i < s.touch.length; i++) {
+    const excursion = padBase.update(i, s.touch[i]);
     $("pad" + i).setAttribute("fill-opacity", clamp(excursion, 0, 1).toFixed(2));
   }
 
   meter("Light", s.light / 1023, s.light);
-  meter("Sound", haveMic ? s.sound / 1023 : 0, haveMic ? s.sound : "off");
-  meter("AccZ", (s.accelZ + 2) / 4, s.accelZ.toFixed(2));
+  meter("Sound", mic ? s.sound / 32767 : 0, mic ? s.sound : "off");
+  meter("AccZ", imu ? (s.accelZ + 2) / 4 : 0, imu ? s.accelZ.toFixed(2) : "–");
 
   const t = Number.isFinite(s.tempC) ? s.tempC.toFixed(1) + " °C" : "–";
   $("vTemp").textContent = t;
@@ -641,17 +735,18 @@ function render(s) {
   $("vBtns").textContent =
     (s.buttonA ? "A" : "–") + " " + (s.buttonB ? "B" : "–") + " " + (s.slide ? "◀" : "▶");
 
+  // The raw table is the bundle as received: one row per message, each
+  // argument formatted by its declared type tag.
+  const fmt = (v, t) => t === "f" ? (Number.isFinite(v) ? v.toFixed(3) : "NaN") : String(v);
+  const rows = s.messages.map(m => [m.address, m.args.map((v, i) => fmt(v, m.tags[i])).join(" ")]);
+  rows.push(["dropped", String(dropped)]);
   const tb = $("raw").tBodies[0];
-  if (tb.rows.length !== FIELDS.length + 1) {
-    tb.innerHTML = FIELDS.map(k => `<tr><td>${k}</td><td id="r_${k}">–</td></tr>`).join("")
-                 + `<tr><td>dropped</td><td id="r_dropped">0</td></tr>`;
-  }
-  FIELDS.forEach((k, i) => {
-    const v = s[k];
-    $("r_" + k).textContent = FIELD_TYPES[i] !== "f" ? v
-                            : Number.isFinite(v) ? v.toFixed(3) : "NaN";
+  if (tb.rows.length !== rows.length)
+    tb.innerHTML = rows.map(() => "<tr><td></td><td></td></tr>").join("");
+  rows.forEach(([k, v], i) => {
+    tb.rows[i].cells[0].textContent = k;
+    tb.rows[i].cells[1].textContent = v;
   });
-  $("r_dropped").textContent = dropped;
 }
 
 function meter(name, frac, value) {
@@ -679,30 +774,32 @@ function logLine(cls, text) {
 setInterval(() => {
   const now = performance.now(), dt = (now - lastRateAt) / 1000;
   if (dt >= 1) {
-    $("rateOut").textContent = `${(frames / dt).toFixed(0)} msg/s   dropped ${dropped}`;
+    $("rateOut").textContent = `${(frames / dt).toFixed(0)} reports/s   dropped ${dropped}`;
     frames = 0; lastRateAt = now;
   }
 }, 1000);
 
 /* ============================================================
-   6. Driving the pixels
+   7. Driving the pixels
    ============================================================ */
 const hex = v => [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)];
 const showPixel = (i, css) => $("pix" + i).setAttribute("fill", css);
 
+// /rgb/<n> r g b: one pixel.
 function paintPixel(i) {
   const c = $("paint").value;
   showPixel(i, c);
-  send("/pix", [i, ...hex(c)]);
+  send("/rgb/" + i, hex(c));
 }
 
+// /rgb r g b: every pixel the same colour.
 function fillAll(cssColour) {
   for (let i = 0; i < PIXELS; i++) showPixel(i, cssColour);
   send("/rgb", hex(cssColour));
 }
 
-// One /pixels message carries all ten, so an animation frame is a single packet
-// rather than ten. Both the sweep and the tilt demo go through here.
+// One /rgb/pixels message carries all ten, so an animation frame is a single
+// packet rather than ten. Both the sweep and the tilt demo go through here.
 function sendAll(colours) {
   const flat = [];
   for (let i = 0; i < PIXELS; i++) {
@@ -710,7 +807,7 @@ function sendAll(colours) {
     flat.push(c[0], c[1], c[2]);
     showPixel(i, `rgb(${c[0]},${c[1]},${c[2]})`);
   }
-  send("/pixels", flat);
+  send("/rgb/pixels", flat);
 }
 
 let sweepTimer = null, sweepPos = 0;
@@ -737,14 +834,15 @@ function stopSweep() {
 // Tilt the board and the light runs downhill, the way a bubble would not.
 //
 // An accelerometer at rest measures the force holding it up, so the axis that
-// reads positive is the one pointing UP: face up on a table this board reads
-// accelZ near +1, which is what was seen on hardware. atan2(accelY, accelX)
+// reads positive is the one pointing UP: face up on a table this board's /imu
+// reads near +1 on Z, which is what was seen on hardware. atan2(accelY, accelX)
 // therefore points at the RAISED edge, and downhill is the opposite bearing.
 //
 // The ring geometry is the page's own, so the lit pixel follows the drawing; if
 // a board numbers its ring the other way the light will run the other way.
 let tiltOn = false, tiltSentAt = 0;
 function followTilt(s) {
+  if (s.accelX === null) return;                   // no /imu in this report
   const now = performance.now();
   if (now - tiltSentAt < 60) return;              // ~16 Hz is plenty for the eye
   tiltSentAt = now;
@@ -764,7 +862,7 @@ function followTilt(s) {
 }
 
 /* ============================================================
-   7. Wiring
+   8. Wiring
    ============================================================ */
 buildBoard();
 
@@ -785,19 +883,19 @@ $("clearLog").onclick = () => $("log").textContent = "";
 $("fill").onclick  = () => fillAll($("paint").value);
 $("clear").onclick = () => { stopSweep(); fillAll("#000000"); };
 
-// The brightness slider fires continuously while dragging and every /bright
-// makes the board rewrite all ten pixels, so coalesce to the latest value at
-// ~20 Hz and let onchange deliver the committed one exactly.
+// The brightness slider fires continuously while dragging and every
+// /rgb/bright makes the board rewrite all ten pixels, so coalesce to the
+// latest value at ~20 Hz and let onchange deliver the committed one exactly.
 let brightLatest = null, brightTimer = null;
 $("bright").oninput = e => {
   brightLatest = +e.target.value;
   $("brightV").textContent = brightLatest;
   if (brightTimer) return;                        // one in flight; newest wins
-  brightTimer = setTimeout(() => { brightTimer = null; send("/bright", [brightLatest]); }, 50);
+  brightTimer = setTimeout(() => { brightTimer = null; send("/rgb/bright", [brightLatest]); }, 50);
 };
 $("bright").onchange = e => {
   if (brightTimer) { clearTimeout(brightTimer); brightTimer = null; }
-  send("/bright", [+e.target.value]);
+  send("/rgb/bright", [+e.target.value]);
 };
 
 $("sweep").onclick = () => sweepTimer ? stopSweep() : startSweep();
@@ -805,17 +903,18 @@ $("tilt").onclick = () => {
   tiltOn = !tiltOn;
   $("tilt").classList.toggle("on", tiltOn);
   if (!tiltOn) fillAll("#000000");
+  else if (!haveImu) logLine("warn", "tilt: the board announced no /enq/imu");
   else if (latest) followTilt(latest);
 };
 let redOn = false;
 $("redled").onclick = () => {
   redOn = !redOn;
   $("redled").classList.toggle("on", redOn);
-  send("/led", [redOn ? 1 : 0]);
+  send("/s/l", [redOn ? 1 : 0]);
 };
 
-$("beep").onclick  = () => send("/tone", [parseInt($("freq").value, 10) || 440, 200]);
-$("quiet").onclick = () => send("/tone", [0]);
+$("beep").onclick  = () => send("/buzz", [parseInt($("freq").value, 10) || 440, 200]);
+$("quiet").onclick = () => send("/buzz", [0]);
 $("rate").onchange = e => send("/rate", [parseInt(e.target.value, 10)]);
 $("heartbeat").onchange = e => send("/heartbeat", [parseInt(e.target.value, 10)]);
 $("deadband").onchange  = e => send("/deadband", [parseInt(e.target.value, 10) || 0]);

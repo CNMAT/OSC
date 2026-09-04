@@ -14,6 +14,9 @@
   and ESP32. The ESP8266 branch has not been compiled — that core is not
   installed on the development machine — and this has not been run on hardware.
 
+  Addresses renamed onto ADDRESSES.md on 2026-09-03 (/analog/0 -> /a/0, /digital/5 -> /d/5, /micros -> /s/m);
+  that build is compile-checked and has not been re-run on the board.
+
   Adrian Freed
  */
 
@@ -136,9 +139,9 @@ void loop() {
   //A0 is the only analog pin all of these boards name: the ESP8266 has just the
   //one, and the classic ESP32 skips A1 and A2 because GPIO37 and GPIO38 are not
   //brought out. Add your own board's other pins here.
-  bndl.add("/analog/0").add((intOSC_t)analogRead(A0));
-  bndl.add("/digital/5").add((digitalRead(5) == HIGH) ? "HIGH" : "LOW");
-  bndl.add("/micros").add((intOSC_t)micros());
+  bndl.add("/a/0").add((intOSC_t)analogRead(A0));
+  bndl.add("/d/5").add((intOSC_t)digitalRead(5));
+  bndl.add("/s/m").add((intOSC_t)micros());
 
   Udp.beginPacket(outIp, outPort);
     //send() writes the packet in small pieces, and on the UNO R4 WiFi and its
@@ -162,7 +165,7 @@ void loop() {
   oneSecondFromNow.seconds += 1;
 
   OSCBundle timed(oneSecondFromNow);
-  timed.add("/analog/0").add((intOSC_t)analogRead(A0));
+  timed.add("/a/0").add((intOSC_t)analogRead(A0));
 
   Udp.beginPacket(outIp, outPort);
     OSCBufferedPrint timedOut(Udp, packetbuf, sizeof(packetbuf));

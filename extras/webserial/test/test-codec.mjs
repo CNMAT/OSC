@@ -21,7 +21,9 @@ try {
 }
 
 const script = html.split(/<script>/)[1].split(/<\/script>/)[0];
-const codecOnly = script.split("/* ============================================================\n   4. UI")[0];
+// Everything up to the marker is codec, SLIP and the capability model: pure
+// functions with no DOM behind them. The transports and UI follow it.
+const codecOnly = script.split("/* @@CORE-END@@")[0];
 
 const mod = new Function(codecOnly + `
   return { encodeMessage, encodeBundle, decodePacket, decodeMessage,

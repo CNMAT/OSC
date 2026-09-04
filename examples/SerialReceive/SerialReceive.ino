@@ -1,5 +1,6 @@
 /*
-* Set the LED according to incoming OSC control
+* Set the LED according to incoming OSC control on /s/l: an int (0 = off, else on)
+* or a string, on or off
 */
 #include <OSCBundle.h>
 #include <OSCBoards.h>
@@ -68,7 +69,7 @@ void loop(){
      }
   
   if(!bundleIN.hasError())
-   bundleIN.dispatch("/led", LEDcontrol);
+   bundleIN.dispatch("/s/l", LEDcontrol);
 
 }
 

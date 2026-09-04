@@ -80,9 +80,9 @@ Sense camera, UNO R4 LED matrix, DeskPi PicoMate, Pico Bricks, the XIAO C6
 expansion board over serial and again over WiFi, Atom JoyStick, and the two
 below, which started it):
 
-* `EsploraOscuino` — the Esplora's eighteen channels as `/esplora`, drawn over a
+* `EsploraOscuino` — the Esplora's eighteen channels, drawn over a
   photograph of the board.
-* `CircuitPlaygroundSensors` — the Circuit Playground Express as `/cpx`: light,
+* `CircuitPlaygroundSensors` — the Circuit Playground Express: light,
   thermistor, accelerometer, seven capacitive pads, both buttons and the slide
   switch, with the ten NeoPixels painted from the page. Needs Adafruit NeoPixel,
   Adafruit FreeTouch and Adafruit LIS3DH; the Express's PDM microphone is opt-in
@@ -91,8 +91,25 @@ below, which started it):
 
 Both are hand-written rather than generated from `extras/webserial`, so `make
 check` does not see them. The Circuit Playground pair has its own test instead,
-pinning the sketch and the page to the same layout of `/cpx`; `make test` in
+pinning the sketch and the page to the same capability messages; `make test` in
 `extras/webserial` runs it.
+
+## One address space
+
+Every sketch, firmware and page here speaks the vocabulary in
+[ADDRESSES.md](ADDRESSES.md), named by **capability, not by board**. A client
+asks `/enq`; the board answers with its name and one `/enq/<capability>` line
+per thing it actually has, and from then on `/rgb`, `/display/text`, `/buzz`,
+`/btn`, `/imu` mean the same everywhere. Streams are a bundle of `/state <seq>
+<millis>` plus one message per capability — nothing is streamed under a board's
+name. That is what lets a single page drive any board, over Web Serial, Web
+Bluetooth or HTTP: `extras/webserial/oscuino.html`, which builds its panels from
+the `/enq` lines it is told about.
+
+The convention used to be per-board (`/pybadge`, `/cpx`, `/xb`, `/egg`, …), with
+the same idea spelled four ways and a page per board. `ADDRESSES.md` records
+what moved where, and `extras/webserial/test/test-namespace.mjs` fails on any
+address outside the contract, so the drift cannot come back quietly.
 
 ### Wired Ethernet
 

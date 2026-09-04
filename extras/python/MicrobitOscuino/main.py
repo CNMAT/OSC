@@ -42,14 +42,18 @@ def run():
    out.append(message('/s/l', a0))
   elif addr == '/s/q':
    raise SystemExit
-  elif addr == '/mb/a':
-   out.append(message('/mb/a', accelerometer.get_x(),
-       accelerometer.get_y(), accelerometer.get_z()))
-  elif addr == '/mb/b':
-   out.append(message('/mb/b', 1 if button_a.is_pressed() else 0,
+  elif addr == '/enq':
+   out.extend(enq())
+  elif addr == '/imu':
+   out.append(message('/imu', accelerometer.get_x() / 1000.0,
+       accelerometer.get_y() / 1000.0,
+       accelerometer.get_z() / 1000.0))
+  elif addr == '/btn':
+   out.append(message('/btn', 1 if button_a.is_pressed() else 0,
        1 if button_b.is_pressed() else 0))
-  elif addr == '/mb/t' and isinstance(a0, str):
+  elif addr == '/display/text' and isinstance(a0, str):
    display.scroll(a0, wait=False)
+   out.append(message('/display/text', 1))
   elif addr.startswith('/tone/'):
    pin = pins.get(_num(addr[6:]))
    f = int(a0) if isinstance(a0, (int, float)) else 0
@@ -83,7 +87,10 @@ def run():
  rx = bytearray(64)
  import gc
  gc.collect()
- uart.write(slip_encode(bundle([message('/hello', 'MicrobitOscuino')])))
+ def enq():
+  return [message('/enq', 'MicrobitOscuino'), message('/enq/imu', 3),
+    message('/enq/btn', 2), message('/enq/display', 5, 5)]
+ uart.write(slip_encode(bundle(enq())))
  while True:
   if uart.any():
    n = uart.readinto(rx)

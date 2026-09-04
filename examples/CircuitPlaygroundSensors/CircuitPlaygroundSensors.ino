@@ -1,5 +1,5 @@
 /*
- * CircuitPlaygroundSensors — the whole Circuit Playground Express in one OSC message
+ * CircuitPlaygroundSensors — the whole Circuit Playground Express in one OSC bundle
  * -----------------------------------------------------------------------------
  * Board : Adafruit Circuit Playground Express (SAMD21G18A)
  * FQBN  : adafruit:samd:adafruit_circuitplayground_m0   (arduino:samd: also works)
@@ -9,35 +9,36 @@
  * template and speaks the pin-oriented Oscuino address space: /d/<pin>, /a/<pin>.
  * That reaches the board's pads but knows nothing about what is soldered to
  * them. This sketch is the other half — the ten NeoPixels and every built-in
- * sensor, by name — modelled on EsploraOscuino:
+ * sensor, by capability, in the vocabulary of ADDRESSES.md. The board is named
+ * nowhere in the address space: /btn, /light, /cap and /rgb mean the same thing
+ * here as on every other Oscuino board.
  *
- *     /cpx ,iiiiififffiiiiiii  <17 args>
+ * Everything the board knows about itself goes out as ONE BUNDLE per report,
+ * sampled in a single pass so the values belong to the same instant. Sent as
+ * separate packets, the accelerometer and the touch pads can be milliseconds
+ * apart and a receiver cannot tell which readings were simultaneous. Here they
+ * are simultaneous by construction, and the sequence counter in /state makes
+ * drops visible. One message per capability, in this order:
  *
- * Everything the board knows about itself in a single packet, sampled in one
- * pass so the values belong to the same instant. With a bundle of separate
- * messages the accelerometer and the touch pads can be milliseconds apart and a
- * receiver cannot tell which readings were simultaneous. Here they are
- * simultaneous by construction, and the sequence counter makes drops visible.
+ *   STREAM — one bundle per report:
+ *     /state  ii       seq, millis. seq is a free-running counter, wraps at
+ *                      2^31; gaps mean dropped packets
+ *     /btn    iii      buttonA, buttonB, slide — 0/1, 1 = pressed (left D4,
+ *                      right D5); slide: 1 = the side that pulls D7 low (note below)
+ *     /light  i        0..1023 ambient light phototransistor (A8)
+ *     /temp   f        degrees Celsius from the thermistor (A9); NaN if out of range
+ *     /mic    ii       rms, peak on the contract's 0..32767 scale. This sketch
+ *                      measures one rough level (0..1023, times 32 = 0..32736)
+ *                      and sends it in both slots. Only with CPX_MIC (see below)
+ *     /imu    fff      accelX, accelY, accelZ in g, roughly -2..2, from the
+ *                      LIS3DH on the internal I2C bus (about +1 on Z with the
+ *                      board face up). Only when the LIS3DH answered its probe
+ *     /cap    iiiiiii  raw capacitance counts, pads A1..A7
  *
- * Argument order is fixed and positional. Index, name, type, range:
- *
- *    0  seq       i  free-running counter, wraps at 2^31; gaps mean dropped packets
- *    1  buttonA   i  0/1, 1 = pressed  (left button, D4)
- *    2  buttonB   i  0/1, 1 = pressed  (right button, D5)
- *    3  slide     i  0/1, 1 = the side that pulls D7 low (see the note below)
- *    4  light     i  0..1023  ambient light phototransistor (A8)
- *    5  tempC     f  degrees Celsius from the thermistor (A9); NaN if out of range
- *    6  sound     i  0..1023 rough level, or -1 when the microphone is not built in
- *    7  accelX    f  g, roughly -2..2   LIS3DH on the internal I2C bus
- *    8  accelY    f  g
- *    9  accelZ    f  g   (about +1 with the board face up on a table)
- *   10  touch1    i  raw capacitance count, pad A1
- *   11  touch2    i  pad A2
- *   12  touch3    i  pad A3
- *   13  touch4    i  pad A4
- *   14  touch5    i  pad A5
- *   15  touch6    i  pad A6
- *   16  touch7    i  pad A7
+ * A capability that is not there is neither sent nor announced: an Express
+ * built without CPX_MIC carries no /mic, and a board whose accelerometer never
+ * answered carries no /imu. The enq bundle says which it is, so a page reads
+ * presence from /enq rather than from a sentinel value.
  *
  * Untouched pads read 196..275 counts on the board this was written against,
  * and a finger takes them to 686..1014 — a factor of three to five, not a fixed
@@ -45,7 +46,7 @@
  * page learns each pad's baseline rather than thresholding. A0 is the speaker's
  * DAC output, not a touch pad, which is why the pads start at A1.
  *
- * Reporting is change-driven, not timer-driven. A packet goes out when
+ * Reporting is change-driven, not timer-driven. A bundle goes out when
  * something actually moved, and otherwise once every heartbeat interval so a
  * page that connects mid-session still gets a full picture and so silence is
  * distinguishable from a dead link. Analog channels are compared with a
@@ -54,20 +55,50 @@
  * Buttons and the slide switch bypass the deadband: a press is never noise.
  *
  * Change detection runs on the raw counts, before conversion, so the deadband
- * stays in one unit across every channel. Only send() converts to degrees and g.
+ * stays in one unit across every channel. Only the outbound path converts to
+ * degrees, g and the microphone's full-scale units.
  *
- * Inbound, so the page can drive the board:
+ * Inbound, so a page can drive the board (ADDRESSES.md is the contract):
  *
- *    /hello                       ask for the identity reply below
- *    /pix       <i> <r> <g> <b>   one pixel, 0..9, colours 0..255
- *    /pixels    <30 ints>         all ten at once, r,g,b per pixel
- *    /rgb       <r> <g> <b>       every pixel the same colour
- *    /bright    <0..255>          NeoPixel brightness
- *    /led       <0/1>             the red LED beside the USB socket (D13)
- *    /tone      <freq> [<ms>]     speaker; 0 or no argument stops it
- *    /rate      <ms>              floor on the gap between reports, 0..1000
- *    /heartbeat <ms>              report at least this often, 0 disables
- *    /deadband  <counts>          analog change needed to trigger, 0..64
+ *    /enq                       answer with the enq bundle below
+ *    /rgb/<n>    <r> <g> <b>      one pixel, 0..9, colours 0..255
+ *    /rgb/pixels <30 ints>        all ten at once, r,g,b per pixel
+ *    /rgb        <r> <g> <b>      every pixel the same colour
+ *    /rgb/bright <0..255>         NeoPixel brightness
+ *    /s/l        <0/1>            the red LED beside the USB socket (D13)
+ *    /buzz       <hz> [<ms>]      speaker; 0 or no argument stops it
+ *    /rate       <ms>             streaming period, 0..1000; 0 STOPS the stream,
+ *                                 as the contract says. This sketch reports on
+ *                                 change, so a non-zero /rate is the floor on
+ *                                 the gap between reports rather than a fixed
+ *                                 period: 1 means "as fast as change allows",
+ *                                 200 means "at most five reports a second".
+ *                                 Asks, /enq and every write still work while
+ *                                 the stream is stopped
+ *    /heartbeat  <ms>             report at least this often, 0 disables
+ *    /deadband   <counts>         analog change needed to trigger, 0..64
+ *    /btn /light /temp /mic /imu /cap
+ *                                 ask: answered with that one reading, fresh.
+ *                                 An absent capability answers nothing
+ *
+ * The enq bundle is /enq "CircuitPlaygroundSensors" followed by one /enq
+ * line per capability the board can prove it has:
+ *
+ *    /enq/rgb 10   /enq/btn 3   /enq/light   /enq/temp   /enq/cap 7   /enq/buzz
+ *    /enq/diag     the board talks about itself; the line it sends is below
+ *    /enq/imu 3    only when the LIS3DH answered its WHO_AM_I probe
+ *    /enq/mic      only when CPX_MIC is compiled in and the PDM peripheral started
+ *
+ * and then the one thing /enq/diag announces:
+ *
+ *    /diag <s>     free text, never parsed: which I2C address the accelerometer
+ *                  answered at, or that neither did
+ *
+ * Nothing is sent that was not announced, /diag included: a page reads the
+ * /enq list and knows what to expect.
+ *
+ * /enq/btn counts the slide switch as a third button because the contract has
+ * no switch capability; its slot is the third /btn argument.
  *
  * LIBRARIES. Adafruit NeoPixel, Adafruit FreeTouch and Adafruit LIS3DH, all
  * from the Library Manager. An earlier revision read the accelerometer
@@ -84,7 +115,8 @@
  * Classic's analog one, so it cannot be reached with analogRead and the core's
  * I2S library is compiled out for this variant (I2S_INTERFACES_COUNT is 0).
  * Install "Adafruit Zero PDM Library" and uncomment CPX_MIC below to switch it
- * on; without it the sketch builds unchanged and reports sound as -1.
+ * on; without it the sketch builds unchanged, announces no /enq/mic and streams
+ * no /mic.
  *
  * VERIFIED. Compiles for adafruit:samd:adafruit_circuitplayground_m0 and
  * arduino:samd:adafruit_circuitplayground_m0, with CPX_MIC both off and on, and
@@ -103,10 +135,19 @@
  *     at brightness 40, and 116 during a per-pixel sweep at 120
  *   - 2186 samples over 45 seconds with no dropped sequence numbers
  *
+ * Addresses renamed onto ADDRESSES.md on 2026-09-03 (/cpx -> /state + /btn
+ * /light /temp /mic /imu /cap, one message per capability instead of one
+ * seventeen-argument blob; /pix -> /rgb/<n>; /pixels -> /rgb/pixels;
+ * /bright -> /rgb/bright; /led -> /s/l; bare /tone -> /buzz; the booleans and
+ * counts that rode in /enq -> /enq/... lines; /rate 0 meant "no floor" and
+ * now stops the stream, as the contract requires); that build is
+ * compile-checked and has not been re-run on the board.
+ *
  * STILL UNVERIFIED, and deliberately not claimed above:
  *
- *   - the microphone, which needs CPX_MIC and the library below. The -1 it
- *     reports when compiled out is what was observed.
+ *   - the microphone, which needs CPX_MIC and the library below. What was
+ *     observed is only that, compiled out, it stays out of the hello and the
+ *     stream.
  *   - WHICH SIDE of the slide switch reports 1. Both states were seen, but
  *     nothing here ties either to the silkscreen, so the table above says only
  *     that 1 is the side pulling the pin low. Flip yours and see.
@@ -116,7 +157,7 @@
  *     NeoPixels at brightness 150 for a minute moved the reading by +0.2 C,
  *     which is the same as the ambient drift measured either side of it, so
  *     that experiment settled nothing. To settle it: hold a finger on the
- *     sensor and confirm tempC RISES.
+ *     sensor and confirm /temp RISES.
  *
  * The constants below are Adafruit's published values for this board, not
  * anything measured here.
@@ -133,7 +174,7 @@
 #include <Wire.h>
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_FreeTouch.h>
-#include <OSCMessage.h>
+#include <OSCBundle.h>
 #include <SLIPEncodedSerial.h>
 #ifdef CPX_MIC
 #include <Adafruit_ZeroPDM.h>
@@ -170,9 +211,10 @@ SLIPEncodedSerial SLIPSerial(Serial);
 #define PIN_SPEAKER_EN 11           // class-D amplifier shutdown, HIGH = enabled
 
 static const uint8_t  TOUCH_COUNT = 7;
+static const uint8_t  BUTTON_COUNT = 3;  // A, B, and the slide switch (see the header)
 static const uint8_t  PIXEL_COUNT = NEOPIXEL_NUM;
 static const long     BAUD = 115200;     // ignored by native USB, kept for clarity
-static const int      ARG_COUNT = 17;
+static const int32_t  MIC_SCALE = 32;    // 0..1023 level -> the contract's 0..32767
 
 /* --------------------------------------------------------------- devices */
 static Adafruit_NeoPixel pixels(PIXEL_COUNT, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
@@ -196,21 +238,25 @@ static Adafruit_FreeTouch touch[TOUCH_COUNT] = {
  * function and the build fails with "'Sample' was not declared in this scope"
  * pointing at a definition that plainly is below the struct.
  */
-// Both messages must outlive a single pass through loop(). pollOSC() returns as
+// bundleIN must outlive a single pass through loop(). pollOSC() returns as
 // soon as the serial buffer runs dry, which for anything but a very short frame
-// happens part way through one; a message declared inside loop() would lose the
-// bytes it had already accumulated every time that happened.
-static OSCMessage msgIn;
-static OSCMessage msgOut("/cpx");
+// happens part way through one; a bundle declared inside loop() would lose the
+// bytes it had already accumulated every time that happened. It accepts a bare
+// message as well as a bundle, so a page may send either.
+static OSCBundle bundleIN;
+// Every hello, reply and report is assembled here and sent by flush(). The
+// messages are heap-allocated per bundle and freed on empty(), which is the
+// library's own pattern and what every sibling Oscuino sketch does.
+static OSCBundle bundleOUT;
 
 static int32_t  seq = 0;
-static uint16_t reportInterval = 20;    // floor on the gap between reports, ms
+static uint16_t reportInterval = 20;    // streaming period, ms; 0 = stream off
 static uint16_t heartbeatMs = 2000;     // report even when nothing moves
 static uint16_t deadband = 4;           // analog counts needed to count as change
 static uint32_t lastReport = 0;
 static uint32_t toneEndsAt = 0;         // 0 = not playing; else millis() deadline
 
-// One sample of everything, in raw units, in the order it goes on the wire.
+// One sample of everything, in raw units.
 struct Sample {
   int32_t buttonA, buttonB, slide;
   int32_t light, tempRaw, sound;
@@ -233,7 +279,7 @@ static bool havePrev = false;
 
 static Adafruit_LIS3DH lis(&Wire1);
 static bool accelOK = false;
-static uint8_t accelAddr = 0;   // /hello reports which address answered
+static uint8_t accelAddr = 0;   // the hello's /diag line reports which address answered
 
 static bool accelBegin() {
   Wire1.begin();
@@ -247,10 +293,9 @@ static bool accelBegin() {
 }
 
 // Raw 12-bit counts, 1 mg each — lis.x/y/z are left-justified 16-bit, so >>4
-// is bit-identical to the old manual conversion and the wire format is
-// unchanged. Zero on every axis when no device answered, which is also a
-// physically impossible reading (gravity is always somewhere), so a receiver
-// can tell a missing accelerometer from a still one.
+// is bit-identical to the old manual conversion. Zero on every axis when no
+// device answered; the stream then simply carries no /imu, so nothing
+// downstream sees the zeros.
 static void accelRead(int16_t &x, int16_t &y, int16_t &z) {
   x = y = z = 0;
   if (!accelOK) return;
@@ -293,6 +338,7 @@ static int micLevel() {
   return (int) ((off * 1023) / (MIC_BITS / 2));       // 0 .. 1023
 }
 #else
+static const bool micReady = false;                   // no PDM driver compiled in
 static int micLevel() { return -1; }
 #endif
 
@@ -324,150 +370,18 @@ static float thermistorC(int raw) {
   return 1.0f / inv - 273.15f;
 }
 
-/* ---------------------------------------------------------------- inbound */
-
-static int colourArg(OSCMessage &m, int i) {
-  return (int) constrain(m.getInt(i), 0, 255);
-}
-
-/* Adafruit_NeoPixel::setBrightness() rescales the pixel buffer in place, and
- * the rescale is lossy in one direction fatally: at brightness 0 it multiplies
- * the whole buffer by zero, so the colours are gone and raising the brightness
- * again cannot bring them back. The page's slider reaches 0, which puts a dead
- * ring one drag away — pixels black while the page still shows their colours.
- *
- * So the commanded colours are kept here, and replayed after any brightness
- * change. This is also what makes /bright cheap to sweep: nothing else has to
- * remember what the ring was showing.
- */
-static uint8_t wanted[PIXEL_COUNT * 3];
-
-static void setPixel(int i, uint8_t r, uint8_t g, uint8_t b) {
-  wanted[i * 3] = r; wanted[i * 3 + 1] = g; wanted[i * 3 + 2] = b;
-  pixels.setPixelColor(i, pixels.Color(r, g, b));
-}
-
-static void replayPixels() {
-  for (uint8_t i = 0; i < PIXEL_COUNT; i++)
-    pixels.setPixelColor(i, pixels.Color(wanted[i * 3], wanted[i * 3 + 1], wanted[i * 3 + 2]));
-}
-
-static void routePix(OSCMessage &m) {
-  if (m.size() < 4) return;
-  int i = m.getInt(0);
-  if (i < 0 || i >= PIXEL_COUNT) return;
-  setPixel(i, colourArg(m, 1), colourArg(m, 2), colourArg(m, 3));
-  pixels.show();
-}
-
-// All ten in one message: r,g,b per pixel, in pixel order. Short messages set
-// as many pixels as they carry, so /pixels with 3 arguments lights only pixel 0.
-static void routePixels(OSCMessage &m) {
-  int n = m.size() / 3;
-  if (n > PIXEL_COUNT) n = PIXEL_COUNT;
-  for (int i = 0; i < n; i++)
-    setPixel(i, colourArg(m, i * 3), colourArg(m, i * 3 + 1), colourArg(m, i * 3 + 2));
-  pixels.show();
-}
-
-static void routeRgb(OSCMessage &m) {
-  if (m.size() < 3) return;
-  uint8_t r = colourArg(m, 0), g = colourArg(m, 1), b = colourArg(m, 2);
-  for (uint8_t i = 0; i < PIXEL_COUNT; i++) setPixel(i, r, g, b);
-  pixels.show();
-}
-
-static void routeBright(OSCMessage &m) {
-  if (m.size() < 1) return;
-  pixels.setBrightness((uint8_t) constrain(m.getInt(0), 0, 255));
-  replayPixels();          // see the note above setPixel(): without this, 0 is a cliff
-  pixels.show();
-}
-
-static void routeLed(OSCMessage &m) {
-  if (m.size() < 1) return;
-  digitalWrite(LED_BUILTIN, m.getInt(0) ? HIGH : LOW);
-}
-
-// The amplifier is left shut down while nothing is playing: enabled all the
-// time it idles with an audible hiss, and the DAC pad is also a touch pad's
-// neighbour. loop() switches it back off when a timed tone runs out.
-static void speaker(bool on) { digitalWrite(PIN_SPEAKER_EN, on ? HIGH : LOW); }
-
-static void routeTone(OSCMessage &m) {
-  if (m.size() < 1 || m.getInt(0) <= 0) {
-    noTone(PIN_SPEAKER);
-    speaker(false);
-    toneEndsAt = 0;
-    return;
-  }
-  unsigned int freq = (unsigned int) m.getInt(0);
-  speaker(true);
-  if (m.size() >= 2) {
-    unsigned long ms = (unsigned long) m.getInt(1);
-    tone(PIN_SPEAKER, freq, ms);
-    toneEndsAt = millis() + ms + 20;     // a little past the end, then mute the amp
-  } else {
-    tone(PIN_SPEAKER, freq);
-    toneEndsAt = 0;                      // plays until /tone 0
-  }
-}
-
-// Sent once at startup and again whenever a host asks. Asking matters more than
-// the startup one does: the board says hello 300 ms after it enumerates, which
-// is long before a person has clicked Connect, so a page that only listened
-// would never see it — and this is where it learns whether the accelerometer
-// answered at all. Measured on hardware: re-flashing and reopening the port as
-// fast as the host allows still misses the startup hello every time.
-static bool haveAccel = false;
-
-static void sayHello() {
-  OSCMessage hello("/hello");
-  hello.add("CircuitPlaygroundSensors")
-       .add((int32_t) ARG_COUNT)
-       .add((int32_t) PIXEL_COUNT)
-       .add((int32_t) (haveAccel ? accelAddr : 0));
-  SLIPSerial.beginPacket();
-  hello.send(SLIPSerial);
-  SLIPSerial.endPacket();
-}
-
-static void routeHello(OSCMessage &m) {
-  (void) m;
-  sayHello();
-  havePrev = false;          // and a full state report right behind it
-}
-
-static void routeRate(OSCMessage &m) {
-  if (m.size() < 1) return;
-  reportInterval = (uint16_t) constrain(m.getInt(0), 0, 1000);
-}
-
-static void routeHeartbeat(OSCMessage &m) {
-  if (m.size() < 1) return;
-  heartbeatMs = (uint16_t) constrain(m.getInt(0), 0, 60000);
-}
-
-static void routeDeadband(OSCMessage &m) {
-  if (m.size() < 1) return;
-  deadband = (uint16_t) constrain(m.getInt(0), 0, 64);
-  havePrev = false;                     // force one full report at the new setting
-}
-
-// Returns true once a whole packet has been accumulated in msgIn.
-static bool pollOSC() {
-  while (!SLIPSerial.endofPacket()) {
-    int avail = SLIPSerial.available();
-    if (avail <= 0) return false;            // nothing buffered; try next loop()
-    while (avail--) {
-      int c = SLIPSerial.read();
-      if (c >= 0) msgIn.fill((uint8_t) c);   // read() returns -1 on a SLIP error
-    }
-  }
-  return true;
-}
-
 /* --------------------------------------------------------------- outbound */
+
+// Everything assembled in bundleOUT goes out as one SLIP frame. An empty
+// bundle is not sent: an ask for a capability the board lacks answers nothing.
+static void flush() {
+  if (bundleOUT.size() > 0) {
+    SLIPSerial.beginPacket();
+    bundleOUT.send(SLIPSerial);
+    SLIPSerial.endPacket();
+  }
+  bundleOUT.empty();
+}
 
 static void sample(Sample &s) {
   // The buttons pull their pin up when pressed and the slide switch pulls its
@@ -489,6 +403,228 @@ static void sample(Sample &s) {
   for (uint8_t i = 0; i < TOUCH_COUNT; i++) s.touch[i] = touch[i].measure();
 }
 
+// Which readings to put in a bundle: the whole set for a report, one for an ask.
+enum { R_BTN = 1, R_LIGHT = 2, R_TEMP = 4, R_MIC = 8, R_IMU = 16, R_CAP = 32, R_ALL = 63 };
+
+static bool haveAccel = false;
+
+// One message per capability, converted here and nowhere else. The address
+// list and the type tags are the ones documented in the header's STREAM table;
+// extras/webserial/test/test-cpx-contract.mjs holds the two to each other.
+static void addReadings(OSCBundle &b, const Sample &s, uint8_t which) {
+  if (which & R_BTN)   b.add("/btn").add(s.buttonA).add(s.buttonB).add(s.slide);
+  if (which & R_LIGHT) b.add("/light").add(s.light);
+  if (which & R_TEMP)  b.add("/temp").add(thermistorC(s.tempRaw));
+  if ((which & R_MIC) && micReady) {
+    int32_t level = s.sound * MIC_SCALE;
+    b.add("/mic").add(level).add(level);
+  }
+  if ((which & R_IMU) && haveAccel)
+    b.add("/imu").add(s.accX * 0.001f).add(s.accY * 0.001f).add(s.accZ * 0.001f);
+  if (which & R_CAP) {
+    OSCMessage &m = b.add("/cap");
+    for (uint8_t i = 0; i < TOUCH_COUNT; i++) m.add(s.touch[i]);
+  }
+}
+
+// A report: /state first, then everything the board has.
+static void send(const Sample &s) {
+  bundleOUT.add("/state").add(seq++).add((int32_t) millis());
+  addReadings(bundleOUT, s, R_ALL);
+  flush();
+}
+
+// An ask: a fresh sample, and only the reading that was asked for.
+static void answer(uint8_t which) {
+  Sample s;
+  sample(s);
+  addReadings(bundleOUT, s, which);
+  flush();
+}
+
+/* ---------------------------------------------------------------- inbound */
+
+static int colourArg(OSCMessage &m, int i) {
+  return (int) constrain(m.getInt(i), 0, 255);
+}
+
+/* Adafruit_NeoPixel::setBrightness() rescales the pixel buffer in place, and
+ * the rescale is lossy in one direction fatally: at brightness 0 it multiplies
+ * the whole buffer by zero, so the colours are gone and raising the brightness
+ * again cannot bring them back. The page's slider reaches 0, which puts a dead
+ * ring one drag away — pixels black while the page still shows their colours.
+ *
+ * So the commanded colours are kept here, and replayed after any brightness
+ * change. This is also what makes /rgb/bright cheap to sweep: nothing else has
+ * to remember what the ring was showing.
+ */
+static uint8_t wanted[PIXEL_COUNT * 3];
+
+static void setPixel(int i, uint8_t r, uint8_t g, uint8_t b) {
+  wanted[i * 3] = r; wanted[i * 3 + 1] = g; wanted[i * 3 + 2] = b;
+  pixels.setPixelColor(i, pixels.Color(r, g, b));
+}
+
+static void replayPixels() {
+  for (uint8_t i = 0; i < PIXEL_COUNT; i++)
+    pixels.setPixelColor(i, pixels.Color(wanted[i * 3], wanted[i * 3 + 1], wanted[i * 3 + 2]));
+}
+
+// /rgb/<n> <r> <g> <b>: one pixel.
+static void routePixel(OSCMessage &m, int i) {
+  if (m.size() < 3 || i < 0 || i >= PIXEL_COUNT) return;
+  setPixel(i, colourArg(m, 0), colourArg(m, 1), colourArg(m, 2));
+  pixels.show();
+}
+
+// /rgb/pixels: all ten in one message, r,g,b per pixel, in pixel order. Short
+// messages set as many pixels as they carry, so three arguments light only
+// pixel 0.
+static void routePixels(OSCMessage &m) {
+  int n = m.size() / 3;
+  if (n > PIXEL_COUNT) n = PIXEL_COUNT;
+  for (int i = 0; i < n; i++)
+    setPixel(i, colourArg(m, i * 3), colourArg(m, i * 3 + 1), colourArg(m, i * 3 + 2));
+  pixels.show();
+}
+
+// /rgb <r> <g> <b>: every pixel the same colour.
+static void routeRgbAll(OSCMessage &m) {
+  if (m.size() < 3) return;
+  uint8_t r = colourArg(m, 0), g = colourArg(m, 1), b = colourArg(m, 2);
+  for (uint8_t i = 0; i < PIXEL_COUNT; i++) setPixel(i, r, g, b);
+  pixels.show();
+}
+
+// /rgb/bright <0..255>
+static void routeBright(OSCMessage &m) {
+  if (m.size() < 1) return;
+  pixels.setBrightness((uint8_t) constrain(m.getInt(0), 0, 255));
+  replayPixels();          // see the note above setPixel(): without this, 0 is a cliff
+  pixels.show();
+}
+
+// The four /rgb addresses share a root, so one route takes the tree and looks
+// at what follows the root: nothing (/rgb), /rgb/pixels, /rgb/bright, or
+// /rgb/<n> for one pixel.
+static void routeRgb(OSCMessage &m, int addrOffset) {
+  const char *rest = m.getAddress() + addrOffset;
+  if (*rest == 0)                              routeRgbAll(m);
+  else if (m.fullMatch("/pixels", addrOffset)) routePixels(m);
+  else if (m.fullMatch("/bright", addrOffset)) routeBright(m);
+  else if (rest[0] == '/' && rest[1] >= '0' && rest[1] <= '9')
+    routePixel(m, (int) strtol(rest + 1, NULL, 10));
+}
+
+// /s/l <0/1>: the plain red LED. The only /s address this sketch answers.
+static void routeSystem(OSCMessage &m, int addrOffset) {
+  if (m.fullMatch("/l", addrOffset) && m.size() >= 1)
+    digitalWrite(LED_BUILTIN, m.getInt(0) ? HIGH : LOW);
+}
+
+// The amplifier is left shut down while nothing is playing: enabled all the
+// time it idles with an audible hiss, and the DAC pad is also a touch pad's
+// neighbour. loop() switches it back off when a timed tone runs out.
+static void speaker(bool on) { digitalWrite(PIN_SPEAKER_EN, on ? HIGH : LOW); }
+
+// /buzz <hz> [<ms>]; 0 or no argument stops it.
+static void routeBuzz(OSCMessage &m) {
+  if (m.size() < 1 || m.getInt(0) <= 0) {
+    noTone(PIN_SPEAKER);
+    speaker(false);
+    toneEndsAt = 0;
+    return;
+  }
+  unsigned int freq = (unsigned int) m.getInt(0);
+  speaker(true);
+  if (m.size() >= 2) {
+    unsigned long ms = (unsigned long) m.getInt(1);
+    tone(PIN_SPEAKER, freq, ms);
+    toneEndsAt = millis() + ms + 20;     // a little past the end, then mute the amp
+  } else {
+    tone(PIN_SPEAKER, freq);
+    toneEndsAt = 0;                      // plays until /buzz 0
+  }
+}
+
+// Sent once at startup and again whenever a host asks. Asking matters more than
+// the startup one does: the board says hello 300 ms after it enumerates, which
+// is long before a person has clicked Connect, so a page that only listened
+// would never see it — and this is where it learns whether the accelerometer
+// answered at all. Measured on hardware: re-flashing and reopening the port as
+// fast as the host allows still misses the startup hello every time.
+//
+// One /enq line per capability the board can prove it has. The accelerometer
+// and the microphone are announced only when their drivers came up, so a page
+// reads presence from the list rather than from a sentinel in the stream.
+static void sayHello() {
+  bundleOUT.add("/enq").add("CircuitPlaygroundSensors");
+  bundleOUT.add("/enq/rgb").add((int32_t) PIXEL_COUNT);
+  bundleOUT.add("/enq/btn").add((int32_t) BUTTON_COUNT);
+  bundleOUT.add("/enq/light");
+  bundleOUT.add("/enq/temp");
+  if (micReady)  bundleOUT.add("/enq/mic");
+  if (haveAccel) bundleOUT.add("/enq/imu").add((int32_t) 3);
+  bundleOUT.add("/enq/cap").add((int32_t) TOUCH_COUNT);
+  bundleOUT.add("/enq/buzz");
+  bundleOUT.add("/enq/diag");    // the free text below is announced like anything else
+  char diag[32];
+  if (haveAccel) snprintf(diag, sizeof diag, "LIS3DH at 0x%02x", accelAddr);
+  else           snprintf(diag, sizeof diag, "no LIS3DH at 0x19 or 0x18");
+  bundleOUT.add("/diag").add(diag);
+  flush();
+}
+
+static void routeEnq(OSCMessage &m) {
+  (void) m;
+  sayHello();
+  havePrev = false;          // and a full report right behind it
+}
+
+// /rate <ms>: 0 stops the stream, per ADDRESSES.md. A non-zero value is a floor
+// on the gap between reports rather than a fixed period, because this sketch is
+// change-driven; 1 is therefore "as fast as change allows", which is what the
+// old /rate 0 used to mean here. Asks and writes are unaffected either way.
+static void routeRate(OSCMessage &m) {
+  if (m.size() < 1) return;
+  reportInterval = (uint16_t) constrain(m.getInt(0), 0, 1000);
+  havePrev = false;             // restarting the stream begins with a full report
+}
+
+static void routeHeartbeat(OSCMessage &m) {
+  if (m.size() < 1) return;
+  heartbeatMs = (uint16_t) constrain(m.getInt(0), 0, 60000);
+}
+
+static void routeDeadband(OSCMessage &m) {
+  if (m.size() < 1) return;
+  deadband = (uint16_t) constrain(m.getInt(0), 0, 64);
+  havePrev = false;                     // force one full report at the new setting
+}
+
+// The asks: each answers on its own address with a fresh reading.
+static void askBtn(OSCMessage &m)   { (void) m; answer(R_BTN); }
+static void askLight(OSCMessage &m) { (void) m; answer(R_LIGHT); }
+static void askTemp(OSCMessage &m)  { (void) m; answer(R_TEMP); }
+static void askMic(OSCMessage &m)   { (void) m; answer(R_MIC); }
+static void askImu(OSCMessage &m)   { (void) m; answer(R_IMU); }
+static void askCap(OSCMessage &m)   { (void) m; answer(R_CAP); }
+
+// Returns true once a whole packet has been accumulated in bundleIN.
+static bool pollOSC() {
+  while (!SLIPSerial.endofPacket()) {
+    int avail = SLIPSerial.available();
+    if (avail <= 0) return false;            // nothing buffered; try next loop()
+    while (avail--) {
+      int c = SLIPSerial.read();
+      if (c >= 0) bundleIN.fill((uint8_t) c);   // read() returns -1 on a SLIP error
+    }
+  }
+  return true;
+}
+
+/* ------------------------------------------------------- change detection */
+
 static bool moved(int32_t a, int32_t b) {
   int32_t d = a > b ? a - b : b - a;
   return d > (int32_t) deadband;
@@ -506,23 +642,6 @@ static bool changed(const Sample &a, const Sample &b) {
   for (uint8_t i = 0; i < TOUCH_COUNT; i++)
     if (moved(a.touch[i], b.touch[i])) return true;
   return false;
-}
-
-static void send(const Sample &s) {
-  // empty() keeps the address and reuses the allocation, so the steady state
-  // does not churn the heap.
-  msgOut.empty();
-  msgOut.add(seq++)
-        .add(s.buttonA).add(s.buttonB).add(s.slide)
-        .add(s.light)
-        .add(thermistorC(s.tempRaw))
-        .add(s.sound)
-        .add(s.accX * 0.001f).add(s.accY * 0.001f).add(s.accZ * 0.001f);
-  for (uint8_t i = 0; i < TOUCH_COUNT; i++) msgOut.add(s.touch[i]);
-
-  SLIPSerial.beginPacket();
-  msgOut.send(SLIPSerial);
-  SLIPSerial.endPacket();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -562,19 +681,22 @@ void setup() {
 
 void loop() {
   if (pollOSC()) {
-    if (!msgIn.hasError()) {
-      msgIn.dispatch("/hello",     routeHello);
-      msgIn.dispatch("/pix",       routePix);
-      msgIn.dispatch("/pixels",    routePixels);
-      msgIn.dispatch("/rgb",       routeRgb);
-      msgIn.dispatch("/bright",    routeBright);
-      msgIn.dispatch("/led",       routeLed);
-      msgIn.dispatch("/tone",      routeTone);
-      msgIn.dispatch("/rate",      routeRate);
-      msgIn.dispatch("/heartbeat", routeHeartbeat);
-      msgIn.dispatch("/deadband",  routeDeadband);
+    if (!bundleIN.hasError()) {
+      bundleIN.dispatch("/enq",     routeEnq);
+      bundleIN.route("/rgb",          routeRgb);      // /rgb, /rgb/<n>, /rgb/pixels, /rgb/bright
+      bundleIN.route("/s",            routeSystem);   // /s/l
+      bundleIN.dispatch("/buzz",      routeBuzz);
+      bundleIN.dispatch("/rate",      routeRate);
+      bundleIN.dispatch("/heartbeat", routeHeartbeat);
+      bundleIN.dispatch("/deadband",  routeDeadband);
+      bundleIN.dispatch("/btn",       askBtn);
+      bundleIN.dispatch("/light",     askLight);
+      bundleIN.dispatch("/temp",      askTemp);
+      bundleIN.dispatch("/mic",       askMic);
+      bundleIN.dispatch("/imu",       askImu);
+      bundleIN.dispatch("/cap",       askCap);
     }
-    msgIn.empty();
+    bundleIN.empty();
   }
 
   uint32_t now = millis();
@@ -586,8 +708,11 @@ void loop() {
     toneEndsAt = 0;
   }
 
-  // reportInterval is a floor, not a period: it caps how fast change can push
-  // packets out, so a noisy microphone cannot saturate the link.
+  // /rate 0 stops the stream, as the contract says; asks, writes and /enq are
+  // still answered above. Otherwise reportInterval is a floor rather than a
+  // period, because reporting here is change-driven: it caps how fast change
+  // can push packets out, so a noisy microphone cannot saturate the link.
+  if (reportInterval == 0) return;
   if ((uint32_t)(now - lastReport) < reportInterval) return;
 
   Sample s;

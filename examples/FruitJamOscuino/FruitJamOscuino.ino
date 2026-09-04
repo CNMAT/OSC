@@ -9,18 +9,25 @@
  *
  * The same board also has a CircuitPython firmware speaking the identical
  * address space: extras/python/FruitJamOscuino/. This sketch pairs with the
- * same FruitJamOscuino.html page (generated next to both).
+ * same FruitJamOscuino.html page (generated next to both by extras/webserial;
+ * extras/webserial/oscuino.html is the same page for any board).
  *
- * ADDRESSES — the standard Oscuino set (/d /a /tone /s, see template.ino)
- * plus the Fruit Jam's own hardware:
+ * ADDRESSES — the standard Oscuino set (/d /a /tone /s, see ADDRESSES.md)
+ * plus the capabilities this board announces in its /enq bundle:
  *
- *   /fj/b                    -> /fj/b <b1> <b2> <b3>   (1 = pressed)
- *   /fj/led <r> <g> <b>      set all 5 NeoPixels, 0..255 each
- *   /fj/led <n> <r> <g> <b>  set NeoPixel n (0..4)
- *   /fj/beep <freq> [<ms>]   sine through the TLV320 codec (headphone jack
- *                            and speaker); no argument or 0 stops it
- *   /fj/t <string>           print a line of text on the DVI display
+ *   /btn                     -> /btn <b1> <b2> <b3>   (1 = pressed) [/enq/btn 3]
+ *   /rgb <r> <g> <b>         set all 5 NeoPixels, 0..255 each      [/enq/rgb 5]
+ *   /rgb/<n> <r> <g> <b>     set NeoPixel n (0..4)
+ *   /buzz <freq> [<ms>]      sine through the TLV320 codec (headphone jack
+ *                            and speaker); no argument or 0 stops it [/enq/buzz]
+ *   /display/text <string>      print a line of text on the DVI display [/enq/display]
  *
+ * The board is named nowhere in the address space — /btn, /rgb, /buzz and
+ * /display mean the same on every Oscuino sketch, so one page drives them all.
+ * /enq is answered on request (the boot one is usually lost to USB) and
+ * lists only the capabilities that actually came up, so a bare board with
+ * no display or codec degrades to a shorter list, not a lie.
+
  * DVI NOTE: the display runs on the "Adafruit DVI HSTX" library (dvhstx),
  * which drives the RP2350's HSTX peripheral properly and knows this board's
  * pinout (ADAFRUIT_FRUIT_JAM_CFG). Do NOT substitute PicoDVI: it is the
@@ -75,7 +82,7 @@ static OSCBundle bundleOUT;
 // Wire-level breadcrumb, sent immediately (not queued): the instrument for
 // locating a hang. Cheap enough to leave in a demo.
 static void dbg(const char *s) {
-  OSCMessage m("/fj/dbg");
+  OSCMessage m("/diag");
   m.add(s);
   SLIPSerial.beginPacket();
   m.send(SLIPSerial);
@@ -175,56 +182,72 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
   }
 }
 
-// ---- Fruit Jam routes ------------------------------------------------------
-void routeFruitJam(OSCMessage &msg, int addrOffset) {
-  if (msg.fullMatch("/b", addrOffset)) {
-    // Buttons pull to ground; report 1 = pressed.
-    bundleOUT.add("/fj/b")
-        .add((intOSC_t)(digitalRead(PIN_BUTTON1) == LOW))
-        .add((intOSC_t)(digitalRead(PIN_BUTTON2) == LOW))
-        .add((intOSC_t)(digitalRead(PIN_BUTTON3) == LOW));
-    return;
-  }
+// ---- capability routes -------------------------------------------------------
+static void addEnq() {
+  bundleOUT.add("/enq").add("FruitJamOscuino");
+  bundleOUT.add("/enq/btn").add((intOSC_t)3);
+  bundleOUT.add("/enq/rgb").add((intOSC_t)NUM_NEOPIXEL);
+  if (codecOK) bundleOUT.add("/enq/buzz");
+  if (dviOK)   bundleOUT.add("/enq/display").add((intOSC_t)display.width())
+                                        .add((intOSC_t)display.height());
+}
 
-  if (msg.fullMatch("/led", addrOffset)) {
-    if (msg.isInt(0) && msg.isInt(1) && msg.isInt(2) && msg.isInt(3)) {
-      int n = msg.getInt(0);
-      if (n >= 0 && n < (int)NUM_NEOPIXEL)
-        pixels.setPixelColor(n, msg.getInt(1), msg.getInt(2), msg.getInt(3));
-    } else if (msg.isInt(0) && msg.isInt(1) && msg.isInt(2)) {
-      for (unsigned n = 0; n < NUM_NEOPIXEL; n++)
-        pixels.setPixelColor(n, msg.getInt(0), msg.getInt(1), msg.getInt(2));
-    }
+void routeEnq(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  addEnq();
+}
+
+void routeBtn(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  // Buttons pull to ground; report 1 = pressed.
+  bundleOUT.add("/btn")
+      .add((intOSC_t)(digitalRead(PIN_BUTTON1) == LOW))
+      .add((intOSC_t)(digitalRead(PIN_BUTTON2) == LOW))
+      .add((intOSC_t)(digitalRead(PIN_BUTTON3) == LOW));
+}
+
+void routeRgb(OSCMessage &msg, int addrOffset) {
+  if (!(msg.isInt(0) && msg.isInt(1) && msg.isInt(2))) return;
+  // /rgb/<n> addresses one pixel, matched the same way /d/<pin> is.
+  for (int n = 0; n < (int)NUM_NEOPIXEL; n++) {
+    if (!msg.match(numToOSCAddress(n), addrOffset)) continue;
+    pixels.setPixelColor(n, msg.getInt(0), msg.getInt(1), msg.getInt(2));
     pixels.show();
-    // Echo the values back: probes can't see photons.
-    OSCMessage &echo = bundleOUT.add("/fj/led");
-    for (int i = 0; i < 4 && msg.isInt(i); i++) echo.add((intOSC_t)msg.getInt(i));
+    char addr[12];
+    pinAddress(addr, "/rgb", n, NULL);
+    bundleOUT.add(addr).add((intOSC_t)msg.getInt(0))
+        .add((intOSC_t)msg.getInt(1)).add((intOSC_t)msg.getInt(2));
     return;
   }
+  for (unsigned n = 0; n < NUM_NEOPIXEL; n++)
+    pixels.setPixelColor(n, msg.getInt(0), msg.getInt(1), msg.getInt(2));
+  pixels.show();
+  // Echo the values back: probes can't see photons.
+  bundleOUT.add("/rgb").add((intOSC_t)msg.getInt(0))
+      .add((intOSC_t)msg.getInt(1)).add((intOSC_t)msg.getInt(2));
+}
 
-  if (msg.fullMatch("/beep", addrOffset)) {
-    unsigned int freq = 0;
-    if (msg.isInt(0))        freq = (unsigned int)msg.getInt(0);
-    else if (msg.isFloat(0)) freq = (unsigned int)msg.getFloat(0);
-    if (freq == 0 || !codecOK) {
-      toneStep = 0;
-      toneOffAt = 0;
-    } else {
-      toneStep = (uint32_t)(((uint64_t)freq << 32) / SAMPLE_RATE);
-      toneOffAt = msg.isInt(1) ? millis() + msg.getInt(1) : 0;
-    }
-    bundleOUT.add("/fj/beep").add((intOSC_t)(codecOK ? freq : -1));
-    return;
+void routeBuzz(OSCMessage &msg, int addrOffset) {
+  (void)addrOffset;
+  unsigned int freq = 0;
+  if (msg.isInt(0))        freq = (unsigned int)msg.getInt(0);
+  else if (msg.isFloat(0)) freq = (unsigned int)msg.getFloat(0);
+  if (freq == 0 || !codecOK) {
+    toneStep = 0;
+    toneOffAt = 0;
+  } else {
+    toneStep = (uint32_t)(((uint64_t)freq << 32) / SAMPLE_RATE);
+    toneOffAt = msg.isInt(1) ? millis() + msg.getInt(1) : 0;
   }
+  bundleOUT.add("/buzz").add((intOSC_t)(codecOK ? freq : -1));
+}
 
-  if (msg.fullMatch("/t", addrOffset) && msg.isString(0)) {
+void routeDisplay(OSCMessage &msg, int addrOffset) {
+  if (msg.fullMatch("/text", addrOffset) && msg.isString(0)) {
     char text[96];
     msg.getString(0, text, sizeof(text));
-    if (dviOK) {
-        display.println(text);
-      }
-    bundleOUT.add("/fj/t").add((intOSC_t)(dviOK ? 1 : 0));
-    return;
+    if (dviOK) display.println(text);
+    bundleOUT.add("/display/text").add((intOSC_t)(dviOK ? 1 : 0));
   }
 }
 
@@ -272,9 +295,9 @@ void setup() {
   pinMode(PIN_BUTTON3, INPUT_PULLUP);
 
   // Announce before any risky peripheral bring-up, so a wedge downstream is
-  // distinguishable from a dead port: /hello arrives, then silence.
+  // distinguishable from a dead port: /enq arrives, then silence.
   delay(300);
-  bundleOUT.add("/hello").add("FruitJamOscuino");
+  bundleOUT.add("/enq").add("FruitJamOscuino");   // full list: ask /enq
   SLIPSerial.beginPacket();
   bundleOUT.send(SLIPSerial);
   SLIPSerial.endPacket();
@@ -327,7 +350,11 @@ void loop() {
       bundleIN.route("/a", routeAnalog);
       bundleIN.route("/tone", routeTone);
       bundleIN.route("/s", routeSystem);
-      bundleIN.route("/fj", routeFruitJam);
+      bundleIN.route("/enq", routeEnq);
+      bundleIN.route("/btn",  routeBtn);
+      bundleIN.route("/rgb",  routeRgb);
+      bundleIN.route("/buzz", routeBuzz);
+      bundleIN.route("/display", routeDisplay);
     }
     bundleIN.empty();
   }

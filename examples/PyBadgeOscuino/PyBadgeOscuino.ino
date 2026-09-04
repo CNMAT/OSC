@@ -15,10 +15,52 @@
 // battery divider A6; buttons on a 74HC165 shift register, clock 48, data 49,
 // latch 50.
 //
+// Speaks the capability-named address space in ADDRESSES.md. Ask /enq and
+// the badge answers one bundle: /enq "PyBadgeOscuino", then one /enq line
+// per capability it can prove it has -- /enq/display 160 128, /enq/buzz,
+// /enq/rgb 5, /enq/btn 8, /enq/light, /enq/bat, and /enq/imu 3 or /enq/mic
+// only when the LIS3DH or the PDM microphone actually answered its probe in
+// setup(). A page shows panels for what is announced, not for the board name.
+//
+// Writes. ADDRESSES.md marks the display writes, /buzz, /rgb, /s/l and /rate
+// "echoed"; /mic/gain is a request that also reads, so it answers too. Each
+// replies on the address it arrived on with the value actually applied, which
+// is not always the one sent -- /rate clamps, /buzz fills in its defaults:
+//   /display/text "a" ["b"]       two lines of text; answers /display/text <n>
+//   /display/fill r g b           background colour; redraws the text
+//   /display/rect x y w h r g b   a filled rectangle, screen pixels
+//   /display/bl 0..255            backlight
+//   /buzz hz [ms] [vol]           DAC speaker; vol 0..255, 0 hz stops
+//   /rgb r g b                    all five NeoPixels one colour
+//   /rgb/<n> r g b                one of them, n = 0..4
+//   /rgb/pixels r g b ...         a whole frame, one triple per pixel
+//   /rgb/bright 0..255            NeoPixel brightness
+//   /mic/gain [<i>]               PDM gain; no arg reads it back
+//   /s/l 0|1                      the red LED
+//   /rate ms                      streaming period; 0 stops, else 20..5000
+//
+// Reads. "Every request that reads something answers on the same address",
+// so each of these takes no arguments and replies on its own address, with
+// exactly the shape it has in the stream below:
+//   /enq                        the enq bundle again
+//   /btn  /light  /bat            always answered
+//   /imu  /mic                    answered only when that probe succeeded;
+//                                 a badge without the part stays silent
+//
+// Streamed every /rate ms (default 50) as one bundle, sampled in one pass:
+//   /state seq millis
+//   /btn l u d r sel st a b       eight ints, 1 = pressed, in 74HC165 bit order
+//   /light raw                    light sensor on A7, 10-bit
+//   /bat mv                       battery millivolts, from the A6 divider
+//   /imu x y z                    LIS3DH, floats in g; only when the part is present
+// On an EdgeBadge, /mic goes out on the same /rate tick as the bundle, as its
+// own packet rather than a bundle member -- see sendMic().
+//
 // Open PyBadgeOscuino.html to drive it. Chrome or Edge, served over
 // http://localhost — Web Serial does not work from a file:// URL.
 
 #include <OSCMessage.h>
+#include <OSCBundle.h>
 #include <OSCBoards.h>
 #include <SLIPEncodedSerial.h>
 
@@ -32,11 +74,12 @@
 // PDM microphone. The EdgeBadge (Adafruit's TensorFlow Lite badge) is a PyBadge
 // with a PDM MEMS mic added; a plain PyBadge or PyBadge LC has none.
 //
-// Both are safe. Leave this at 1 on either board: a badge with no mic reports
-// micOK false, sends no /mic, and the page hides its microphone panel. Set it
-// to 0 to drop the code entirely and save the flash on a board you know has
-// none. Both boards share one FQBN, so the choice cannot be made at compile
-// time -- see the probe in setup() for how a missing mic is actually detected.
+// Both are safe. Leave this at 1 on either board: a badge with no mic leaves
+// /enq/mic out of its enq bundle, sends no /mic, and the page hides its
+// microphone panel. Set it to 0 to drop the code entirely and save the flash
+// on a board you know has none. Both boards share one FQBN, so the choice
+// cannot be made at compile time -- see the probe in setup() for how a
+// missing mic is actually detected.
 //
 // Use Adafruit_ZeroPDMSPI, NOT Adafruit_ZeroPDM. Both ship in the same
 // library (Adafruit_Zero_PDM_Library), and picking the wrong one silently
@@ -54,6 +97,15 @@
 // corrected, the floor is near -34 dBFS. The no-microphone path is verified separately
 // (see setup()). Still unmeasured: MIC_GAIN 8, the shipped default -- the
 // figures above are at 16, and halving them is arithmetic, not a capture.
+// Addresses renamed onto ADDRESSES.md on 2026-09-03 (/screen/text ->
+// /display/text, /screen/fill -> /display/fill, /screen/box -> /display/rect,
+// /screen/backlight -> /display/bl, bare /tone -> /buzz, /pixels ->
+// /rgb/pixels, /pixel <n> -> /rgb/<n>, /led -> /s/l, the /pybadge blob ->
+// /state + /btn + /light + /bat + /imu in one bundle, /enq booleans ->
+// /enq/imu and /enq/mic); that build is compile-checked and has not been
+// re-run on the board. The same edit gave every write its echo, gave /btn,
+// /light, /bat, /imu and /mic single-shot replies, and put /mic on the /rate
+// tick -- also compile-checked only.
 //
 // decimateFilterWord() is an INTERRUPT routine, not a polling call. It reads
 // and rewrites the SERCOM data register unconditionally to keep the bit stream
@@ -109,11 +161,20 @@
 static_assert(SCOPE_POINTS % 4 == 0, "OSC blob payload must be a multiple of 4");
 #define SCOPE_DECIM  8               // 16 kHz / 8 = one scope point per 0.5 ms
 static Adafruit_ZeroPDMSPI pdmspi(&PDM_SPI);
-static bool micOK = false;
+static bool  micOK   = false;
+// MIC_GAIN is the boot value; /mic/gain moves it at runtime and reads it back.
+static float micGain = MIC_GAIN;
 
-// written by PDM_HANDLER, read and cleared by sendMic() with the IRQ masked
+// written by PDM_HANDLER, read and cleared by sendMic() with the IRQ masked.
+//
+// micCount is uint32_t, not uint16_t: the window is now one /rate period
+// rather than a fixed 50 ms, and /rate accepts up to 5000 ms. At 16 kHz that
+// is 80000 samples, which a uint16 wraps -- and a wrapped count divides the
+// sum of squares by the wrong number, so rms would come back wildly wrong at
+// exactly the slow rates a user picks to calm the stream down. uint32 holds
+// 74 hours of it.
 static volatile uint64_t micSumSq  = 0;   // sum of v*v at full scale
-static volatile uint16_t micCount  = 0;
+static volatile uint32_t micCount  = 0;
 static volatile int32_t  micPeak   = 0;   // full-scale, +-32768
 static volatile int16_t  micScope[SCOPE_POINTS];   // full-scale samples
 static volatile uint8_t  micScopeN = 0;
@@ -138,9 +199,10 @@ SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 #define BTN_DATA      49
 #define BTN_LATCH     50
 
-// Bit positions in the shift register byte, in the order the page expects.
-// left 0x01, up 0x02, down 0x04, right 0x08, select 0x10, start 0x20,
-// A 0x40, B 0x80.
+// Bit positions in the shift register byte: left 0x01, up 0x02, down 0x04,
+// right 0x08, select 0x10, start 0x20, A 0x40, B 0x80. /btn sends one int
+// per button in that order, bit 0 first, so the page never sees the byte.
+#define BTN_COUNT      8
 
 // The PyBadge's display is on SPI1 -- a second SERCOM on pins 41/42/43, per
 // the variant header's "Internal SPI for TFT" block. Constructing the driver
@@ -151,10 +213,43 @@ Adafruit_NeoPixel pixels(NEOPIX_NUM, NEOPIX_PIN, NEO_GRB + NEO_KHZ800);
 Adafruit_LIS3DH   lis;
 
 static bool     accelOK = false;
-static uint32_t reportEvery = 50;
+static uint32_t reportEvery = 50;           // /rate, ms; 0 = not streaming
+static uint32_t seq = 0;                    // /state sequence number
 static char     line1[26] = "PyBadgeOscuino";
 static char     line2[26] = "waiting for OSC";
 static uint16_t bgColour = ST77XX_BLACK;
+
+// Everything the badge says, hello and stream alike, goes out as a bundle
+// built here and flushed as one SLIP packet.
+static OSCBundle bundleOUT;
+
+static void flushBundle() {
+  SLIPSerial.beginPacket();
+  bundleOUT.send(SLIPSerial);
+  SLIPSerial.endPacket();
+  bundleOUT.empty();
+}
+
+// Single messages: the echo of a write and the answer to a read. ADDRESSES.md
+// wants both -- "/s/l ... echoed", "/rate ... Echoed", "/buzz ... echoed",
+// "/rgb ... echoed", the display writes "echoed", and "Every request that
+// reads something answers on the same address" -- and neither belongs in the
+// stream bundle, because both are answers to something that just arrived
+// rather than readings taken on the stream tick. So each goes out on its own
+// as its own SLIP packet.
+static void sendMsg(OSCMessage &m) {
+  SLIPSerial.beginPacket();
+  m.send(SLIPSerial);
+  SLIPSerial.endPacket();
+}
+
+// The commonest echo: the address the message arrived on, carrying its first
+// `count` int arguments clamped exactly as the route clamped them.
+static void echoInts(OSCMessage &m, int count) {
+  OSCMessage e(m.getAddress());
+  for (int i = 0; i < count; i++) e.add((intOSC_t) constrain(m.getInt(i), 0, 255));
+  sendMsg(e);
+}
 
 /* ------------------------------------------------------- raw OSC helpers */
 
@@ -274,6 +369,22 @@ void PDM_HANDLER(void) {
 
 // /mic ,iiib  rms, peak, sampleRate, scope
 //
+// That is exactly ADDRESSES.md's four-argument form, `/mic <i> <i> [<i> <b>]`
+// -- rms and peak at full scale, and the optional pair the contract describes
+// as what "boards with a scope add", the sample rate and a waveform blob.
+// Nothing here is an extension.
+//
+// It goes out on the same /rate tick as the stream bundle, but as its OWN
+// packet rather than a bundle member: the scope trace is written straight
+// from the capture buffer to the wire below, and a bundle member would have
+// to be copied into an OSCMessage first.
+//
+// The scope covers only the first SCOPE_POINTS * SCOPE_DECIM samples of the
+// window -- 768 of them, 48 ms -- because the ISR stops storing once the
+// buffer is full. rms and peak still cover the whole window, so at a slow
+// /rate the numbers describe the period and the waveform describes its
+// opening. At the default 50 ms they are the same thing.
+//
 // rms and peak go out at FULL SCALE, 0..32767, because that is the number a
 // receiver can actually reason about -- it is comparable between frames, and
 // the page turns it into dBFS for the meter. Sending a pre-scaled 0..127 was
@@ -288,7 +399,7 @@ static void sendMic() {
   int16_t  raw[SCOPE_POINTS];
   int8_t   scope[SCOPE_POINTS];
   uint64_t sumsq;
-  uint16_t count;
+  uint32_t count;
   int32_t  peak;
   uint8_t  n;
 
@@ -332,73 +443,203 @@ static void sendMic() {
 
 /* ----------------------------------------------------------------- inbound */
 
-static void routeText(OSCMessage &m) {              // /screen/text "a" "b"
-  if (m.isString(0)) m.getString(0, line1, sizeof line1);
-  if (m.size() > 1 && m.isString(1)) m.getString(1, line2, sizeof line2);
+// /display/text "a" ["b"]. The display capability's reply in ADDRESSES.md is
+// `/display/text <i>` lines drawn, so that is what goes back: the number of
+// text lines this message supplied. redraw() repaints both slots either way,
+// but only the ones counted here were changed by the request.
+static void routeText(OSCMessage &m) {
+  intOSC_t lines = 0;
+  if (m.size() > 0 && m.isString(0)) { m.getString(0, line1, sizeof line1); lines++; }
+  if (m.size() > 1 && m.isString(1)) { m.getString(1, line2, sizeof line2); lines++; }
   redraw();
+  OSCMessage e("/display/text"); e.add(lines); sendMsg(e);
 }
-static void routeFill(OSCMessage &m) {              // /screen/fill r g b
+static void routeFill(OSCMessage &m) {              // /display/fill r g b, echoed
   if (m.size() < 3) return;
   bgColour = tft.color565(constrain(m.getInt(0), 0, 255),
                           constrain(m.getInt(1), 0, 255),
                           constrain(m.getInt(2), 0, 255));
   redraw();
+  echoInts(m, 3);
 }
-static void routeBacklight(OSCMessage &m) {         // /screen/backlight 0..255
-  if (m.size() >= 1 && m.isInt(0)) analogWrite(TFT_LITE, constrain(m.getInt(0), 0, 255));
+static void routeBacklight(OSCMessage &m) {         // /display/bl 0..255, echoed
+  if (m.size() < 1 || !m.isInt(0)) return;
+  analogWrite(TFT_LITE, constrain(m.getInt(0), 0, 255));
+  echoInts(m, 1);
 }
-static void routeBox(OSCMessage &m) {               // /screen/box x y w h r g b
+static void routeRect(OSCMessage &m) {              // /display/rect x y w h r g b
   if (m.size() < 7) return;
   tft.fillRect(m.getInt(0), m.getInt(1), m.getInt(2), m.getInt(3),
                tft.color565(constrain(m.getInt(4), 0, 255),
                             constrain(m.getInt(5), 0, 255),
                             constrain(m.getInt(6), 0, 255)));
+  // Not echoInts(): x, y, w and h are screen coordinates, not 0..255 colours,
+  // and clamping them to 255 would misreport a rectangle drawn off the right
+  // of a 160-wide panel. Echo the geometry as sent and the colour as clamped.
+  OSCMessage e("/display/rect");
+  for (int i = 0; i < 4; i++) e.add((intOSC_t) m.getInt(i));
+  for (int i = 4; i < 7; i++) e.add((intOSC_t) constrain(m.getInt(i), 0, 255));
+  sendMsg(e);
 }
-static void routeTone(OSCMessage &m) {              // /tone freq [ms] [vol]
+static void routeBuzz(OSCMessage &m) {              // /buzz hz [ms] [vol], echoed
   if (m.size() < 1 || !m.isInt(0)) return;
-  beep(constrain(m.getInt(0), 0, 8000),
-       (m.size() > 1 && m.isInt(1)) ? constrain(m.getInt(1), 0, 3000) : 150,
-       (m.size() > 2 && m.isInt(2)) ? constrain(m.getInt(2), 0, 255) : 120);
+  const intOSC_t hz  = constrain(m.getInt(0), 0, 8000);
+  const intOSC_t ms  = (m.size() > 1 && m.isInt(1)) ? constrain(m.getInt(1), 0, 3000) : 150;
+  const intOSC_t vol = (m.size() > 2 && m.isInt(2)) ? constrain(m.getInt(2), 0, 255) : 120;
+  // Echo BEFORE playing. beep() blocks for the whole note, so echoing after it
+  // would hold the acknowledgement back by up to three seconds and make the
+  // page's next write look like it had been dropped.
+  OSCMessage e("/buzz"); e.add(hz).add(ms).add(vol); sendMsg(e);
+  beep(hz, ms, vol);
 }
-static void routePixels(OSCMessage &m) {            // /pixels r g b  (all five)
+
+// r g b at argument index i of a message, clamped, as a NeoPixel colour.
+static uint32_t colourAt(OSCMessage &m, int i) {
+  return pixels.Color(constrain(m.getInt(i),     0, 255),
+                      constrain(m.getInt(i + 1), 0, 255),
+                      constrain(m.getInt(i + 2), 0, 255));
+}
+
+// One route for the whole rgb capability. `offset` is where the address
+// stops matching "/rgb", so the remainder tells the four shapes apart:
+//   /rgb r g b            remainder empty     all five, one colour
+//   /rgb/<n> r g b        remainder /<n>      one pixel
+//   /rgb/pixels r g b ... remainder /pixels   a frame, one triple per pixel
+//   /rgb/bright 0..255    remainder /bright   the strip's brightness
+// All four are echoed, on the address they arrived on.
+static void routeRgb(OSCMessage &m, int offset) {
+  if (m.fullMatch("/bright", offset)) {
+    if (m.size() < 1 || !m.isInt(0)) return;
+    // setBrightness() only takes effect on the next show(), and it rescales
+    // from the colours last set rather than from the ones on the wire.
+    pixels.setBrightness(constrain(m.getInt(0), 0, 255));
+    pixels.show();
+    echoInts(m, 1);
+    return;
+  }
+  if (m.fullMatch("/pixels", offset)) {
+    // A short frame leaves the pixels it does not name as they were.
+    const int n = min(m.size() / 3, (int) NEOPIX_NUM);
+    for (int i = 0; i < n; i++) pixels.setPixelColor(i, colourAt(m, 3 * i));
+    pixels.show();
+    echoInts(m, 3 * n);                             // echo what was applied
+    return;
+  }
   if (m.size() < 3) return;
-  const uint32_t c = pixels.Color(constrain(m.getInt(0), 0, 255),
-                                  constrain(m.getInt(1), 0, 255),
-                                  constrain(m.getInt(2), 0, 255));
-  for (int i = 0; i < NEOPIX_NUM; i++) pixels.setPixelColor(i, c);
+  if (m.getAddressLength(offset) == 0) {            // bare /rgb: all five
+    const uint32_t c = colourAt(m, 0);
+    for (int i = 0; i < NEOPIX_NUM; i++) pixels.setPixelColor(i, c);
+    pixels.show();
+    echoInts(m, 3);
+    return;
+  }
+  char rest[8];                                     // "/<n>", or something else
+  m.getAddress(rest, offset, sizeof rest);
+  if (rest[0] != '/' || !isdigit((unsigned char) rest[1])) return;
+  pixels.setPixelColor(constrain(atoi(rest + 1), 0, NEOPIX_NUM - 1), colourAt(m, 0));
   pixels.show();
+  echoInts(m, 3);
 }
-static void routePixel(OSCMessage &m) {             // /pixel i r g b (just one)
-  if (m.size() < 4) return;
-  pixels.setPixelColor(constrain(m.getInt(0), 0, NEOPIX_NUM - 1),
-                       pixels.Color(constrain(m.getInt(1), 0, 255),
-                                    constrain(m.getInt(2), 0, 255),
-                                    constrain(m.getInt(3), 0, 255)));
-  pixels.show();
+static void routeLed(OSCMessage &m) {               // /s/l 0|1, echoed
+  if (m.size() < 1 || !m.isInt(0)) return;
+  const intOSC_t on = m.getInt(0) ? 1 : 0;
+  digitalWrite(LED_BUILTIN, on ? HIGH : LOW);
+  OSCMessage e("/s/l"); e.add(on); sendMsg(e);
 }
-static void routeLed(OSCMessage &m) {               // /led 0|1
-  if (m.size() >= 1 && m.isInt(0)) digitalWrite(LED_BUILTIN, m.getInt(0) ? HIGH : LOW);
+static void routeRate(OSCMessage &m) {              // /rate <ms>, 0 stops, echoed
+  if (m.size() < 1 || !m.isInt(0)) return;
+  const int v = m.getInt(0);
+  reportEvery = v <= 0 ? 0 : constrain(v, 20, 5000);
+  // Echo the value in force, not the one asked for: 5 becomes 20 and 9000
+  // becomes 5000, and a page that drew its slider from the request would sit
+  // there disagreeing with the board about the rate it is actually running.
+  OSCMessage e("/rate"); e.add((intOSC_t) reportEvery); sendMsg(e);
 }
-static void routeRate(OSCMessage &m) {              // /rate <ms>
-  if (m.size() >= 1 && m.isInt(0)) reportEvery = constrain(m.getInt(0), 20, 5000);
+
+/* ------------------------------------------------------------- the readings
+
+   Each capability's reading is built in one place and used twice: added to
+   the stream bundle on the /rate tick, and sent on its own when the address
+   is asked for with no arguments. ADDRESSES.md: "Every request that reads
+   something answers on the same address" -- and the enq bundle announces
+   /enq/btn, /enq/light, /enq/bat, so those requests have to answer, or a page
+   reading the contract would take the silence for "no buttons". */
+
+static void fillBtn(OSCMessage &m) {                // eight ints, 1 = pressed
+  const uint8_t bits = readButtons();
+  for (int i = 0; i < BTN_COUNT; i++) m.add((intOSC_t) ((bits >> i) & 1));
 }
+static void fillLight(OSCMessage &m) {              // A7, 10-bit raw
+  m.add((intOSC_t) analogRead(LIGHT_SENSOR));
+}
+// A6 sits on a divider giving half the battery voltage, read 10-bit against
+// the 3.3 V reference -- the arithmetic the page used to do, moved here so
+// /bat is millivolts as the contract says.
+static void fillBat(OSCMessage &m) {
+  m.add((intOSC_t) ((analogRead(BATTERY_SENSE) * 6600L) / 1023));
+}
+// x_g/y_g/z_g are in g: Adafruit_LIS3DH::read() (library 1.3.0) scales the raw
+// counts by the selected range -- its own comment reads "raw_lsb => 10-bit lsb
+// -> milli-gs -> gs" -- and getEvent() multiplies them by
+// SENSORS_GRAVITY_STANDARD to make m/s^2.
+static void fillImu(OSCMessage &m) {
+  lis.read();
+  m.add(lis.x_g).add(lis.y_g).add(lis.z_g);
+}
+
+static void routeBtnAsk(OSCMessage &)   { OSCMessage m("/btn");   fillBtn(m);   sendMsg(m); }
+static void routeLightAsk(OSCMessage &) { OSCMessage m("/light"); fillLight(m); sendMsg(m); }
+static void routeBatAsk(OSCMessage &)   { OSCMessage m("/bat");   fillBat(m);   sendMsg(m); }
+
+// "Absence is silence": a badge whose LIS3DH did not answer left /enq/imu out
+// of its hello, so /imu must answer nothing at all -- not a zero, not a -1.
+static void routeImuAsk(OSCMessage &) {
+  if (!accelOK) return;
+  OSCMessage m("/imu"); fillImu(m); sendMsg(m);
+}
+
+#if BADGE_HAS_PDM_MIC
+static void routeMicAsk(OSCMessage &) { if (micOK) sendMic(); }
+// /mic/gain [<i>]: with an argument it sets the gain, and either way it
+// answers with the gain now in force. Silent on a badge with no microphone.
+static void routeMicGain(OSCMessage &m) {
+  if (!micOK) return;
+  if (m.size() >= 1 && m.isInt(0)) {
+    micGain = (float) constrain(m.getInt(0), 1, 64);
+    pdmspi.setMicGain(micGain);
+  }
+  OSCMessage e("/mic/gain"); e.add((intOSC_t) micGain); sendMsg(e);
+}
+#endif
 
 /* -------------------------------------------------------------------- main */
 
-// The boot /hello is very nearly always lost: the board resets, its USB
+// The boot /enq is very nearly always lost: the board resets, its USB
 // device re-enumerates, and the host opens the port some hundreds of
 // milliseconds later, by which time setup() has long finished. Measured on
 // this repo's ESP32 and SAMD boards -- a probe opening the port straight
-// after flashing never once caught it. So /hello is also an INBOUND address
+// after flashing never once caught it. So /enq is also an INBOUND address
 // and the page asks for it on connect.
-static void sendHello() {
-  OSCMessage hello("/hello");
-  // the page uses micOK to decide whether to show the microphone panel
-  hello.add("PyBadgeOscuino").add((intOSC_t) NEOPIX_NUM).add(accelOK).add(micOK);
-  SLIPSerial.beginPacket(); hello.send(SLIPSerial); SLIPSerial.endPacket();
+//
+// The reply is a bundle: the name, then one /enq line per capability that is
+// actually there. The display, speaker, NeoPixels, buttons, light sensor and
+// battery divider are soldered to every PyBadge; the accelerometer and the
+// microphone are announced only if their probes in setup() succeeded, so a
+// page decides whether to show those panels from the hello, not from a flag.
+static void sendEnq() {
+  bundleOUT.add("/enq").add("PyBadgeOscuino");
+  bundleOUT.add("/enq/display").add((intOSC_t) tft.width()).add((intOSC_t) tft.height());
+  bundleOUT.add("/enq/buzz");
+  bundleOUT.add("/enq/rgb").add((intOSC_t) NEOPIX_NUM);
+  bundleOUT.add("/enq/btn").add((intOSC_t) BTN_COUNT);
+  bundleOUT.add("/enq/light");
+  bundleOUT.add("/enq/bat");
+  if (accelOK) bundleOUT.add("/enq/imu").add((intOSC_t) 3);
+  if (micOK)   bundleOUT.add("/enq/mic");
+  flushBundle();
 }
 
-static void routeHello(OSCMessage &) { sendHello(); }
+static void routeEnq(OSCMessage &) { sendEnq(); }
 
 void setup() {
   SLIPSerial.begin(115200);
@@ -428,15 +669,17 @@ void setup() {
   // flattens to exactly zero variance; a real mic always has a noise floor.
   //
   // Verified on a SAMD51 with no microphone on those pins (a Feather M4
-  // Express built with this FQBN): the raw filter output was a flat 0, the
-  // probe returned micOK false, and the sketch went on sending /pybadge with
-  // no /mic at all. The path a mic-less PyBadge takes is therefore known good.
+  // Express built with this FQBN, running the pre-rename build that sent one
+  // board-named state message): the raw filter output was a flat 0, the
+  // probe returned micOK false, and that build went on sending its state
+  // message with no /mic at all. The path a mic-less PyBadge takes is
+  // therefore known good; the renamed bundle has not been re-run on it.
   // The mic-present path IS verified -- see the STATUS note in the header.
   if (pdmspi.begin(PDM_RATE)) {
-    pdmspi.setMicGain(MIC_GAIN);
+    pdmspi.setMicGain(micGain);
     delay(100);
     NVIC_DisableIRQ(PDM_IRQ);
-    const uint16_t count = micCount;
+    const uint32_t count = micCount;
     const int32_t  peak  = micPeak;
     micSumSq = 0; micCount = 0; micPeak = 0; micScopeN = 0; micDecim = 0;
     NVIC_EnableIRQ(PDM_IRQ);
@@ -448,7 +691,7 @@ void setup() {
   accelOK = lis.begin(0x19) || lis.begin(0x18);
   if (accelOK) lis.setRange(LIS3DH_RANGE_4_G);
 
-  sendHello();          // nearly always lost; the page asks again
+  sendEnq();          // nearly always lost; the page asks again
 }
 
 // Non-blocking receive, the extras/webserial/template.ino pattern. Two rules,
@@ -478,39 +721,51 @@ void loop() {
 
   if (pollOSC()) {
     if (!inMsg.hasError()) {
-      inMsg.dispatch("/screen/text",      routeText);
-      inMsg.dispatch("/screen/fill",      routeFill);
-      inMsg.dispatch("/screen/backlight", routeBacklight);
-      inMsg.dispatch("/screen/box",       routeBox);
-      inMsg.dispatch("/tone",             routeTone);
-      inMsg.dispatch("/pixels",           routePixels);
-      inMsg.dispatch("/pixel",            routePixel);
-      inMsg.dispatch("/led",              routeLed);
-      inMsg.dispatch("/rate",             routeRate);
-      inMsg.dispatch("/hello",       routeHello);
+      // writes
+      inMsg.dispatch("/display/text", routeText);
+      inMsg.dispatch("/display/fill", routeFill);
+      inMsg.dispatch("/display/bl",   routeBacklight);
+      inMsg.dispatch("/display/rect", routeRect);
+      inMsg.dispatch("/buzz",         routeBuzz);
+      inMsg.route("/rgb",             routeRgb);   // /rgb, /rgb/<n>, /pixels, /bright
+      inMsg.dispatch("/s/l",          routeLed);
+      inMsg.dispatch("/rate",         routeRate);
+      // reads -- one per capability the enq bundle announces, so that
+      // "absence is silence" still means something on this board
+      inMsg.dispatch("/enq",        routeEnq);
+      inMsg.dispatch("/btn",          routeBtnAsk);
+      inMsg.dispatch("/light",        routeLightAsk);
+      inMsg.dispatch("/bat",          routeBatAsk);
+      inMsg.dispatch("/imu",          routeImuAsk);
+#if BADGE_HAS_PDM_MIC
+      inMsg.dispatch("/mic",          routeMicAsk);
+      inMsg.dispatch("/mic/gain",     routeMicGain);
+#endif
     }
     inMsg.empty();
   }
 
-#if BADGE_HAS_PDM_MIC
-  static uint32_t lastMic = 0;
-  if (micOK && millis() - lastMic >= 50) { lastMic = millis(); sendMic(); }
-#endif
-
   const uint32_t now = millis();
-  if (now - last < reportEvery) return;
+  if (!reportEvery || now - last < reportEvery) return;
   last = now;
 
-  int16_t ax = 0, ay = 0, az = 0;
-  if (accelOK) { lis.read(); ax = lis.x; ay = lis.y; az = lis.z; }
+  // One bundle, sampled in one pass, so every reading in it belongs to the
+  // same instant. /state carries the sequence number and the millis it was
+  // taken at; the rest is one message per capability, never a board blob.
+  bundleOUT.add("/state").add((intOSC_t) seq++).add((intOSC_t) now);
 
-  // One message, sampled in one pass, so every reading in it belongs to the
-  // same instant -- the same shape as EsploraOscuino and XiaoS3SenseOscuino.
-  OSCMessage m("/pybadge");
-  m.add((intOSC_t) readButtons());                     // one bitmask, eight buttons
-  m.add((intOSC_t) analogRead(LIGHT_SENSOR));
-  m.add((intOSC_t) analogRead(BATTERY_SENSE));         // half the battery volts
-  m.add((intOSC_t) ax).add((intOSC_t) ay).add((intOSC_t) az);
-  m.add(accelOK);
-  SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
+  fillBtn(bundleOUT.add("/btn"));
+  fillLight(bundleOUT.add("/light"));
+  fillBat(bundleOUT.add("/bat"));
+  if (accelOK) fillImu(bundleOUT.add("/imu"));
+  flushBundle();
+
+#if BADGE_HAS_PDM_MIC
+  // On the /rate tick, like everything else. ADDRESSES.md retired /mic/rate
+  // with the note "one rate per board", so a fixed cadence here would have
+  // meant /rate 0 stopping the bundle while /mic carried on and /rate 200
+  // leaving it at 50 ms. It is still its own packet rather than a bundle
+  // member -- see sendMic() for why the blob is written straight to the wire.
+  if (micOK) sendMic();
+#endif
 }

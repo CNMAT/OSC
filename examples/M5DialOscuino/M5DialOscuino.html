@@ -35,6 +35,8 @@
   .row label{color:var(--dim);font-size:13px;min-width:74px}
   input[type=range]{flex:1;accent-color:var(--acc)}
   input[type=color]{width:44px;height:30px;border:0;background:none;padding:0;cursor:pointer}
+  select{background:#04121a;color:#7fe3ff;border:1px solid var(--edge);border-radius:7px;
+         font:13px var(--mono);padding:6px 7px}
   input[type=text],textarea{background:#04121a;color:#7fe3ff;border:1px solid var(--edge);
          border-radius:7px;font:13px/1.5 var(--mono);padding:7px;width:100%}
   textarea{resize:none;height:88px}
@@ -51,10 +53,16 @@
 <h1>M5Dial — knob, touch and round screen over OSC</h1>
 <p class="intro">
   The Dial's round 240×240 screen mirrored at 2×, wrapped in a ring that tracks
-  the knob. Draw on the mirror and it lands on the glass as <code>/disp</code>
-  messages; turn the knob, press the G0 button or touch the screen and
-  <code>/dial</code> events come back. Web Serial needs
-  <code>http://localhost</code>, Chrome or Edge.
+  the knob. Draw on the mirror and it lands on the glass as
+  <code>/display/circle</code> or <code>/display/rect</code>; turn the knob,
+  press the G0 button or touch the screen and a <code>/state</code> bundle
+  comes back carrying <code>/enc</code>, <code>/btn</code> and, while a finger
+  is down, <code>/touch</code>. The rate slider sets <code>/rate</code> (0
+  stops the stream; the board echoes the value in force) and "read" asks
+  <code>/enc</code> and <code>/btn</code> once. Connecting asks
+  <code>/enq</code>; the reply lists what the board proved it has as
+  <code>/enq</code> lines. Web Serial needs <code>http://localhost</code>,
+  Chrome or Edge.
 </p>
 
 <div class="bar">
@@ -77,6 +85,8 @@
   <div class="tools">
     <div class="row"><label>brush</label>
       <input type="color" id="color" value="#ff7a1a">
+      <select id="shape" title="dot sends /display/circle, square sends /display/rect">
+        <option value="dot">dot</option><option value="square">square</option></select>
       <input type="range" id="brush" min="1" max="24" value="6">
       <button id="clear" class="ghost">clear</button>
       <button id="fillbtn" class="ghost">fill</button>
@@ -87,8 +97,15 @@
       <input type="range" id="freq" min="100" max="4000" value="880"><span id="freqv" class="v">880</span> Hz
       <button id="beep" class="ghost">beep</button></div>
     <div class="row"><label>encoder</label>
-      <button id="zero" class="ghost">zero</button>
+      <button id="zero" class="ghost" title="/enc/zero: reset the count">zero</button>
+      <button id="read" class="ghost" title="ask /enc and /btn once, outside the stream">read</button>
       <span id="delta" class="v" style="color:var(--dim)">Δ 0</span></div>
+    <div class="row"><label>rate</label>
+      <input type="range" id="rate" min="0" max="500" step="10" value="30"
+             title="/rate: stream period in ms; 0 stops the stream">
+      <span id="ratev" class="v">30 ms</span></div>
+    <div class="row"><label>rfid</label>
+      <button id="rdiag" class="ghost" title="one instrumented read attempt, answered on /diag">diag</button></div>
     <div class="row" style="align-items:flex-start"><label>text</label>
       <textarea id="tlines" spellcheck="false" title="up to four lines, centred on the round face">M5DialOscuino
 OSC over USB</textarea></div>
@@ -123,6 +140,7 @@ class Reader{
   blob(){const n=this.int32();
     if(n<0||n>this.left){this.pos=this.b.length;return new Uint8Array(0);}
     const v=this.b.subarray(this.pos,this.pos+n);this.pos+=(n+3)&~3;return v;}
+  raw(n){const v=this.b.subarray(this.pos,this.pos+n);this.pos+=n;return v;}
 }
 // The complete tag set: an unknown tag has no known width, so the decoder
 // must stop rather than misparse everything after it.
@@ -143,6 +161,17 @@ function decodeMessage(bytes){
       else return {address,args};
     }}
   return {address,args};
+}
+// The sketch speaks in bundles: hello is /enq + /enq lines, the stream is
+// /state + one message per capability. '#' at offset 0 means "#bundle".
+function decodePacket(bytes){
+  if(bytes.length>=16&&bytes[0]===0x23){
+    const r=new Reader(bytes);r.string();r.raw(8);       // "#bundle", timetag
+    const packets=[];
+    while(r.left>=4){const n=r.int32();if(n<=0||n>r.left)break;packets.push(decodePacket(r.raw(n)));}
+    return {bundle:true,packets};
+  }
+  return decodeMessage(bytes);
 }
 const pad4=b=>{const n=(b.length+3)&~3,o=new Uint8Array(n);o.set(b);return o;};
 function encodeMessage(address,args){
@@ -209,43 +238,70 @@ function markTouch(x,y,down){
   ctx.fillStyle=down?"rgba(57,211,83,.9)":"rgba(57,211,83,.35)";ctx.fill();
 }
 
-function onFrame(m){
-  if(m.address==="/hello"){
-    const [name,disp,touch,rfid,w,h]=m.args;
-    $("name").textContent=name??"–";
-    $("dok").textContent=disp?(w+"×"+h):"absent";
-    $("dok").style.color=disp?"var(--live)":"var(--warn)";
-    $("tok").textContent=touch?"FT3267":"absent";
-    $("tok").style.color=touch?"var(--live)":"var(--warn)";
-    $("rok").textContent=rfid?"ready — present a tag":"absent";
-    $("rok").style.color=rfid?"var(--live)":"var(--dim)";
-    logLine("","board: "+m.args.join(" "));
-    return;
+function setCap(id,text,color){$(id).textContent=text;$(id).style.color=color;}
+
+function onPacket(pkt){
+  const msgs=pkt.bundle?pkt.packets:[pkt];
+  // A enq bundle lists only what is present, so the table starts from
+  // "absent" and each /enq line turns one cell on.
+  if(msgs.some(m=>m.address==="/enq")){
+    setCap("dok","absent","var(--warn)");
+    setCap("tok","absent","var(--warn)");
+    setCap("rok","absent","var(--dim)");
   }
-  if(m.address==="/rfid"){
-    const [present,uid]=m.args;
-    $("rok").textContent=present?("tag "+uid):"no tag (last "+uid+")";
-    $("rok").style.color=present?"var(--acc)":"var(--dim)";
-    logLine("",(present?"tag arrived: ":"tag left: ")+uid);
-    return;
+  let stream=false,touched=false;
+  for(const m of msgs){
+    if(m.bundle){onPacket(m);continue;}
+    const a=m.address,g=m.args;
+    if(a==="/enq"){$("name").textContent=g[0]??"–";logLine("","sketch: "+g[0]);}
+    else if(a==="/enq/display")setCap("dok",g[0]+"×"+g[1],"var(--live)");
+    else if(a==="/enq/touch")setCap("tok","FT3267 "+g[0]+"×"+g[1],"var(--live)");
+    else if(a==="/enq/rfid")setCap("rok","ready — present a tag","var(--live)");
+    else if(a.startsWith("/enq/"))logLine("","has "+a.slice(5)+(g.length?" "+g.join(" "):""));
+    else if(a==="/rfid"){
+      const [present,uid]=g;
+      setCap("rok",present?("tag "+uid):"no tag (last "+uid+")",present?"var(--acc)":"var(--dim)");
+      logLine("",(present?"tag arrived: ":"tag left: ")+uid);
+    }
+    else if(a==="/diag")logLine("","diag: "+g.join(" "));
+    else if(a==="/rate"){                 // the echo is the value in force
+      const ms=g[0]|0;$("rate").value=ms;$("ratev").textContent=ms?ms+" ms":"stopped";
+      logLine("",ms?"rate "+ms+" ms":"rate 0: stream stopped");
+    }
+    else if(a==="/state"){
+      const s=g[0];stream=true;frames++;
+      if(lastSeq!==null){const gap=(s-lastSeq)|0;if(gap>1)dropped+=gap-1;}
+      lastSeq=s;
+      $("seq").textContent=s;$("drop").textContent=dropped;
+    }
+    else if(a==="/enc"){
+      const [pos,d]=g;
+      $("enc").textContent=pos;$("delta").textContent="Δ "+d;
+      ring(pos);
+    }
+    else if(a==="/btn"){
+      const btn=g[0];
+      $("btn").textContent=btn?"BTN DOWN":"BTN up";
+      $("btn").style.color=btn?"var(--live)":"var(--dim)";
+    }
+    else if(a==="/touch"){
+      const [x,y]=g;touched=true;
+      $("tx").textContent=x;$("ty").textContent=y;
+      $("tdown").textContent="DOWN";$("tdown").style.color="var(--live)";
+      markTouch(x,y,true);
+    }
   }
-  if(m.address!=="/dial")return;
-  const [s,pos,btn,down,x,y,d]=m.args;
-  frames++;
-  if(lastSeq!==null){const gap=(s-lastSeq)|0;if(gap>1)dropped+=gap-1;}
-  lastSeq=s;
-  $("seq").textContent=s;$("drop").textContent=dropped;
-  $("enc").textContent=pos;$("delta").textContent="Δ "+d;
-  $("btn").textContent=btn?"BTN DOWN":"BTN up";
-  $("btn").style.color=btn?"var(--live)":"var(--dim)";
-  $("tx").textContent=down?x:"–";$("ty").textContent=down?y:"–";
-  $("tdown").textContent=down?"DOWN":"up";
-  $("tdown").style.color=down?"var(--live)":"var(--dim)";
-  ring(pos);
-  if(down)markTouch(x,y,true);
-  const now=performance.now();
-  if(!t0)t0=now;
-  if(now-t0>=1000){$("hz").textContent=(frames*1000/(now-t0)).toFixed(0)+" ev/s";frames=0;t0=now;}
+  // /touch is only streamed while a finger is down: a stream bundle without
+  // it is the release.
+  if(stream&&!touched){
+    $("tx").textContent="–";$("ty").textContent="–";
+    $("tdown").textContent="up";$("tdown").style.color="var(--dim)";
+  }
+  if(stream){
+    const now=performance.now();
+    if(!t0)t0=now;
+    if(now-t0>=1000){$("hz").textContent=(frames*1000/(now-t0)).toFixed(0)+" ev/s";frames=0;t0=now;}
+  }
 }
 
 /* ----------------------------------------------------------------- serial */
@@ -260,9 +316,9 @@ async function send(a,args){
 async function readLoop(){
   const slip=new SlipDecoder(p=>{
     let m;
-    try{ m=decodeMessage(p); }
+    try{ m=decodePacket(p); }
     catch(e){ logLine("!","decode: "+e); return; }
-    try{ onFrame(m); }
+    try{ onPacket(m); }
     catch(e){ logLine("!","render: "+e); }
   });
   reader=port.readable.getReader();
@@ -280,8 +336,8 @@ $("connect").onclick=async()=>{
     $("connect").disabled=true;$("disconnect").disabled=false;
     $("dot").classList.add("on");$("status").textContent="connected";
     logLine("","connected");
-    // ask for /hello: the boot one is lost to USB re-enumeration
-    setTimeout(()=>send("/hello",[]),150);
+    // ask for /enq: the boot one is lost to USB re-enumeration
+    setTimeout(()=>send("/enq",[]),150);
   }catch(e){ logLine("!",String(e)); }
 };
 $("disconnect").onclick=async()=>{
@@ -313,28 +369,39 @@ function stroke(ev){
   if(now-lastDraw<25)return;
   lastDraw=now;
   const [x,y]=canvasXY(ev),rad=+$("brush").value,[r,g,b]=hex($("color").value);
-  send("/disp/circle",[x,y,rad,r,g,b]);
-  ctx.beginPath();ctx.arc(x*SCALE,y*SCALE,rad*SCALE,0,7);
-  ctx.fillStyle=$("color").value;ctx.fill();
+  ctx.fillStyle=$("color").value;
+  if($("shape").value==="square"){
+    // a square brush is /display/rect x y w h, top-left anchored like fillRect
+    send("/display/rect",[x-rad,y-rad,2*rad,2*rad,r,g,b]);
+    ctx.fillRect((x-rad)*SCALE,(y-rad)*SCALE,2*rad*SCALE,2*rad*SCALE);
+  }else{
+    send("/display/circle",[x,y,rad,r,g,b]);
+    ctx.beginPath();ctx.arc(x*SCALE,y*SCALE,rad*SCALE,0,7);ctx.fill();
+  }
 }
 cv.addEventListener("pointerdown",ev=>{drawing=true;cv.setPointerCapture(ev.pointerId);stroke(ev);});
 cv.addEventListener("pointermove",ev=>{if(drawing)stroke(ev);});
 cv.addEventListener("pointerup",()=>{drawing=false;});
 
-$("clear").onclick=()=>{send("/disp/clear",[]);clearFace();};
+$("clear").onclick=()=>{send("/display/clear",[]);clearFace();};
 $("fillbtn").onclick=()=>{const [r,g,b]=hex($("color").value);
-  send("/disp/fill",[r,g,b]);clearFace($("color").value);};
+  send("/display/fill",[r,g,b]);clearFace($("color").value);};
 
-$("bl").oninput=()=>{$("blv").textContent=$("bl").value;send("/disp/bl",[+$("bl").value]);};
+$("bl").oninput=()=>{$("blv").textContent=$("bl").value;send("/display/bl",[+$("bl").value]);};
 $("freq").oninput=()=>{$("freqv").textContent=$("freq").value;};
 $("beep").onclick=()=>send("/buzz",[+$("freq").value,150]);
 $("zero").onclick=()=>send("/enc/zero",[]);
+$("read").onclick=()=>{send("/enc",[]);send("/btn",[]);};   // the direct reads
+$("rdiag").onclick=()=>send("/rfid/diag",[]);
+// the label follows the thumb; the echoed /rate is what the board is doing
+$("rate").oninput=()=>{const ms=+$("rate").value;$("ratev").textContent=ms?ms+" ms":"stopped";};
+$("rate").onchange=()=>send("/rate",[+$("rate").value]);
 
 let textT=null;
 $("tlines").addEventListener("input",()=>{clearTimeout(textT);
-  textT=setTimeout(()=>{send("/disp/text",$("tlines").value.split("\n").slice(0,4));mirrorText();},300);});
+  textT=setTimeout(()=>{send("/display/text",$("tlines").value.split("\n").slice(0,4));mirrorText();},300);});
 $("big").addEventListener("input",()=>{clearTimeout(textT);
-  textT=setTimeout(()=>{send("/disp/big",[$("big").value]);},300);});
+  textT=setTimeout(()=>{send("/display/big",[$("big").value]);},300);});
 
 mirrorText();ring(0);
 </script>

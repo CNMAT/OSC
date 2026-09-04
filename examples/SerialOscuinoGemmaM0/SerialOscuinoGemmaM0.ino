@@ -240,8 +240,6 @@ void routeTouch(OSCMessage &msg, int addrOffset )
  *   /d = number of digital pins
  *   /a = number of analog pins
  *  /l integer = set the led
- *  /t = temperature
- *  /s = power supply voltage
  */
 // 
 void routeSystem(OSCMessage &msg, int addrOffset ){

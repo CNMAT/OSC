@@ -66,10 +66,14 @@
 <h1>M5Stack Atom JoyStick — sticks, buttons and screen over OSC</h1>
 <p class="lede">
   Both Hall sticks, the shoulder buttons, the stick clicks, the AtomS3's front
-  button and its 128&times;128 screen, in one <code>/joy</code> message per
-  instant. The sticks live behind an STM32 co-processor at I²C
-  <code>0x59</code>, not on the ESP32's ADC. Type on the emulated glass and it
-  goes to the real LCD. Web Serial needs <code>http://localhost</code>.
+  button and its 128&times;128 screen, as one bundle per instant:
+  <code>/state</code>, <code>/joy</code> (four axes), <code>/btn</code> (five
+  buttons) and <code>/bat</code> (both cells). Connecting asks
+  <code>/enq</code>; the reply lists what is really there as
+  <code>/enq</code> lines. The sticks live behind an STM32 co-processor at
+  I²C <code>0x59</code>, not on the ESP32's ADC. Type on the emulated glass
+  and it goes to the real LCD as <code>/display/text</code>. Web Serial needs
+  <code>http://localhost</code>.
 </p>
 
 <div class="bar">
@@ -108,12 +112,18 @@
   </div>
   <div class="below">
     <span class="batt">bat1 <span id="b1">–</span> mV · bat2 <span id="b2">–</span> mV</span>
-    <table><tr>
-      <td class="k">sketch</td><td class="v" id="name">–</td>
-      <td class="k">joystick MCU</td><td class="v" id="jok">–</td>
-      <td class="k">display</td><td class="v" id="dok">–</td>
-      <td class="k">base fw</td><td class="v" id="fw">–</td>
-    </tr></table>
+    <table>
+      <tr>
+        <td class="k">sketch</td><td class="v" id="name">–</td>
+        <td class="k">joy</td><td class="v" id="jok">–</td>
+        <td class="k">btn</td><td class="v" id="bok">–</td>
+        <td class="k">bat</td><td class="v" id="batok">–</td>
+        <td class="k">display</td><td class="v" id="dok">–</td>
+      </tr>
+      <tr>
+        <td class="k">diag</td><td class="v" id="diag" colspan="9">–</td>
+      </tr>
+    </table>
   </div>
   <div id="log">idle</div>
 </div>
@@ -130,6 +140,7 @@ class Reader{
   float32(){const v=this.dv.getFloat32(this.pos);this.pos+=4;return v;}
   float64(){const v=this.dv.getFloat64(this.pos);this.pos+=8;return v;}
   int64(){const v=this.dv.getBigInt64(this.pos);this.pos+=8;return v;}
+  raw(n){const v=this.b.subarray(this.pos,this.pos+n);this.pos+=n;return v;}
   string(){let e=this.pos;while(e<this.b.length&&this.b[e]!==0)e++;
     const s=dec.decode(this.b.subarray(this.pos,e));this.pos=(e+4)&~3;return s;}
   blob(){const n=this.int32();
@@ -155,6 +166,17 @@ function decodeMessage(bytes){
       else return {address,args};
     }}
   return {address,args};
+}
+// The sketch speaks in bundles: hello is /enq + /enq lines, the stream is
+// /state + one message per capability. '#' at offset 0 means "#bundle".
+function decodePacket(bytes){
+  if(bytes.length>=16&&bytes[0]===0x23){
+    const r=new Reader(bytes);r.string();r.raw(8);       // "#bundle", timetag
+    const packets=[];
+    while(r.left>=4){const n=r.int32();if(n<=0||n>r.left)break;packets.push(decodePacket(r.raw(n)));}
+    return {bundle:true,packets};
+  }
+  return decodeMessage(bytes);
 }
 const pad4=b=>{const n=(b.length+3)&~3,o=new Uint8Array(n);o.set(b);return o;};
 function encodeMessage(address,args){
@@ -217,48 +239,61 @@ function drawLCD(){
   lcdLines.forEach((t,i)=>ctx.fillText(t,3,5+i*12));
 }
 
-function onFrame(payload){
-  let m;try{m=decodeMessage(payload);}catch{return;}
+function setCap(id,text,color){$(id).textContent=text;$(id).style.color=color;}
 
-  if(m.address==="/joy"){
-    const [seq,lx,ly,rx,ry,btn,b1,b2,front]=m.args;
-    if(lastSeq!==null&&seq>lastSeq+1)dropped+=seq-lastSeq-1;
-    lastSeq=seq;
-    $("seq").textContent=seq;$("drop").textContent=dropped;
-    frames++;if(!t0)t0=performance.now();
-    const secs=(performance.now()-t0)/1000;
-    if(secs>0.5)$("hz").textContent=(frames/secs).toFixed(1)+" Hz";
-
-    drawStick("stickL",lx,ly);drawStick("stickR",rx,ry);
-    $("valL").textContent=lx+","+ly;$("valR").textContent=rx+","+ry;
-    // bitmask: 0 L shoulder, 1 R shoulder, 2 left click, 3 right click --
-    // the mapping M5's NEW_ATOM_JOY build uses; the sketch header says to
-    // verify it on the bench before trusting it
-    $("btnL").classList.toggle("hot",!!(btn&1));
-    $("btnR").classList.toggle("hot",!!(btn&2));
-    $("boxL").classList.toggle("click",!!(btn&4));
-    $("boxR").classList.toggle("click",!!(btn&8));
-    $("front").classList.toggle("hot",!!front);
-    $("b1").textContent=b1;$("b2").textContent=b2;
-    return;
+function onPacket(pkt){
+  const msgs=pkt.bundle?pkt.packets:[pkt];
+  // A enq bundle lists only what setup() proved, so the table starts from
+  // "absent" and each /enq line turns one cell on. The front button is the
+  // AtomS3's own GPIO, so /enq/btn 1 with no /enq/joy means the base is gone.
+  if(msgs.some(m=>m.address==="/enq")){
+    setCap("jok","absent","var(--warn)");
+    setCap("bok","absent","var(--warn)");
+    setCap("batok","absent","var(--dim)");
+    setCap("dok","absent","var(--warn)");
   }
-
-  if(m.address==="/hello"){
-    const [name,joy,disp,,fw,sda]=m.args;
-    $("name").textContent=name??"–";
-    // Which internal I2C bus answered also names the module: the AtomS3 puts
-    // it on GPIO38, the AtomS3R on GPIO45.
-    const mod = sda===38 ? " (AtomS3)" : sda===45 ? " (AtomS3R)" : "";
-    $("jok").textContent=joy?"0x59 on GPIO"+sda+mod:"absent";
-    $("jok").style.color=joy?"var(--live)":"var(--warn)";
-    $("dok").textContent=disp?"present":"absent";
-    // The button mapping this page draws is the v2 one, read out of M5's
-    // published STM32 source. Any other version and the labels below may be
-    // wrong, so say so rather than mislabel a press.
-    $("fw").textContent = fw===undefined ? "–" : (fw===0 ? "unread" : "v"+fw);
-    $("fw").style.color = (fw===2||fw===undefined) ? "" : "var(--warn)";
-    logLine("","board: "+m.args.join(" "));
-    return;
+  for(const m of msgs){
+    if(m.bundle){onPacket(m);continue;}
+    const a=m.address,g=m.args;
+    if(a==="/enq"){$("name").textContent=g[0]??"–";logLine("","sketch: "+g[0]);}
+    else if(a==="/enq/joy")setCap("jok",g[0]+" axes","var(--live)");
+    else if(a==="/enq/btn")setCap("bok",g[0]+(g[0]===5?" (base + screen)":" (screen only)"),g[0]===5?"var(--live)":"var(--warn)");
+    else if(a==="/enq/bat")setCap("batok","2 cells","var(--live)");
+    else if(a==="/enq/display")setCap("dok",g[0]+"×"+g[1],"var(--live)");
+    else if(a.startsWith("/enq/"))logLine("","has "+a.slice(5)+(g.length?" "+g.join(" "):""));
+    // Free text from the sketch: which internal bus answered (and so which
+    // module this is), and which STM32 firmware. Shown as sent, never parsed
+    // -- the sketch already decided what to say, including the warning when
+    // the firmware is not the v2 the button labels below assume.
+    else if(a==="/diag"){$("diag").textContent=g.join(" · ");logLine("","diag: "+g.join(" "));}
+    else if(a==="/rate")logLine("","rate "+g[0]+" ms");
+    else if(a==="/state"){
+      const s=g[0];
+      if(lastSeq!==null&&s>lastSeq+1)dropped+=s-lastSeq-1;
+      lastSeq=s;
+      $("seq").textContent=s;$("drop").textContent=dropped;
+      frames++;if(!t0)t0=performance.now();
+      const secs=(performance.now()-t0)/1000;
+      if(secs>0.5)$("hz").textContent=(frames/secs).toFixed(1)+" Hz";
+    }
+    else if(a==="/joy"){
+      const [lx,ly,rx,ry]=g;
+      drawStick("stickL",lx,ly);drawStick("stickR",rx,ry);
+      $("valL").textContent=lx+","+ly;$("valR").textContent=rx+","+ry;
+    }
+    else if(a==="/btn"){
+      // Five ints when the base answered: L shoulder, R shoulder, left click,
+      // right click, then the front button -- the order M5's NEW_ATOM_JOY
+      // build uses; the sketch header says to verify it on the bench before
+      // trusting it. One int, the front button alone, when the base is absent.
+      const front=g[g.length-1], base=g.length>=5;
+      $("btnL").classList.toggle("hot",base&&!!g[0]);
+      $("btnR").classList.toggle("hot",base&&!!g[1]);
+      $("boxL").classList.toggle("click",base&&!!g[2]);
+      $("boxR").classList.toggle("click",base&&!!g[3]);
+      $("front").classList.toggle("hot",!!front);
+    }
+    else if(a==="/bat"){$("b1").textContent=g[0];$("b2").textContent=g[1]??"–";}
   }
 }
 
@@ -272,7 +307,7 @@ async function send(a,args){
 async function readLoop(){
   const slip=new SlipDecoder(p=>{
     // contain render throws so one bad frame cannot stop reception
-    try{ onFrame(p); }catch(e){ logLine("!","render: "+e); }
+    try{ onPacket(decodePacket(p)); }catch(e){ logLine("!","render: "+e); }
   });
   while(keep){
     try{
@@ -294,8 +329,8 @@ $("connect").onclick=async()=>{
     $("status").textContent="connected";
     $("connect").disabled=true;$("disconnect").disabled=false;
     frames=0;t0=0;lastSeq=null;dropped=0;
-    // ask for /hello: the boot one is lost to USB re-enumeration
-    setTimeout(()=>send("/hello",[]),150);
+    // ask for /enq: the boot one is lost to USB re-enumeration
+    setTimeout(()=>send("/enq",[]),150);
   }catch(e){logLine("!",String(e));}
 };
 $("disconnect").onclick=async()=>{
@@ -319,7 +354,7 @@ const pushGlass=()=>{
   const rows=$("glass").innerText.replace(/ /g," ").split("\n").slice(0,5);
   lcdLines=rows.concat(["","","","",""]).slice(0,5);
   drawLCD();
-  send("/joy/screen",lcdLines.map(r=>r.slice(0,21)));
+  send("/display/text",lcdLines.map(r=>r.slice(0,21)));
 };
 $("glass").addEventListener("input",()=>{clearTimeout(glassT);glassT=setTimeout(pushGlass,260);});
 $("glass").innerText="AtomJoyOscuino\nOSC over USB";

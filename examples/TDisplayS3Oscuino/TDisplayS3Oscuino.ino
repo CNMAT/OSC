@@ -37,7 +37,8 @@
 // sketch can even hold GPIO21 low ACROSS reset, so absence of touch is never
 // trusted until the reset has been tried. Boards also ship with a CST328 at
 // 0x1A speaking a different protocol; this sketch probes both addresses and
-// reports what it found in /hello rather than assuming.
+// announces /enq/touch in the /enq bundle only if one of them answered,
+// naming the part in a /diag line, rather than assuming.
 //
 // The CST816 is polled (the INT line on GPIO16 is wired but polling keeps
 // loop() single-pathed); polling requires disabling its auto-sleep by writing
@@ -52,26 +53,45 @@
 // finger the map is right, and that check takes one second instead of an
 // argument with documentation.
 //
-// Inbound
-//   /disp/text ,s...        up to 5 lines of text
-//   /disp/big ,s            one large centred line
-//   /disp/fill ,iii         r g b background fill
-//   /disp/rect ,iiiiiii     x y w h r g b (filled)
-//   /disp/circle ,iiiiii    x y radius r g b (filled)
-//   /disp/bl ,i             backlight 0..255
-//   /disp/clear
+// Inbound (the ADDRESSES.md vocabulary)
+//   /display/text ,s...     up to 5 lines of text
+//   /display/big ,s         one large centred line
+//   /display/fill ,iii      r g b background fill
+//   /display/rect ,iiiiiii  x y w h r g b (filled)
+//   /display/circle ,iiiiii x y radius r g b (filled)
+//   /display/bl ,i          backlight 0..255
+//   /display/clear
 //   /touch/map ,iii         swapXY mirrorX mirrorY (0|1 each)
-//   /rate ,i                touch/report pacing ms, 10..500
-//   /hello                  ask again -- the boot one is lost to enumeration
+//   /rate ,i                touch stream pacing ms, 10..500; 0 stops; echoed
+//   /enq                  ask again -- the boot one is lost to enumeration
 // Outbound
-//   /hello ,sTTiiii  name, dispOK, touchOK, width, height, touchChipID
-//                    -- the flags are OSC booleans (tag T or F, no payload);
-//                    touchChipID is the CST816 0xA7 register (0xB4=CST816S,
-//                    0xB5=CST816T, 0xB7=CST820), 0x1A if a CST328 answered,
-//                    0 if nothing did
-//   /touch ,iiiii    seq, down(0|1), x, y, gesture -- x/y already through the
-//                    landscape map; a state change always sends, moves are
-//                    paced by /rate
+//   /enq bundle   /enq ,s "TDisplayS3Oscuino", then one /enq per thing
+//                   that is actually here: /enq/display ,ii 320 170 if the
+//                   panel initialised, /enq/touch ,ii 320 170 if a touch
+//                   controller answered the probe, /enq/diag always. What
+//                   failed to initialise is simply not listed.
+//   /diag ,s        free text sent right after the hello: which touch part
+//                   answered, from the CST816 0xA7 id (0xB4=CST816S,
+//                   0xB5=CST816T, 0xB7=CST820), "CST328" if that part
+//                   answered at 0x1A, "absent" if nothing did
+//   touch stream    a bundle of /state ,ii seq millis plus /touch ,iii x y
+//                   gesture (x/y already through the landscape map) while a
+//                   finger is down. A press or release always sends; moves
+//                   are paced by /rate. The release bundle carries /state
+//                   alone: no /touch in it means no finger.
+//
+// STATUS: run on the board 2026-08-18 (commit 355e249): after flash the
+// old-shape hello answered with display and touch present, 320x170, touch
+// chip id 0xB5 (CST816T), and the board's dot tracked the finger under the
+// swap+mirror-Y default with no page attached. Addresses renamed onto
+// ADDRESSES.md on 2026-09-03 (/disp/text -> /display/text, /disp/big ->
+// /display/big, /disp/fill -> /display/fill, /disp/rect -> /display/rect,
+// /disp/circle -> /display/circle, /disp/bl -> /display/bl, /disp/clear ->
+// /display/clear; the /enq ,sTTiiii flag list -> a /enq + /enq/display +
+// /enq/touch + /enq/diag bundle with the chip id moved into /diag; the
+// /touch ,iiiii seq/down/x/y/gesture message -> a /state + /touch bundle;
+// /rate now echoed, and 0 stops); that build is compile-checked and has not
+// been re-run on the board.
 #include <M5GFX.h>
 #include <lgfx/v1/panel/Panel_ST7789.hpp>   // M5GFX.h includes no panel header
 #include <Wire.h>
@@ -281,18 +301,45 @@ static void routeMap(OSCMessage &m) {
     mapSwap = m.getInt(0) != 0; mapMirX = m.getInt(1) != 0; mapMirY = m.getInt(2) != 0;
   }
 }
-static void routeRate(OSCMessage &m) {
-  if (m.size() >= 1 && m.isInt(0)) reportMs = constrain(m.getInt(0), 10, 500);
+// Everything outbound goes through one file-scope bundle, emptied after each
+// send, so the stream does not construct and free a bundle per report.
+static OSCBundle outB;
+
+static void sendOut() {
+  SLIPSerial.beginPacket(); outB.send(SLIPSerial); SLIPSerial.endPacket();
+  outB.empty();
 }
 
-static void sendHello() {
-  OSCMessage h("/hello");
-  h.add("TDisplayS3Oscuino").add(dispOK).add(touchOK)
-   .add((intOSC_t) lcd.width()).add((intOSC_t) lcd.height())
-   .add((intOSC_t) touchChip);
-  SLIPSerial.beginPacket(); h.send(SLIPSerial); SLIPSerial.endPacket();
+static void routeRate(OSCMessage &m) {
+  if (m.size() < 1 || !m.isInt(0)) return;
+  const int32_t v = m.getInt(0);
+  reportMs = v <= 0 ? 0 : (uint32_t) constrain(v, 10, 500);   // 0 stops the stream
+  outB.add("/rate").add((intOSC_t) reportMs);                  // echoed, per the contract
+  sendOut();
 }
-static void routeHello(OSCMessage &) { sendHello(); }
+
+// The capability bundle of ADDRESSES.md: the name, then one /enq per thing
+// that is actually here. What failed to initialise is simply not listed.
+static void sendEnq() {
+  outB.add("/enq").add("TDisplayS3Oscuino");
+  if (dispOK)  outB.add("/enq/display").add((intOSC_t) lcd.width()).add((intOSC_t) lcd.height());
+  if (touchOK) outB.add("/enq/touch").add((intOSC_t) lcd.width()).add((intOSC_t) lcd.height());
+  outB.add("/enq/diag");
+  sendOut();
+  // Which touch part answered, as free text: the chip id has no slot in
+  // /enq/touch, and a page should not have to parse it.
+  char text[40];
+  if (!touchOK)        snprintf(text, sizeof text, "touch absent");
+  else if (touchIs328) snprintf(text, sizeof text, "touch CST328 at 0x1A");
+  else                 snprintf(text, sizeof text, "touch %s id 0x%02X",
+                                touchChip == 0xB4 ? "CST816S" : touchChip == 0xB5 ? "CST816T" :
+                                touchChip == 0xB6 ? "CST816D" : touchChip == 0xB7 ? "CST820"  :
+                                touchChip == 0x20 ? "CST716"  : "CST816-family",
+                                (unsigned) touchChip);
+  outB.add("/diag").add((const char *) text);
+  sendOut();
+}
+static void routeEnq(OSCMessage &) { sendEnq(); }
 
 void setup() {
   pinMode(PIN_POWER, OUTPUT);
@@ -308,7 +355,7 @@ void setup() {
   }
 
   touchBegin();
-  sendHello();                             // usually lost; the page asks again
+  sendEnq();                             // usually lost; the page asks again
 }
 
 // Non-blocking receive, the extras/webserial/template.ino pattern:
@@ -330,20 +377,19 @@ static bool pollOSC() {
 void loop() {
   static uint32_t lastSend = 0;
   static bool     wasDown = false;
-  static int16_t  lastX = -1, lastY = -1;
 
   if (pollOSC()) {
     if (!inMsg.hasError()) {
-      inMsg.dispatch("/disp/text",   routeText);
-      inMsg.dispatch("/disp/big",    routeBig);
-      inMsg.dispatch("/disp/fill",   routeFill);
-      inMsg.dispatch("/disp/rect",   routeRect);
-      inMsg.dispatch("/disp/circle", routeCircle);
-      inMsg.dispatch("/disp/bl",     routeBl);
-      inMsg.dispatch("/disp/clear",  routeClear);
-      inMsg.dispatch("/touch/map",   routeMap);
-      inMsg.dispatch("/rate",        routeRate);
-      inMsg.dispatch("/hello",       routeHello);
+      inMsg.dispatch("/display/text",   routeText);
+      inMsg.dispatch("/display/big",    routeBig);
+      inMsg.dispatch("/display/fill",   routeFill);
+      inMsg.dispatch("/display/rect",   routeRect);
+      inMsg.dispatch("/display/circle", routeCircle);
+      inMsg.dispatch("/display/bl",     routeBl);
+      inMsg.dispatch("/display/clear",  routeClear);
+      inMsg.dispatch("/touch/map",      routeMap);
+      inMsg.dispatch("/rate",           routeRate);
+      inMsg.dispatch("/enq",          routeEnq);
     }
     inMsg.empty();
   }
@@ -354,20 +400,19 @@ void loop() {
 
   if (down) mapTouch(x, y);
 
-  // A press or release always sends; movement is paced. The dot on the LCD is
-  // the map check: if it tracks your finger the transform is right.
+  // A press or release always sends; movement is paced; /rate 0 stops it. The
+  // dot on the LCD is the map check: if it tracks your finger the transform
+  // is right.
   const bool edge = (down != wasDown);
-  if (edge || (down && now - lastSend >= reportMs)) {
+  if (reportMs && (edge || (down && now - lastSend >= reportMs))) {
     if (down && dispOK) lcd.fillCircle(x, y, 3, TFT_GREEN);
-    OSCMessage m("/touch");
-    m.add((intOSC_t) seq++)
-     .add((intOSC_t)(down ? 1 : 0))
-     .add((intOSC_t)(down ? x : lastX))
-     .add((intOSC_t)(down ? y : lastY))
-     .add((intOSC_t) g);
-    SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
+    // The ADDRESSES.md stream: /state seq millis, then /touch x y gesture
+    // while a finger is down. A release sends /state alone -- no /touch in
+    // the bundle means no finger.
+    outB.add("/state").add((intOSC_t) seq++).add((intOSC_t) now);
+    if (down) outB.add("/touch").add((intOSC_t) x).add((intOSC_t) y).add((intOSC_t) g);
+    sendOut();
     lastSend = now;
   }
-  if (down) { lastX = x; lastY = y; }
   wasDown = down;
 }

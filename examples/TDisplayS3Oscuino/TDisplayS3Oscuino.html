@@ -51,11 +51,11 @@
 <h1>T-Display-S3 — draw by OSC, touch back</h1>
 <p class="intro">
   The board's 320×170 screen, mirrored below at 2×. Draw on the mirror and the
-  strokes go to the real panel as <code>/disp</code> messages; touch the real
-  glass and <code>/touch</code> events light up here in green. The dot the
-  board draws under your finger is the map check — if it tracks, the landscape
-  transform is right; if not, flip the toggles. Web Serial needs
-  <code>http://localhost</code>, Chrome or Edge.
+  strokes go to the real panel as <code>/display</code> messages; touch the
+  real glass and the board's <code>/state</code> + <code>/touch</code> bundles
+  light up here in green. The dot the board draws under your finger is the map
+  check — if it tracks, the landscape transform is right; if not, flip the
+  toggles. Web Serial needs <code>http://localhost</code>, Chrome or Edge.
 </p>
 
 <div class="bar">
@@ -88,7 +88,7 @@
     <div class="row"><label>touch rate</label>
       <input type="range" id="rate" min="10" max="200" value="30"><span id="ratev" class="v">30</span> ms</div>
     <div class="row" style="align-items:flex-start"><label>text</label>
-      <textarea id="tlines" spellcheck="false" title="up to five lines, sent as /disp/text">TDisplayS3Oscuino
+      <textarea id="tlines" spellcheck="false" title="up to five lines, sent as /display/text">TDisplayS3Oscuino
 OSC over USB</textarea></div>
     <div class="row"><label>big</label>
       <input type="text" id="big" maxlength="12" placeholder="one big centred line"></div>
@@ -98,6 +98,8 @@ OSC over USB</textarea></div>
     </tr><tr>
       <td class="k">touch</td><td class="v" id="tok">–</td>
       <td class="k">size</td><td class="v" id="size">–</td>
+    </tr><tr>
+      <td class="k">diag</td><td class="v" id="diag" colspan="3">–</td>
     </tr></table>
   </div>
 </div>
@@ -116,11 +118,24 @@ class Reader{
   float32(){const v=this.dv.getFloat32(this.pos);this.pos+=4;return v;}
   float64(){const v=this.dv.getFloat64(this.pos);this.pos+=8;return v;}
   int64(){const v=this.dv.getBigInt64(this.pos);this.pos+=8;return v;}
+  raw(n){const v=this.b.subarray(this.pos,this.pos+n);this.pos+=n;return v;}
   string(){let e=this.pos;while(e<this.b.length&&this.b[e]!==0)e++;
     const s=dec.decode(this.b.subarray(this.pos,e));this.pos=(e+4)&~3;return s;}
   blob(){const n=this.int32();
     if(n<0||n>this.left){this.pos=this.b.length;return new Uint8Array(0);}
     const v=this.b.subarray(this.pos,this.pos+n);this.pos+=(n+3)&~3;return v;}
+}
+// A bundle is "#bundle", an 8-byte timetag, then size-prefixed elements. The
+// board speaks bundles for its /enq answer and for the touch stream
+// (ADDRESSES.md), so every packet decodes to a flat list of messages.
+function decodePacket(bytes){
+  if(bytes.length>=16&&bytes[0]===0x23){
+    const r=new Reader(bytes),msgs=[];r.string();r.raw(8);
+    while(r.left>=4){const n=r.int32();if(n<=0||n>r.left)break;
+      for(const m of decodePacket(r.raw(n)))msgs.push(m);}
+    return msgs;
+  }
+  return [decodeMessage(bytes)];
 }
 // The complete tag set: an unknown tag has no known width, so the decoder
 // must stop rather than misparse everything after it.
@@ -174,13 +189,13 @@ function padAwayZLP(b){if(b.length%64!==0)return b;
 /* ---------------------------------------------------------------- render */
 const SW=320,SH=170,SCALE=2;
 const cv=$("screen"),ctx=cv.getContext("2d");
-let frames=0,t0=0,lastSeq=null,dropped=0;
+let frames=0,t0=0,lastSeq=null,dropped=0,lastX=null,lastY=null;
 const logLine=(t,s)=>{const e=$("log");
   e.textContent=(t?t+" ":"")+s+"\n"+e.textContent;
   if(e.textContent.length>900)e.textContent=e.textContent.slice(0,900);};
 
 function mirrorText(){
-  // the local model of what /disp/text put on the panel
+  // the local model of what /display/text put on the panel
   ctx.fillStyle="#000";ctx.fillRect(0,0,cv.width,cv.height);
   ctx.fillStyle="#fff";ctx.font="26px ui-monospace,monospace";
   const rows=$("tlines").value.split("\n").slice(0,5);
@@ -191,29 +206,48 @@ function markTouch(x,y,down){
   ctx.fillStyle=down?"rgba(57,211,83,.9)":"rgba(57,211,83,.35)";ctx.fill();
 }
 
-function onFrame(m){
-  if(m.address==="/hello"){
-    const [name,disp,touch,w,h,chip]=m.args;
-    $("name").textContent=name??"–";
-    $("dok").textContent=disp?"OK":"absent";
-    $("dok").style.color=disp?"var(--live)":"var(--warn)";
-    const chips={0xB4:"CST816S",0xB5:"CST816T",0xB6:"CST816D",0xB7:"CST820",0x1A:"CST328",0x20:"CST716"};
-    $("tok").textContent=touch?(chips[chip]||("id 0x"+(chip??0).toString(16))):"absent";
-    $("tok").style.color=touch?"var(--live)":"var(--warn)";
-    $("size").textContent=w+"×"+h;
-    logLine("","board: "+m.args.join(" "));
-    return;
+// One packet, already flattened to its messages. The enq bundle is the
+// name followed by one /enq per capability the board actually has; the
+// touch stream is /state plus, while a finger is down, /touch.
+function onPacket(msgs){
+  let state=null,touch=null;
+  for(const m of msgs){
+    const a=m.address;
+    if(a==="/enq"){
+      // everything starts absent; the /enq lines that follow turn on what is there
+      $("name").textContent=m.args[0]??"–";
+      for(const id of ["dok","tok"]){$(id).textContent="absent";$(id).style.color="var(--warn)";}
+      $("size").textContent="–";
+      logLine("","board: "+m.args.join(" "));
+    }else if(a==="/enq/display"){
+      const [w,h]=m.args;
+      $("dok").textContent="OK";$("dok").style.color="var(--live)";
+      $("size").textContent=w+"×"+h;logLine("","display "+w+"×"+h);
+    }else if(a==="/enq/touch"){
+      const [w,h]=m.args;
+      $("tok").textContent="OK "+w+"×"+h;$("tok").style.color="var(--live)";logLine("","touch "+w+"×"+h);
+    }else if(a.startsWith("/enq/")){
+      logLine("","has "+a.slice(5)+" "+m.args.join(" "));
+    }else if(a==="/diag"){                 // free text, shown as is, never parsed
+      $("diag").textContent=m.args.join(" ");logLine("","diag: "+m.args.join(" "));
+    }else if(a==="/rate"){                 // the board echoes the period it will use
+      $("ratev").textContent=m.args[0];
+    }else if(a==="/state")state=m.args;
+    else if(a==="/touch")touch=m.args;
   }
-  if(m.address!=="/touch")return;
-  const [s,down,x,y]=m.args;
+  if(!state)return;
+  // The touch stream: /state counts and paces; /touch rides in the same bundle
+  // while a finger is down, and a bundle without one is the release.
+  const [s]=state;
   frames++;
   if(lastSeq!==null){const gap=(s-lastSeq)|0;if(gap>1)dropped+=gap-1;}
   lastSeq=s;
   $("seq").textContent=s;$("drop").textContent=dropped;
-  $("tx").textContent=x;$("ty").textContent=y;
+  const down=!!touch;
+  if(down){[lastX,lastY]=touch;$("tx").textContent=lastX;$("ty").textContent=lastY;}
   $("tdown").textContent=down?"DOWN":"up";
   $("tdown").style.color=down?"var(--live)":"var(--dim)";
-  markTouch(x,y,!!down);
+  if(lastX!==null)markTouch(lastX,lastY,down);
   const now=performance.now();
   if(!t0)t0=now;
   if(now-t0>=1000){$("hz").textContent=(frames*1000/(now-t0)).toFixed(0)+" ev/s";frames=0;t0=now;}
@@ -231,9 +265,9 @@ async function send(a,args){
 async function readLoop(){
   const slip=new SlipDecoder(p=>{
     let m;
-    try{ m=decodeMessage(p); }
+    try{ m=decodePacket(p); }
     catch(e){ logLine("!","decode: "+e); return; }
-    try{ onFrame(m); }
+    try{ onPacket(m); }
     catch(e){ logLine("!","render: "+e); }
   });
   reader=port.readable.getReader();
@@ -251,8 +285,8 @@ $("connect").onclick=async()=>{
     $("connect").disabled=true;$("disconnect").disabled=false;
     $("dot").classList.add("on");$("status").textContent="connected";
     logLine("","connected");
-    // ask for /hello: the boot one is lost to USB re-enumeration
-    setTimeout(()=>send("/hello",[]),150);
+    // ask for /enq: the boot one is lost to USB re-enumeration
+    setTimeout(()=>send("/enq",[]),150);
     setTimeout(pushMap,300);
   }catch(e){ logLine("!",String(e)); }
 };
@@ -286,7 +320,7 @@ function stroke(ev){
   if(now-lastDraw<25)return;              // ~40/s; the board repaints fine
   lastDraw=now;
   const [x,y]=canvasXY(ev),rad=+$("brush").value,[r,g,b]=hex($("color").value);
-  send("/disp/circle",[x,y,rad,r,g,b]);
+  send("/display/circle",[x,y,rad,r,g,b]);
   ctx.beginPath();ctx.arc(x*SCALE,y*SCALE,rad*SCALE,0,7);
   ctx.fillStyle=$("color").value;ctx.fill();
 }
@@ -294,12 +328,12 @@ cv.addEventListener("pointerdown",ev=>{drawing=true;cv.setPointerCapture(ev.poin
 cv.addEventListener("pointermove",ev=>{if(drawing)stroke(ev);});
 cv.addEventListener("pointerup",()=>{drawing=false;});
 
-$("clear").onclick=()=>{send("/disp/clear",[]);ctx.fillStyle="#000";ctx.fillRect(0,0,cv.width,cv.height);};
+$("clear").onclick=()=>{send("/display/clear",[]);ctx.fillStyle="#000";ctx.fillRect(0,0,cv.width,cv.height);};
 $("fillbtn").onclick=()=>{const [r,g,b]=hex($("color").value);
-  send("/disp/fill",[r,g,b]);
+  send("/display/fill",[r,g,b]);
   ctx.fillStyle=$("color").value;ctx.fillRect(0,0,cv.width,cv.height);};
 
-$("bl").oninput=()=>{$("blv").textContent=$("bl").value;send("/disp/bl",[+$("bl").value]);};
+$("bl").oninput=()=>{$("blv").textContent=$("bl").value;send("/display/bl",[+$("bl").value]);};
 $("rate").oninput=()=>{$("ratev").textContent=$("rate").value;send("/rate",[+$("rate").value]);};
 
 function pushMap(){send("/touch/map",[$("swap").checked?1:0,$("mirx").checked?1:0,$("miry").checked?1:0]);}
@@ -307,9 +341,9 @@ $("swap").onchange=pushMap;$("mirx").onchange=pushMap;$("miry").onchange=pushMap
 
 let textT=null;
 $("tlines").addEventListener("input",()=>{clearTimeout(textT);
-  textT=setTimeout(()=>{send("/disp/text",$("tlines").value.split("\n").slice(0,5));mirrorText();},300);});
+  textT=setTimeout(()=>{send("/display/text",$("tlines").value.split("\n").slice(0,5));mirrorText();},300);});
 $("big").addEventListener("input",()=>{clearTimeout(textT);
-  textT=setTimeout(()=>{send("/disp/big",[$("big").value]);},300);});
+  textT=setTimeout(()=>{send("/display/big",[$("big").value]);},300);});
 
 mirrorText();
 </script>

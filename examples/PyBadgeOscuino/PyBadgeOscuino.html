@@ -98,10 +98,18 @@
 <h1>PyBadge M4 Express</h1>
 <p class="lede">
   Eight buttons, the light sensor, the battery divider and the LIS3DH arrive as
-  a single <code>/pybadge</code> message, sampled in one pass so every reading
-  belongs to the same instant. The buttons come back as one bitmask, because on
-  this board they are read through a 74HC165 shift register. Going the other way,
-  the page drives the 160&times;128 screen, the DAC speaker and all five NeoPixels.
+  one bundle every <code>/rate</code> ms, 50 by default &mdash;
+  <code>/state</code>, <code>/btn</code>, <code>/light</code>, <code>/bat</code>
+  and <code>/imu</code> &mdash; sampled in one pass so every reading belongs to
+  the same instant. The buttons come back as eight ints, one per button, read on
+  the badge through a 74HC165 shift register. Ask any of those addresses with no
+  arguments and it answers once, on the same address, without waiting for the
+  stream. Going the other way, the page drives the 160&times;128 screen
+  (<code>/display</code>), the DAC speaker (<code>/buzz</code>), all five
+  NeoPixels (<code>/rgb</code>) and the red LED (<code>/s/l</code>); every write
+  is echoed back, so the readouts here follow the board rather than the click.
+  On connect it asks <code>/enq</code>; the accelerometer and microphone panels
+  follow whether <code>/enq/imu</code> and <code>/enq/mic</code> are in the answer.
 </p>
 
 <div class="panel">
@@ -196,35 +204,52 @@
         <button data-note="330">E</button><button data-note="392">G</button>
         <button data-note="523">C↑</button>
         <button id="arp">arpeggio</button>
+        <!-- filled from the /buzz echo: the badge fills in the defaults and
+             clamps the range, so this is the note it really played -->
+        <span id="buzzback" style="color:var(--dim);font-size:12px;font-family:var(--mono)">–</span>
       </div>
       <div class="row">
         <label>all pixels</label>
         <input type="color" id="pxall" value="#ff8800">
         <button id="pxoff">off</button>
         <button id="rainbow">rainbow</button>
+        <label for="bright">bright</label>
+        <input type="range" id="bright" min="0" max="255" value="40">
         <button id="led">red LED</button>
+      </div>
+      <div class="row">
+        <!-- One /rate for the whole board: it is the period of the /state
+             bundle AND of /mic, and 0 stops both. "read once" asks the four
+             reading addresses with no arguments, which is how you get a
+             sample while the stream is stopped. -->
+        <label for="rate">stream ms</label>
+        <input type="number" id="rate" value="50" min="0" max="5000" step="10">
+        <button id="setrate">set rate</button>
+        <button id="stop">stop stream</button>
+        <button id="readonce">read once</button>
       </div>
     </div>
 
     <div class="panel">
       <canvas id="tilt" width="320" height="120"></canvas>
-      <div style="color:var(--dim);font-size:13px;margin-top:6px">tilt — accelerometer x/y</div>
+      <div style="color:var(--dim);font-size:13px;margin-top:6px">tilt — <code>/imu</code> x/y, one g reaches the edge</div>
     </div>
   </div>
 
   <div>
     <div class="panel">
       <table>
-        <tr><td class="k">buttons</td><td class="v" id="btnbits">–</td></tr>
-        <tr><td class="k">light</td><td class="v" id="light">–</td></tr>
+        <tr><td class="k">buttons down (<code>/btn</code>)</td><td class="v" id="btnlist">–</td></tr>
+        <tr><td class="k">light (<code>/light</code>)</td><td class="v" id="light">–</td></tr>
         <tr><td colspan="2"><div class="bar"><i id="lightb"></i></div></td></tr>
-        <tr><td class="k">battery</td><td class="v" id="batt">–</td></tr>
+        <tr><td class="k">battery (<code>/bat</code>)</td><td class="v" id="batt">–</td></tr>
         <tr><td colspan="2"><div class="bar"><i id="battb"></i></div></td></tr>
-        <tr><td class="k">accel x</td><td class="v" id="ax">–</td></tr>
-        <tr><td class="k">accel y</td><td class="v" id="ay">–</td></tr>
-        <tr><td class="k">accel z</td><td class="v" id="az">–</td></tr>
-        <tr><td class="k">accelerometer</td><td class="v" id="ok">–</td></tr>
-        <tr><td class="k">rate</td><td class="v" id="hz">–</td></tr>
+        <tr><td class="k">accel x, g (<code>/imu</code>)</td><td class="v" id="ax">–</td></tr>
+        <tr><td class="k">accel y, g</td><td class="v" id="ay">–</td></tr>
+        <tr><td class="k">accel z, g</td><td class="v" id="az">–</td></tr>
+        <tr><td class="k">accelerometer (<code>/enq/imu</code>)</td><td class="v" id="ok">–</td></tr>
+        <tr><td class="k">stream (<code>/state</code>)</td><td class="v" id="hz">–</td></tr>
+        <tr><td class="k">period echoed (<code>/rate</code>)</td><td class="v" id="rateback">–</td></tr>
       </table>
     </div>
     <div class="panel" id="micpanel" style="display:none">
@@ -251,12 +276,22 @@
         <tr><td colspan="2"><div class="bar"><i id="micb"></i></div></td></tr>
         <tr><td class="k">peak (1 s hold)</td><td class="v" id="micpeak">–</td></tr>
         <tr><td class="k">sample rate</td><td class="v" id="micrate">–</td></tr>
+        <tr><td class="k">gain (<code>/mic/gain</code>)</td><td class="v" id="micgainv">–</td></tr>
       </table>
+      <div class="row" style="margin-top:8px">
+        <label for="micgain">gain</label>
+        <input type="number" id="micgain" value="8" min="1" max="64">
+        <button id="setgain">set</button>
+      </div>
       <div style="color:var(--dim);font-size:12px;margin-top:8px">
-        EdgeBadge PDM microphone. <code>rms</code> and <code>peak</code> arrive
-        at full scale, 0–32767, after the sketch's <code>MIC_GAIN</code> — so
-        they are gain-dependent, and CLIP lights when a transient pins 32767.
-        Measured on this badge: a quiet room floors at about −64 dBFS.
+        EdgeBadge PDM microphone, on the same <code>/rate</code> tick as the
+        stream bundle. <code>rms</code> and <code>peak</code> arrive at full
+        scale, 0–32767, after the sketch's <code>MIC_GAIN</code> — so they are
+        gain-dependent, and CLIP lights when a transient pins 32767. Measured on
+        this badge at <code>MIC_GAIN</code> 16, corrected for the rms scaling
+        bug those captures predate: a quiet room floors near −34 dBFS, rising
+        about 26.6 dB to the loudest frame. At the shipped gain of 8 the floor
+        should sit roughly 6 dB lower again — arithmetic, not a fresh capture.
       </div>
     </div>
     <div class="panel" style="padding:10px"><div id="log">idle</div></div>
@@ -319,6 +354,24 @@ function decodeMessage(bytes){
   return {address,args};
 }
 
+// A bundle is "#bundle", an 8-byte timetag, then size-prefixed messages. The
+// badge says everything as one -- the hello and every stream frame -- so the
+// members are decoded here and handed on one at a time.
+function decodePacket(bytes){
+  if(bytes.length>=16 && bytes[0]===0x23){                 // "#bundle"
+    const dv=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+    const out=[]; let pos=16;
+    while(pos+4<=bytes.length){
+      const size=dv.getInt32(pos); pos+=4;
+      if(size<=0 || pos+size>bytes.length) break;
+      out.push(decodeMessage(bytes.subarray(pos,pos+size)));
+      pos+=size;
+    }
+    return {bundle:true, packets:out};
+  }
+  return decodeMessage(bytes);
+}
+
 const pad4 = b => { const n=(b.length+3)&~3; const o=new Uint8Array(n); o.set(b); return o; };
 
 function encodeMessage(address, args){
@@ -378,6 +431,9 @@ async function connect(){
   pipeDone = readLoop();
   setConnected(true);
   logLine("", "connected");
+  // The boot hello is lost to USB enumeration, so ask for it: the answer says
+  // which of the optional panels this particular badge has earned.
+  await send("/enq",[]);
 }
 
 async function readLoop(){
@@ -416,10 +472,11 @@ const hex2rgb = h => [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseI
 /* ============================================================
    4. Inbound
    ============================================================ */
-// Bit positions come from Adafruit's own board definition: left 0x01, up 0x02,
-// down 0x04, right 0x08, select 0x10, start 0x20, A 0x40, B 0x80.
-const BITS = { s_left:0x01, s_up:0x02, s_down:0x04, s_right:0x08,
-               s_select:0x10, s_start:0x20, s_a:0x40, s_b:0x80 };
+// /btn carries eight ints, 1 = pressed, in the 74HC165's bit order, which
+// Adafruit's board definition fixes as left, up, down, right, select, start,
+// A, B. Argument i of the message lights BUTTONS[i] on the drawing.
+const BUTTONS      = ["s_left","s_up","s_down","s_right","s_select","s_start","s_a","s_b"];
+const BUTTON_NAMES = ["left","up","down","right","select","start","A","B"];
 
 const tiltCtx = $("tilt").getContext("2d");
 let tiltX=0, tiltY=0, frames=0, t0=0;
@@ -430,9 +487,9 @@ function drawTilt(){
   tiltCtx.strokeStyle="#2b3242"; tiltCtx.strokeRect(.5,.5,w-1,h-1);
   tiltCtx.beginPath(); tiltCtx.moveTo(w/2,0); tiltCtx.lineTo(w/2,h);
   tiltCtx.moveTo(0,h/2); tiltCtx.lineTo(w,h/2); tiltCtx.stroke();
-  // LIS3DH at +-4g reads roughly +-8192 per g
-  const x=w/2+Math.max(-1,Math.min(1,tiltX/8192))*(w/2-12);
-  const y=h/2+Math.max(-1,Math.min(1,tiltY/8192))*(h/2-12);
+  // /imu arrives in g, so one g of tilt puts the dot at the edge
+  const x=w/2+Math.max(-1,Math.min(1,tiltX))*(w/2-12);
+  const y=h/2+Math.max(-1,Math.min(1,tiltY))*(h/2-12);
   tiltCtx.fillStyle="#fbbf24";
   tiltCtx.beginPath(); tiltCtx.arc(x,y,9,0,Math.PI*2); tiltCtx.fill();
 }
@@ -442,12 +499,17 @@ drawTilt();
 // and each one has to be reinterpreted: 200 really means -56.
 const scopeCtx = () => $("scope").getContext("2d");
 
-// Level history. 20 frames/s from the board, 15 s of it.
+// Level history: one point per /mic frame, 300 of them. /mic rides the board's
+// /rate, so that is 15 s at the default 50 ms and proportionally longer if the
+// rate is slowed.
 const MIC_HIST = 300;
 const micHist = [];
 let micPeakHold = 0, micPeakHoldAt = 0;
 
-const DB_FLOOR = -90;                       // this mic idles near -64 at gain 8
+// The sketch measured a quiet room at about -90 dBFS with the driver's default
+// unity gain -- an rms of 1 count out of 32768 -- so that is the bottom of the
+// scale. At the shipped MIC_GAIN of 8 the floor sits far above it.
+const DB_FLOOR = -90;
 const dbfs  = v => v > 0 ? 20*Math.log10(v/32768) : DB_FLOOR;
 const dbPct = d => Math.max(0, Math.min(1, (d - DB_FLOOR) / -DB_FLOOR));
 
@@ -490,40 +552,92 @@ function drawScope(bytes){
   ctx.stroke();
 }
 
-function onFrame(payload){
-  let m; try{ m=decodeMessage(payload); }catch{ return; }
+// The enq bundle: /enq <name>, then one /enq/<capability> [shape] per
+// capability the badge proved it has. Two are optional on this board and they
+// decide the page: /enq/imu means the LIS3DH answered its probe, /enq/mic
+// means the EdgeBadge's PDM microphone passed its signal probe.
+function onHello(name, caps){
+  const list = Object.entries(caps).map(([k,a]) => a.length ? k+" "+a.join(" ") : k);
+  logLine("","board: "+name+" — "+list.join(", "));
+  $("ok").textContent = caps.imu ? "ok" : "not found";
+  if(!caps.imu) logLine("","no accelerometer announced: /imu will not arrive");
+  $("micpanel").style.display = caps.mic ? "" : "none";
+  if(!caps.mic) logLine("","no microphone on this badge");
+  // /mic/gain with no argument is a read, so this fills the gain row in from
+  // the board rather than assuming the sketch's compiled-in default.
+  if(caps.mic) send("/mic/gain",[]);
+  // /rgb announces its count; the strip's brightness has no read, so the
+  // slider stays at the sketch's boot value until something moves it.
+  if(caps.rgb) logLine("", caps.rgb[0]+" NeoPixels announced");
+}
 
-  if(m.address==="/pybadge"){
-    const [bits,light,batt,ax,ay,az,ok] = m.args;
+function onFrame(payload){
+  let pkt; try{ pkt=decodePacket(payload); }catch{ return; }
+  if(!pkt.bundle){ onMessage(pkt); return; }
+  let hello=null;
+  for(const m of pkt.packets){
+    if(m.address==="/enq"){ hello={name:m.args[0], caps:{}}; continue; }
+    if(hello && m.address.startsWith("/enq/")){ hello.caps[m.address.slice(5)]=m.args; continue; }
+    onMessage(m);
+  }
+  if(hello) onHello(hello.name, hello.caps);
+}
+
+// Every address that carries a reading, streamed in the bundle or answered to
+// a single-shot request. The rows used to un-stale on /state alone, which was
+// fine while the stream was the only source; with /rate 0 there is no /state
+// and a "read once" answer would have rendered already dimmed.
+const READINGS = new Set(["/state","/btn","/light","/bat","/imu","/mic"]);
+
+function onMessage(m){
+  if(READINGS.has(m.address))
     document.querySelectorAll(".stale").forEach(n=>n.classList.remove("stale"));
 
-    if(typeof bits==="number"){
-      $("btnbits").textContent = "0x"+bits.toString(16).padStart(2,"0");
-      for(const [id,mask] of Object.entries(BITS)){
-        const el = $(id);
-        if (el) el.classList.toggle("hit", (bits & mask) !== 0);
-      }
-    }
-    if(typeof light==="number"){
-      $("light").textContent = light;
-      $("lightb").style.width = Math.min(100, light/1023*100)+"%";
-    }
-    if(typeof batt==="number"){
-      // A6 is a divider giving half the battery voltage; 3.3 V reference, 10-bit
-      const volts = (batt/1023)*3.3*2;
-      $("batt").textContent = volts.toFixed(2)+" V";
-      $("battb").style.width = Math.max(0,Math.min(100,(volts-3.0)/(4.2-3.0)*100))+"%";
-    }
-    if(typeof ax==="number"){ $("ax").textContent=ax; tiltX=ax; }
-    if(typeof ay==="number"){ $("ay").textContent=ay; tiltY=ay; }
-    if(typeof az==="number") $("az").textContent=az;
-    if(typeof ok==="boolean") $("ok").textContent = ok?"ok":"not found";
-    drawTilt();
-
+  if(m.address==="/state"){
+    // seq, millis -- the heartbeat of the stream. The readings follow it in
+    // the same bundle.
     frames++;
     if(!t0) t0=performance.now();
     const secs=(performance.now()-t0)/1000;
     if(secs>0.5) $("hz").textContent = (frames/secs).toFixed(1)+" Hz";
+    return;
+  }
+
+  if(m.address==="/btn"){
+    const down=[];
+    m.args.forEach((v,i)=>{
+      const el=$(BUTTONS[i]); if(el) el.classList.toggle("hit", v===1);
+      if(v===1 && BUTTON_NAMES[i]) down.push(BUTTON_NAMES[i]);
+    });
+    $("btnlist").textContent = down.length ? down.join(" ") : "none";
+    return;
+  }
+
+  if(m.address==="/light"){
+    const light=m.args[0];
+    if(typeof light==="number"){
+      $("light").textContent = light;
+      $("lightb").style.width = Math.min(100, light/1023*100)+"%";
+    }
+    return;
+  }
+
+  if(m.address==="/bat"){
+    const mv=m.args[0];                       // millivolts; the badge did the divider arithmetic
+    if(typeof mv==="number"){
+      const volts = mv/1000;
+      $("batt").textContent = volts.toFixed(2)+" V";
+      $("battb").style.width = Math.max(0,Math.min(100,(volts-3.0)/(4.2-3.0)*100))+"%";
+    }
+    return;
+  }
+
+  if(m.address==="/imu"){
+    const [ax,ay,az] = m.args;                // floats, g
+    if(typeof ax==="number"){ $("ax").textContent=ax.toFixed(2); tiltX=ax; }
+    if(typeof ay==="number"){ $("ay").textContent=ay.toFixed(2); tiltY=ay; }
+    if(typeof az==="number") $("az").textContent=az.toFixed(2);
+    drawTilt();
     return;
   }
 
@@ -532,9 +646,10 @@ function onFrame(payload){
     // EdgeBadge's mic never does, so the panel stays hidden rather than
     // sitting there reading zero.
     // rms and peak arrive at full scale, 0..32767. A linear bar is the wrong
-    // instrument for that: measured on this badge, a quiet room sits near
-    // -64 dBFS, so a linear meter would pin everything short of a shout at
-    // the left end. Everything here is dBFS down to a -90 floor.
+    // instrument for that: measured on this badge at MIC_GAIN 16, a quiet room
+    // sits near -34 dBFS -- an rms around 640 out of 32768 -- so a linear meter
+    // would pin everything short of a shout at the left end. Everything here is
+    // dBFS down to a -90 floor.
     const [rms,peak,rate,scope] = m.args;
     $("micpanel").style.display = "";
 
@@ -566,12 +681,71 @@ function onFrame(payload){
     return;
   }
 
-  if(m.address==="/hello"){
-    logLine("","board: "+m.args.join(" "));
-    // /hello is name, pixels, accelOK, micOK -- a badge with no mic reports
-    // false and the panel stays hidden.
-    if(m.args.length>3 && m.args[3]===false) logLine("","no microphone on this badge");
+  /* -- echoes ----------------------------------------------------------------
+     ADDRESSES.md marks every write "echoed", and the badge does echo them, so
+     the controls below are driven from what came BACK rather than from what
+     was clicked. That is not decoration: /rate clamps to 20..5000 and /buzz
+     fills in its defaults, so the echo is the only place the values actually
+     in force appear. The one exception is the screen text, whose reply is a
+     line count rather than the strings, so that stays a local mirror. */
+
+  if(m.address==="/rate"){
+    const ms=m.args[0];
+    if(typeof ms==="number"){
+      $("rateback").textContent = ms ? ms+" ms" : "stopped";
+      $("rate").value = ms;
+      frames=0; t0=0;                      // the Hz average is about a new rate now
+      if(!ms) $("hz").textContent = "stopped";
+    }
+    return;
   }
+
+  if(m.address==="/s/l"){                  // the board's own idea of the LED
+    const on=m.args[0]===1;
+    led=on;
+    $("led").classList.toggle("primary", on);
+    return;
+  }
+
+  if(m.address==="/buzz"){                 // hz, ms, vol as actually played
+    const [hz,ms,vol]=m.args;
+    $("buzzback").textContent = hz ? `${hz} Hz · ${ms} ms · vol ${vol}` : "stopped";
+    return;
+  }
+
+  if(m.address==="/rgb"){ const [r,g,b]=m.args;
+    for(let i=0;i<5;i++) paintPixel(i,`rgb(${r},${g},${b})`); return; }
+
+  if(m.address==="/rgb/pixels"){
+    for(let i=0;i*3+2<m.args.length && i<5;i++)
+      paintPixel(i,`rgb(${m.args[i*3]},${m.args[i*3+1]},${m.args[i*3+2]})`);
+    return;
+  }
+
+  if(m.address==="/rgb/bright"){ $("bright").value = m.args[0]; return; }
+
+  if(/^\/rgb\/\d+$/.test(m.address)){      // /rgb/<n> r g b
+    const [r,g,b]=m.args;
+    paintPixel(parseInt(m.address.slice(5),10),`rgb(${r},${g},${b})`);
+    return;
+  }
+
+  if(m.address==="/display/fill"){ const [r,g,b]=m.args;
+    scrFill(`#${[r,g,b].map(v=>v.toString(16).padStart(2,"0")).join("")}`);
+    scrText($("l1").value,$("l2").value);  // the badge redraws the text over it
+    return; }
+
+  if(m.address==="/display/rect"){ const [x,y,w,h,r,g,b]=m.args;
+    scrBox(x,y,w,h,r,g,b); return; }
+
+  if(m.address==="/display/bl"){ scrBacklight(m.args[0]); $("lite").value=m.args[0]; return; }
+
+  // /display/text answers with the number of lines drawn, not the strings, so
+  // there is nothing to mirror -- just say so once per request.
+  if(m.address==="/display/text"){ logLine("","screen redrew "+m.args[0]+" line(s)"); return; }
+
+  if(m.address==="/mic/gain"){ $("micgain").value = m.args[0];
+    $("micgainv").textContent = "×"+m.args[0]; return; }
 }
 
 setInterval(()=>{ document.querySelectorAll("td.v").forEach(n=>n.classList.add("stale")); }, 2000);
@@ -593,8 +767,12 @@ if(!("serial" in navigator)){
 $("connect").onclick    = () => connect().catch(e=>logLine("warn",e.message));
 $("disconnect").onclick = () => disconnect();
 // --- emulated screen -------------------------------------------------------
-// The TFT cannot report its contents back, so this mirrors what we SEND. It is
-// an emulation of the commands, not a readback of the panel.
+// The TFT cannot report its pixels back, so this is an emulation of the
+// commands rather than a readback of the panel. Where the badge echoes the
+// command -- /display/fill, /display/rect, /display/bl -- these are called
+// from onMessage() on the ECHO, so the drawing only changes once the board has
+// actually acted. /display/text is the exception: its reply is a line count,
+// so the two text lines are still mirrored at send time.
 function scrText(a,b){ $("scr1").textContent=a; $("scr2").textContent=b; }
 function scrFill(hex){
   $("screen").setAttribute("fill",hex);
@@ -612,50 +790,44 @@ function scrBacklight(v){ $("screen").style.opacity = Math.max(.12, v/255).toFix
 scrText("PyBadgeOscuino","waiting for OSC");
 
 $("settext").onclick    = () => { scrText($("l1").value,$("l2").value);
-                                  send("/screen/text",[$("l1").value,$("l2").value]); };
-$("fill").onclick       = () => { scrFill($("bg").value);
-                                  scrText($("l1").value,$("l2").value);
-                                  send("/screen/fill",hex2rgb($("bg").value)); };
-$("lite").oninput       = e => { scrBacklight(parseInt(e.target.value,10));
-                                 send("/screen/backlight",[parseInt(e.target.value,10)]); };
-$("beep").onclick       = () => send("/tone",[parseInt($("freq").value,10)||440,
+                                  send("/display/text",[$("l1").value,$("l2").value]); };
+$("fill").onclick       = () => send("/display/fill",hex2rgb($("bg").value));
+$("lite").oninput       = e => send("/display/bl",[parseInt(e.target.value,10)]);
+// /buzz hz ms vol -- all three are the contract's, volume 0..255
+$("beep").onclick       = () => send("/buzz",[parseInt($("freq").value,10)||440,
                                               parseInt($("ms").value,10)||150,140]);
 document.querySelectorAll("button[data-note]").forEach(b =>
-  b.onclick = () => send("/tone",[parseInt(b.dataset.note,10),180,140]));
+  b.onclick = () => send("/buzz",[parseInt(b.dataset.note,10),180,140]));
 
 $("arp").onclick = async () => {
-  for(const f of [262,330,392,523,392,330,262]){ await send("/tone",[f,110,140]);
+  for(const f of [262,330,392,523,392,330,262]){ await send("/buzz",[f,110,140]);
     await new Promise(r=>setTimeout(r,130)); }
 };
 
 // Boxes are drawn one message at a time rather than in a burst: each is a
 // separate small write, which also keeps well clear of any inbound buffer.
+// The drawing happens in onMessage() when /display/rect comes back.
 $("paint").onclick = async () => {
   for(let i=0;i<14;i++){
     const x=Math.floor(Math.random()*140), y=Math.floor(Math.random()*108);
     const r=Math.floor(Math.random()*256), g=Math.floor(Math.random()*256),
           b=Math.floor(Math.random()*256);
-    scrBox(x,y,20,20,r,g,b);
-    await send("/screen/box",[x,y,20,20,r,g,b]);
+    await send("/display/rect",[x,y,20,20,r,g,b]);
     await new Promise(r=>setTimeout(r,40));
   }
 };
 
 function paintPixel(i,css){ const e=$("np"+i); if(e) e.setAttribute("fill",css); }
-$("pxall").oninput = e => {
-  send("/pixels",hex2rgb(e.target.value));
-  for(let i=0;i<5;i++) paintPixel(i,e.target.value);
-};
-$("pxoff").onclick = () => {
-  send("/pixels",[0,0,0]);
-  for(let i=0;i<5;i++) paintPixel(i,"#111");
-};
+// /rgb r g b is all five at once; /rgb/<n> r g b is one of them;
+// /rgb/bright 0..255 is the strip. The circles above are painted from the
+// echoes, not from these clicks.
+$("pxall").oninput  = e => send("/rgb",hex2rgb(e.target.value));
+$("pxoff").onclick  = () => send("/rgb",[0,0,0]);
+$("bright").oninput = e => send("/rgb/bright",[parseInt(e.target.value,10)]);
 $("rainbow").onclick = async () => {
   const hues=[0,60,120,200,280];
   for(let i=0;i<5;i++){
-    const h=hues[i], c=hsv2rgb(h,1,1);
-    await send("/pixel",[i,...c]);
-    paintPixel(i,`rgb(${c[0]},${c[1]},${c[2]})`);
+    await send("/rgb/"+i,hsv2rgb(hues[i],1,1));
     await new Promise(r=>setTimeout(r,40));
   }
 };
@@ -668,12 +840,26 @@ for(let i=0;i<5;i++){
   const e=$("np"+i);
   if(!e) continue;
   e.style.cursor="pointer";
-  e.onclick = () => { send("/pixel",[i,...hex2rgb($("pxall").value)]);
-                      paintPixel(i,$("pxall").value); };
+  e.onclick = () => send("/rgb/"+i,hex2rgb($("pxall").value));
 }
 
 let led=false;
-$("led").onclick = () => { led=!led; send("/led",[led?1:0]); };
+$("led").onclick = () => send("/s/l",[led?0:1]);   // the echo flips `led`
+
+// One /rate for the board: it paces the /state bundle and /mic alike, and 0
+// stops both. The badge echoes the value it clamped to, which is what the
+// "period echoed" row shows.
+$("setrate").onclick = () => send("/rate",[parseInt($("rate").value,10)||0]);
+$("stop").onclick    = () => send("/rate",[0]);
+
+// Single-shot reads. Each answers on its own address with the same shape it
+// has in the stream, so the rows above fill in even with the stream stopped.
+// /imu and /mic answer only on a badge that announced them -- silence there
+// is the contract's way of saying the part is not fitted.
+$("readonce").onclick = async () => {
+  for(const a of ["/btn","/light","/bat","/imu","/mic"]) await send(a,[]);
+};
+$("setgain").onclick = () => send("/mic/gain",[parseInt($("micgain").value,10)||8]);
 
 // The OS-level unplug event: without it the page read "connected" forever
 // after the board vanished, and only a manual click reset the UI.

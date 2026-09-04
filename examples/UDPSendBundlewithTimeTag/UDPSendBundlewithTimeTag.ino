@@ -5,7 +5,8 @@ Make an OSC bundle and send it over UDP
 OSCBundles allow OSCMessages to be grouped together
 to  preserve the order and completeness of related messages.
 They also allow for timetags to be carried to represent the presentation time
-of the messages.
+of the messages. Here the bundle's timetag is the time the readings were taken, so no
+message carries a time of its own.
  */
 #include <Ethernet.h>
 #include <EthernetUdp.h>
@@ -34,27 +35,30 @@ void setup() {
 void loop(){
   //declare the bundle
      OSCBundle bndl;
-    osctime_t timetag;
+    osctime_t when;
     
     //OSCBundle's add' returns the OSCMessage so the message's 'add' can be composed together
-    bndl.add("/analog/0").add((intOSC_t)adcRead(0, &timetag));
-    bndl.add("/analog/0/time").add(timetag);
+    //adcRead also reports the time the sample was taken
+    bndl.add("/a/0").add((intOSC_t)adcRead(0, &when));
     
-    bndl.add("/analog/1").add((intOSC_t)adcRead(1, &timetag));
-   bndl.add("/analog/1/time").add(timetag);
+    bndl.add("/a/1").add((intOSC_t)adcRead(1, &when));
    
     Udp.beginPacket(outIp, outPort);
-    bndl.setTimetag(oscTime());
-    bndl.send(Udp); // send the bytes to the SLIP stream
+    //the bundle's own timetag carries the time of the readings (the last
+    //adcRead's); there is no separate per-pin time message
+    bndl.setTimetag(when);
+    bndl.send(Udp); // send the bytes into the UDP packet
     Udp.endPacket(); // mark the end of the OSC Packet
     bndl.empty(); // empty the bundle to free room for a new one
 
-    bndl.add("/mouse/step").add((intOSC_t)analogRead(0)).add((intOSC_t)analogRead(1));
-    bndl.add("/units").add("pixels");
+    //a message can carry several arguments; /diag carries a label and free
+    //values that no page parses
+    bndl.add("/diag").add("A0 A1").add((intOSC_t)analogRead(0)).add((intOSC_t)analogRead(1));
+    bndl.add("/diag").add("units").add("ADC counts");
 
     Udp.beginPacket(outIp, outPort);
     bndl.setTimetag(oscTime());
-    bndl.send(Udp); // send the bytes to the SLIP stream
+    bndl.send(Udp); // send the bytes into the UDP packet
     Udp.endPacket(); // mark the end of the OSC Packet
     bndl.empty(); // empty the bundle to free room for a new one
 

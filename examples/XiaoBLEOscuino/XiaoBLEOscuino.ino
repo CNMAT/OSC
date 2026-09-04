@@ -7,6 +7,9 @@
  * FQBN  : Seeeduino:nrf52:xiaonRF52840Sense
  * Libs  : Seeed_Arduino_LSM6DS3 (GitHub ZIP, the library Seeed's wiki names
  *         for this board's IMU); BLE comes from the core's own Bluefruit52Lib.
+ * Page  : XiaoBLEOscuino.html, generated beside this sketch by extras/webserial;
+ *         pick Web Bluetooth or Web Serial there (extras/webserial/oscuino.html
+ *         is the same page for any board)
  *
  * THE POINT OF THIS EXAMPLE: the library's SLIP transport is a template,
  * `_SLIPSerial<T>`, and it was written for HardwareSerial and for TCP
@@ -24,30 +27,25 @@
  * goes back to whichever transport asked, so a USB client and a phone can
  * talk to the board at the same time without configuring anything.
  *
- * ADDRESSES — the standard Oscuino set (/d /a /tone /s) plus this board:
+ * ADDRESSES — the standard Oscuino set (/d /a /tone /s, see ADDRESSES.md)
+ * plus the capabilities this board announces in its /enq bundle:
  *
- *   /xb/rgb <r> <g> <b>   the RGB LED, 0..255 each (PWM)
- *   /xb/imu               -> /xb/imu <ax> <ay> <az> <gx> <gy> <gz>
- *                            floats: acceleration in g, rotation in deg/s
- *   /xb/rate <ms>         stream /xb/imu every <ms> (20..2000); 0 stops.
- *                            This is the motion-to-OSC case BLE is for.
- *   /xb/mic               -> /xb/mic <rms> <peak>   full scale, 0..32767
- *   /xb/gain <n>          PDM gain, 0..80 (40 = unity, 0.5 dB a step).
- *                            The sketch's 50 is audible, not clip-calibrated.
- *   /xb/bat               -> /xb/bat <millivolts>
- *   /xb/chg               -> /xb/chg <charging> <mA>
- *   /xb/chg <50|100>      set the BQ25101 charge current, then report
+ *   /rgb <r> <g> <b>      the RGB LED, 0..255 each (PWM)      [/enq/rgb 1]
+ *   /imu                  -> /imu <ax> <ay> <az> <gx> <gy> <gz>
+ *                            floats: g, then deg/s             [/enq/imu 6]
+ *   /mic                  -> /mic <rms> <peak>, full scale     [/enq/mic]
+ *   /mic/gain <n>         PDM gain 0..80 (40 = unity, 0.5 dB a step)
+ *   /bat                  -> /bat <millivolts>                 [/enq/bat]
+ *   /chg [<50|100>]       -> /chg <charging> <mA>              [/enq/chg]
+ *   /rate <ms>            stream /state + /imu + /mic every <ms>; 0 stops
  *
- * BATTERY, per Seeed's wiki and the variant's own pin map. The board carries
- * a BQ25101 PMIC: charge current is selected by HICHG (D22 = P0.13) — HIGH
- * for 50 mA, LOW for 100 mA — and charge state is read from ~CHG (D23 =
- * P0.17), which is LOW while charging and HIGH when not charging or full,
- * the same signal that drives the red CHG LED. ~CHG is open-drain, so it is
- * read with the internal pull-up. The reported current is -1 until /xb/chg
- * sets it: at boot the pin is untouched and the board's own default is in
- * force, and claiming a number for it would be inventing one.
+ * Nothing here is named after the board: the same addresses mean the same
+ * things on every Oscuino sketch, which is what lets one page drive all of
+ * them.
  *
- * /hello carries imuOK, from the driver's own begin() status.
+ * /enq answers with the capability bundle; imuOK and micOK decide whether
+ * /enq/imu and /enq/mic appear in it, imuOK from the driver's own begin()
+ * status and micOK from a signal probe.
  *
  * TWO THINGS THE DOCUMENTATION SETTLED that guessing got wrong. First, the
  * Sense's LSM6DS3TR-C is not on the `Wire` exposed at D4/D5 — Seeed's driver
@@ -60,11 +58,11 @@
  * (NRF_P1->PIN_CNF[8], H0H1) before releasing the rail. A hand-rolled
  * pinMode/digitalWrite plus direct register reads found no IMU at all here.
  *
- * STATUS — VERIFIED END TO END, 2026-08-30. Over USB: /hello, /xb/imu
- * (physically sane — 0.99 g on Z lying flat, gyro ~0 at rest), /xb/rgb,
- * /xb/bat and the standard set. Over the air, from Chrome via the companion
+ * STATUS — VERIFIED END TO END, 2026-08-30. Over USB: /enq, /imu
+ * (physically sane — 0.99 g on Z lying flat, gyro ~0 at rest), /rgb,
+ * /bat and the standard set. Over the air, from Chrome via the companion
  * page: advertising, the NUS connection, writes into the board, notifications
- * back out, SLIP frames spanning several notifications, and /xb/imu streaming
+ * back out, SLIP frames spanning several notifications, and /imu streaming
  * at 50 ms with the readouts tracking the board as it is tilted. (The BLE
  * half had to be checked from a browser: macOS denies CoreBluetooth to a
  * command-line process — a bleak scan aborts with SIGABRT and no prompt is
@@ -114,11 +112,12 @@ static const int PIN_CHARGE_STATUS = 23;
 static int chargeMilliamps = -1;            // -1 = untouched, board default
 static bool imuOK = false;
 static uint32_t imuRateMs = 0;              // 0 = not streaming
+static int32_t  seq = 0;
 
 static OSCBundle bundleOUT;
 
 static void addIMU() {
-  bundleOUT.add("/xb/imu")
+  bundleOUT.add("/imu")
       .add(myIMU.readFloatAccelX()).add(myIMU.readFloatAccelY())
       .add(myIMU.readFloatAccelZ())
       .add(myIMU.readFloatGyroX()).add(myIMU.readFloatGyroY())
@@ -143,7 +142,7 @@ static void addIMU() {
 // against +10 / +20 / +30 dB predicted by the 0.5 dB step, so the law holds.
 // 50 is chosen as an audible working point, NOT a calibrated one: finding the
 // clip point needs a known loud source, which this bench did not have. Change
-// it live with /xb/gain.
+// it live with /mic/gain.
 #define MIC_GAIN 50
 static short micBuf[256];
 static volatile int micSamples = 0;
@@ -294,76 +293,98 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
 #endif
 }
 
-// ---- board routes ----------------------------------------------------------
-void routeXiaoBLE(OSCMessage &msg, int addrOffset) {
-  if (msg.fullMatch("/rgb", addrOffset) &&
-      msg.isInt(0) && msg.isInt(1) && msg.isInt(2)) {
-    const int pins[3] = {LED_RED, LED_GREEN, LED_BLUE};
-    for (int i = 0; i < 3; i++) {
-      int v = msg.getInt(i);
-      if (v < 0) v = 0;
-      if (v > 255) v = 255;
-      pinMode(pins[i], OUTPUT);
-      // ACTIVE LOW, measured: sending 255/255/255 goes dark and 0/0/0 lights
-      // white. The variant's LED_STATE_ON is 1, which reads like active high
-      // and is why the first build produced confidently wrong colours — every
-      // channel was inverted, so "red" arrived as cyan.
-      analogWrite(pins[i], 255 - v);
-    }
-    // Echo: probes cannot see photons.
-    bundleOUT.add("/xb/rgb")
-        .add((intOSC_t)msg.getInt(0)).add((intOSC_t)msg.getInt(1))
-        .add((intOSC_t)msg.getInt(2));
-    return;
+// ---- capability routes -------------------------------------------------------
+// Each is routed by its own root (/rgb, /imu, ...) so the addresses are the
+// same on every board that has the capability. See ADDRESSES.md.
+
+static void addEnq() {
+  bundleOUT.add("/enq").add("XiaoBLEOscuino");
+  bundleOUT.add("/enq/rgb").add((intOSC_t)1);
+  if (imuOK) bundleOUT.add("/enq/imu").add((intOSC_t)6);
+  if (micOK) bundleOUT.add("/enq/mic");
+  bundleOUT.add("/enq/bat");
+  bundleOUT.add("/enq/chg");
+}
+
+void routeEnq(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  addEnq();
+}
+
+void routeRgb(OSCMessage &msg, int addrOffset) {
+  (void)addrOffset;
+  if (!(msg.isInt(0) && msg.isInt(1) && msg.isInt(2))) return;
+  const int pins[3] = {LED_RED, LED_GREEN, LED_BLUE};
+  for (int i = 0; i < 3; i++) {
+    int v = msg.getInt(i);
+    if (v < 0) v = 0;
+    if (v > 255) v = 255;
+    pinMode(pins[i], OUTPUT);
+    // ACTIVE LOW, measured: sending 255/255/255 goes dark and 0/0/0 lights
+    // white. The variant's LED_STATE_ON is 1, which reads like active high
+    // and is why the first build produced confidently wrong colours — every
+    // channel was inverted, so "red" arrived as cyan.
+    analogWrite(pins[i], 255 - v);
   }
-  if (msg.fullMatch("/imu", addrOffset)) {
-    if (imuOK) addIMU();
-    else bundleOUT.add("/xb/imu").add((intOSC_t)-1);
-    return;
-  }
-  if (msg.fullMatch("/rate", addrOffset) && msg.isInt(0)) {
-    int r = msg.getInt(0);
-    imuRateMs = (r <= 0) ? 0 : constrain(r, 20, 2000);
-    bundleOUT.add("/xb/rate").add((intOSC_t)imuRateMs);
-    return;
-  }
-  if (msg.fullMatch("/mic", addrOffset)) {
-    if (!micOK) { bundleOUT.add("/xb/mic").add((intOSC_t)-1); return; }
-    uint16_t rms, peak;
-    micLevel(&rms, &peak);
-    bundleOUT.add("/xb/mic").add((intOSC_t)rms).add((intOSC_t)peak);
-    return;
-  }
+  // Echo: probes cannot see photons.
+  bundleOUT.add("/rgb")
+      .add((intOSC_t)msg.getInt(0)).add((intOSC_t)msg.getInt(1))
+      .add((intOSC_t)msg.getInt(2));
+}
+
+void routeImu(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  // Absence is silence (ADDRESSES.md): with no IMU there is no /enq/imu in
+  // the enq bundle and this answers nothing, rather than inventing a -1
+  // that claims to be a float.
+  if (imuOK) addIMU();
+}
+
+void routeRate(OSCMessage &msg, int addrOffset) {
+  (void)addrOffset;
+  if (!msg.isInt(0)) return;
+  int r = msg.getInt(0);
+  imuRateMs = (r <= 0) ? 0 : constrain(r, 20, 2000);
+  bundleOUT.add("/rate").add((intOSC_t)imuRateMs);
+}
+
+void routeMic(OSCMessage &msg, int addrOffset) {
   if (msg.fullMatch("/gain", addrOffset) && msg.isInt(0)) {
     int g = constrain(msg.getInt(0), 0, 80);
     PDM.setGain(g);
-    bundleOUT.add("/xb/gain").add((intOSC_t)g);
+    bundleOUT.add("/mic/gain").add((intOSC_t)g);
     return;
   }
-  if (msg.fullMatch("/chg", addrOffset)) {
-    if (msg.isInt(0)) {
-      chargeMilliamps = (msg.getInt(0) >= 100) ? 100 : 50;
-      pinMode(PIN_CHARGING_CURRENT, OUTPUT);
-      // HIGH is the 50 mA setting, LOW the 100 mA one — inverted-feeling, and
-      // straight from the wiki rather than from guessing at the name.
-      digitalWrite(PIN_CHARGING_CURRENT, chargeMilliamps == 100 ? LOW : HIGH);
-    }
-    pinMode(PIN_CHARGE_STATUS, INPUT_PULLUP);   // ~CHG is open drain
-    bundleOUT.add("/xb/chg")
-        .add((intOSC_t)(digitalRead(PIN_CHARGE_STATUS) == LOW ? 1 : 0))
-        .add((intOSC_t)chargeMilliamps);
-    return;
+  if (!micOK) return;                       // absence is silence, as above
+  uint16_t rms, peak;
+  micLevel(&rms, &peak);
+  bundleOUT.add("/mic").add((intOSC_t)rms).add((intOSC_t)peak);
+}
+
+void routeChg(OSCMessage &msg, int addrOffset) {
+  (void)addrOffset;
+  if (msg.isInt(0)) {
+    chargeMilliamps = (msg.getInt(0) >= 100) ? 100 : 50;
+    pinMode(PIN_CHARGING_CURRENT, OUTPUT);
+    // HIGH is the 50 mA setting, LOW the 100 mA one — inverted-feeling, and
+    // straight from the wiki rather than from guessing at the name.
+    digitalWrite(PIN_CHARGING_CURRENT, chargeMilliamps == 100 ? LOW : HIGH);
   }
-  if (msg.fullMatch("/bat", addrOffset)) {
-    // VBAT_ENABLE must be driven LOW to connect the divider (variant.h).
-    pinMode(VBAT_ENABLE, OUTPUT);
-    digitalWrite(VBAT_ENABLE, LOW);
-    delay(2);
-    int raw = analogRead(PIN_VBAT);
-    // 10-bit default reference 3.6 V, and the board halves VBAT: 2 * 3600/1024.
-    bundleOUT.add("/xb/bat").add((intOSC_t)((raw * 3600L * 2) / 1024));
-    return;
-  }
+  pinMode(PIN_CHARGE_STATUS, INPUT_PULLUP);   // ~CHG is open drain
+  bundleOUT.add("/chg")
+      .add((intOSC_t)(digitalRead(PIN_CHARGE_STATUS) == LOW ? 1 : 0))
+      .add((intOSC_t)chargeMilliamps);
+}
+
+void routeBat(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  // VBAT_ENABLE must be driven LOW to connect the divider (variant.h).
+  pinMode(VBAT_ENABLE, OUTPUT);
+  digitalWrite(VBAT_ENABLE, LOW);
+  delay(2);
+  int raw = analogRead(PIN_VBAT);
+  // 10-bit default reference 3.6 V, and the board halves VBAT: 2 * 3600/1024.
+  bundleOUT.add("/bat").add((intOSC_t)((raw * 3600L * 2) / 1024));
 }
 
 // -----------------------------------------------------------------------------
@@ -374,7 +395,13 @@ static void dispatchAll(OSCBundle &b) {
   b.route("/a", routeAnalog);
   b.route("/tone", routeTone);
   b.route("/s", routeSystem);
-  b.route("/xb", routeXiaoBLE);
+  b.route("/enq", routeEnq);
+  b.route("/rgb",   routeRgb);
+  b.route("/imu",   routeImu);
+  b.route("/mic",   routeMic);
+  b.route("/chg",   routeChg);
+  b.route("/bat",   routeBat);
+  b.route("/rate",  routeRate);
 }
 
 void setup() {
@@ -417,8 +444,7 @@ void setup() {
   Bluefruit.Advertising.start(0);           // 0 = advertise forever
 
   delay(300);
-  bundleOUT.add("/hello").add("XiaoBLEOscuino")
-      .add((intOSC_t)imuOK).add((intOSC_t)micOK);
+  addEnq();
   SLIPSerial.beginPacket();
   bundleOUT.send(SLIPSerial);
   SLIPSerial.endPacket();
@@ -446,11 +472,12 @@ void loop() {
   static uint32_t lastImu = 0;
   if (imuRateMs && imuOK && millis() - lastImu >= imuRateMs) {
     lastImu = millis();
+    bundleOUT.add("/state").add((intOSC_t)seq++).add((intOSC_t)millis());
     addIMU();
     if (micOK) {
       uint16_t rms, peak;
       micLevel(&rms, &peak);
-      bundleOUT.add("/xb/mic").add((intOSC_t)rms).add((intOSC_t)peak);
+      bundleOUT.add("/mic").add((intOSC_t)rms).add((intOSC_t)peak);
     }
     if (Bluefruit.connected()) flushTo(SLIPBle, bundleOUT);
     else                       flushTo(SLIPSerial, bundleOUT);

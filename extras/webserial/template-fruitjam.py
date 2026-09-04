@@ -16,21 +16,21 @@
 # answers the same addresses through the same page.
 #
 # Beyond the standard Oscuino set this board answers:
-#   /fj/b                    -> /fj/b <b1> <b2> <b3>   (1 = pressed)
-#   /fj/led <r> <g> <b>      all five NeoPixels, 0..255 each
-#   /fj/led <n> <r> <g> <b>  one NeoPixel
-#   /fj/beep <freq> [<ms>]   sine via the TLV320 codec (headphones + speaker);
+#   /btn                    -> /btn <b1> <b2> <b3>   (1 = pressed)
+#   /rgb <r> <g> <b>      all five NeoPixels, 0..255 each
+#   /rgb <n> <r> <g> <b>  one NeoPixel
+#   /btneep <freq> [<ms>]   sine via the TLV320 codec (headphones + speaker);
 #                            0 stops; answers -1 if audio is unavailable
-#   /fj/t <string>           a line of text on the DVI display
+#   /display/text <string>           a line of text on the DVI display
 #   /s/q                     exit to the REPL
 #
 # Everything below matches what was measured on the board (CircuitPython
 # 10.2.1, 2026-08-27). The NeoPixels use the builtin neopixel_write, no
 # library. DVI is initialised explicitly -- this build does NOT auto-create
-# board.DISPLAY -- and the console terminal lands on the screen, so /fj/t is
+# board.DISPLAY -- and the console terminal lands on the screen, so /display/text is
 # print() plus a status reply. Audio uses the official adafruit_tlv320
 # driver (vendored in this folder's lib/, copy it across too) with the
-# builtin audiobusio and synthio; without it /fj/beep answers -1 instead of
+# builtin audiobusio and synthio; without it /btneep answers -1 instead of
 # breaking the rest. Two hardware facts worth keeping: the codec shares its
 # I2C bus with the DVI connector's DDC lines, and a wedged bus object NACKs
 # every multi-byte write while still ACKing address probes -- creating the
@@ -239,7 +239,7 @@ def run():
         neopixel_write.neopixel_write(npx, npbuf)
 
     # Audio: the official adafruit_tlv320 driver + builtin audiobusio and
-    # synthio, each absence degrading /fj/beep to a -1 reply rather than
+    # synthio, each absence degrading /btneep to a -1 reply rather than
     # taking the firmware down. Measured: the first bus object sometimes
     # comes up wedged (multi-byte writes NACK while probes ACK), so the bus
     # is created fresh and recreated between attempts.
@@ -334,30 +334,37 @@ def run():
             out.append(message('/s/l', a0))
         elif addr == '/s/q':
             raise SystemExit
-        elif addr == '/fj/b':
-            out.append(message('/fj/b', *[0 if b.value else 1 for b in btns]))
-        elif addr == '/fj/led' and len(args) >= 3 and isinstance(a0, int):
+        elif addr == '/enq':
+            out.extend(enq())
+        elif addr == '/btn':
+            out.append(message('/btn', *[0 if b.value else 1 for b in btns]))
+        elif addr == '/rgb' and len(args) >= 3 and isinstance(a0, int):
             led(args)
             out.append(message(addr, *args))    # echo: probes can't see photons
-        elif addr == '/fj/beep':
+        elif addr.startswith('/rgb/') and len(args) >= 3 and isinstance(a0, int):
+            n = _num(addr[5:])
+            if 0 <= n < 5:
+                led([n] + list(args[:3]))
+                out.append(message(addr, *args[:3]))
+        elif addr == '/buzz':
             f = int(a0) if isinstance(a0, (int, float)) else 0
             if synth is None:
-                out.append(message('/fj/beep', -1))
+                out.append(message('/buzz', -1))
             elif f <= 0:
                 import synthio
                 synth.release_all()
                 beep_off[0] = 0.0
-                out.append(message('/fj/beep', 0))
+                out.append(message('/buzz', 0))
             else:
                 import synthio
                 synth.release_all()
                 synth.press(synthio.Note(frequency=f))
                 ms = args[1] if len(args) > 1 and isinstance(args[1], int) else 0
                 beep_off[0] = time.monotonic() + ms / 1000.0 if ms > 0 else 0.0
-                out.append(message('/fj/beep', f))
-        elif addr == '/fj/t' and isinstance(a0, str):
+                out.append(message('/buzz', f))
+        elif addr == '/display/text' and isinstance(a0, str):
             print(a0)
-            out.append(message('/fj/t', 1 if display else 0))
+            out.append(message('/display/text', 1 if display else 0))
         elif addr.startswith('/d/') or addr.startswith('/a/'):
             part = addr.split('/')          # ['', 'd', '13'] or ['', 'd', '13', 'u']
             n = _num(part[2])
@@ -385,7 +392,16 @@ def run():
                 out.append(message(addr, 1 if o.value else 0))
 
     dec = SlipDecoder()
-    ser.write(slip_encode(bundle([message('/hello', '{{ID}}Oscuino')])))
+    def enq():
+        # The capability bundle of ADDRESSES.md: only what actually came up.
+        out = [message('/enq', '{{ID}}Oscuino'), message('/enq/btn', len(btns)),
+               message('/enq/rgb', 5)]
+        if synth is not None:
+            out.append(message('/enq/buzz'))
+        if display:
+            out.append(message('/enq/display', display.width, display.height))
+        return out
+    ser.write(slip_encode(bundle(enq())))
     while True:
         if synth is not None and beep_off[0] and time.monotonic() >= beep_off[0]:
             synth.release_all()

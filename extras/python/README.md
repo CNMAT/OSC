@@ -47,7 +47,7 @@ convention, not protocol.
   expect. Receivers must flatten nested bundles.
 - **The standard Oscuino address space**: `/d/<pin>`, `/d/<pin>/u`,
   `/a/<pin>`, `/tone/<pin>`, `/s/m` `/s/d` `/s/a` `/s/l`, announced by one
-  `/hello <name>` at startup.
+  `/enq <name>` at startup.
 
 The python firmwares add `/s/q` — exit the program, back to the REPL — because
 on an interpreter that is a meaningful, useful thing to do, and there is no
@@ -76,7 +76,7 @@ exists on 0–4 and 10, and the buttons/accelerometer/display arrive under
 `/mb/…` (see the header of `template-microbit.py`). The DAPLink USB bridge
 carries a real UART, so the browser's baud must stay at 115200 to match
 `uart.init()`. Opening the port does not reset the board, so press reset
-after connecting if you want the `/hello`.
+after connecting if you want the `/enq`.
 
 Traps this firmware already avoids, recorded because any rewrite must keep
 avoiding them, all measured on a V1.3 running MicroPython v1.9.2:
@@ -111,11 +111,11 @@ until the first frame that contains 0x03.
 ## Fruit Jam (CircuitPython) — and its Arduino twin
 
 `FruitJamOscuino/` covers Adafruit's Fruit Jam (RP2350B) with the board's own
-hardware on top of the standard set: `/fj/b` reads the three buttons
-(1 = pressed), `/fj/led` drives the five NeoPixels (three ints = all, four =
-index first; values echo back because probes cannot see photons), `/fj/beep`
+hardware on top of the standard set: `/btn` reads the three buttons
+(1 = pressed), `/rgb` drives the five NeoPixels (`/rgb/<n>` addresses one;
+values echo back because probes cannot see photons), `/buzz`
 plays a sine through the TLV320 codec into headphones and speaker, and
-`/fj/t` prints a line on the DVI output — the firmware brings the display up
+`/display/text` prints a line on the DVI output — the firmware brings the display up
 itself with the builtin `picodvi` and the console terminal lands on the
 monitor. Deploy = copy `code.py`, `boot.py` **and the `lib/` folder** (it
 vendors the official `adafruit_tlv320` driver, MIT, from

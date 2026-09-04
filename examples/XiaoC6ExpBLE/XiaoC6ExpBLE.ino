@@ -28,30 +28,46 @@
  *
  * Two chip families, two unrelated BLE stacks, one transport abstraction and
  * one set of OSC bytes. The service is the Nordic UART Service in both cases,
- * so examples/XiaoBLEOscuino/XiaoBLEOscuino.html drives THIS board too —
- * only the addresses in its chips differ.
+ * so one Web Bluetooth page drives both boards: XiaoC6ExpBLE.html, generated
+ * beside this sketch by extras/webserial (extras/webserial/oscuino.html is
+ * the same page for any board).
  *
  * ADDRESSES — mirroring the serial and WiFi twins:
- *   /disp/text <s> [...]  up to 4 lines on the OLED
- *   /disp/clear           blank it
+ *   /display/text <s> [...]  up to 4 lines on the OLED
+ *   /display/clear           blank it
  *   /buzz <freq> [<ms>]   the expansion board's buzzer; 0 stops
- *   /led <int>            the XIAO's user LED (active LOW on this module)
+ *   /s/l <int>            the XIAO's user LED (active LOW on this module)
  *   /rate <ms>            state period, 20..2000
- * State, streamed at that rate and also on request:
- *   /xc6 <seq> <button> <millis> <buzzing>
+ * State, streamed at that rate and on request, as a bundle (ADDRESSES.md):
+ *   /state <seq> <millis>  +  /btn <pressed>
  *
- * STATUS — BLE VERIFIED OVER THE AIR, 2026-08-30, from Chrome via
- * XiaoBLEOscuino.html (the same page, since both boards advertise NUS):
- * advertising and the device picker, the connection, central-to-board writes
- * (/led visibly toggling the XIAO's LED), and board-to-central notifications
- * (/xc6 streaming continuously). That last one also proves reassembly: the
- * state bundle is ~52 bytes and the adapter chunks at 20, so every packet the
- * page decoded had been split across three notifications and put back
- * together by SLIP. Over USB in the same build: /xc6, /led and /rate.
+ * STATUS — BLE VERIFIED OVER THE AIR, 2026-09-04, from Chrome via
+ * XiaoC6ExpBLE.html, on a bare XIAO ESP32-C6 (MAC 10:bd:a3:9f:ef:ac):
+ * advertising and the device picker, the connection, the /enq greeting
+ * (name plus /enq/btn 1 and /enq/buzz, and correctly NO /enq/display on a
+ * board with no OLED), central-to-board writes with echoes (/s/l 1 and 0
+ * visibly toggling the LED, /buzz 523 200 audible), and a clean notification
+ * stream: 12 consecutive /state bundles, sequence 2208..2219 with no gaps,
+ * board-side millis exactly 100 ms apart at the default rate, arriving
+ * 89-106 ms apart. /rate 0 was echoed and the stream stopped dead.
+ * Over USB in the same build: the greeting, /s/l, /buzz, /btn and /rate.
+ *
+ * THE NOTIFICATION BUG THIS FOUND. The run before that one showed corrupt
+ * bundles on the air while USB stayed byte-perfect: some frames truncated,
+ * others with foreign bytes spliced between the bundle timetag and its first
+ * element, and /btn arriving ahead of the /state added before it. The cause
+ * was in ble_stream.h, not in OSC or SLIP -- it chunked every bundle into
+ * 20-byte notifications 3 ms apart, far inside the connection interval, so
+ * setValue() kept overwriting payloads the radio had not sent yet. One chunk
+ * was lost, another went out twice, which is exactly what reordering and
+ * spliced bytes look like. The adapter now uses the MTU the central actually
+ * granted and sends the whole bundle in one notification. See the note there.
  *
  * NOT verified: the peripheral lines. This C6 was bare, so displayOK came
- * back false and the OLED, buzzer and button addresses answered without
- * driving anything. Put the board on the XIAO Expansion Board to close that.
+ * back false. Display addresses are now silent in that case rather than
+ * answering "/display/clear 1" for a screen that is not there (fixed the same
+ * day, after the reply was seen on the air). Put the board on the XIAO
+ * Expansion Board to exercise the OLED, buzzer and button for real.
  */
 
 #include <OSCBundle.h>
@@ -118,20 +134,25 @@ static void redraw() {
 }
 
 // ---- routes ----------------------------------------------------------------
-void routeDisp(OSCMessage &msg, int addrOffset) {
+void routeDisplay(OSCMessage &msg, int addrOffset) {
+  // Absence is silence (ADDRESSES.md). With no OLED on the bus this board
+  // announces no /enq/display, so it must not answer display commands either
+  // -- it used to reply "/display/clear 1", claiming to have cleared a screen
+  // that is not there. Caught over BLE on a bare C6, 2026-09-04.
+  if (!displayOK) return;
   if (msg.fullMatch("/text", addrOffset)) {
     for (uint8_t i = 0; i < 4; i++) lines[i][0] = '\0';
     const int n = msg.size() < 4 ? msg.size() : 4;
     for (int i = 0; i < n; i++)
       if (msg.isString(i)) msg.getString(i, lines[i], sizeof lines[i]);
     redraw();
-    bundleOUT.add("/disp/text").add((intOSC_t)n);
+    bundleOUT.add("/display/text").add((intOSC_t)n);
     return;
   }
   if (msg.fullMatch("/clear", addrOffset)) {
     for (uint8_t i = 0; i < 4; i++) lines[i][0] = '\0';
     redraw();
-    bundleOUT.add("/disp/clear").add((intOSC_t)1);
+    bundleOUT.add("/display/clear").add((intOSC_t)1);
     return;
   }
 }
@@ -154,21 +175,39 @@ void routeLed(OSCMessage &msg, int addrOffset) {
   if (!msg.isInt(0)) return;
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, msg.getInt(0) ? LOW : HIGH);   // active LOW here
-  bundleOUT.add("/led").add((intOSC_t)msg.getInt(0));
+  bundleOUT.add("/s/l").add((intOSC_t)msg.getInt(0));
 }
 
 void routeRate(OSCMessage &msg, int addrOffset) {
   (void)addrOffset;
-  if (msg.isInt(0)) reportMs = constrain(msg.getInt(0), 20, 2000);
+  // 0 STOPS the stream (ADDRESSES.md); constrain(v, 20, 2000) turned it into
+  // 20 and streamed faster instead. Measured on the serial twin, 2026-09-04.
+  if (msg.isInt(0)) {
+    const int32_t v = msg.getInt(0);
+    reportMs = (v <= 0) ? 0 : (uint32_t) constrain(v, 20, 2000);
+  }
   bundleOUT.add("/rate").add((intOSC_t)reportMs);
 }
 
+static void addBtn() {
+  bundleOUT.add("/btn").add((intOSC_t)(digitalRead(PIN_BTN) == LOW ? 1 : 0));
+}
+
 static void addState() {
-  bundleOUT.add("/xc6")
-      .add((intOSC_t)seq)
-      .add((intOSC_t)(digitalRead(PIN_BTN) == LOW ? 1 : 0))
-      .add((intOSC_t)millis())
-      .add((intOSC_t)(buzzUntil ? 1 : 0));
+  bundleOUT.add("/state").add((intOSC_t)seq).add((intOSC_t)millis());
+  addBtn();
+}
+
+static void addEnq() {
+  bundleOUT.add("/enq").add("XiaoC6ExpBLE");
+  bundleOUT.add("/enq/btn").add((intOSC_t)1);
+  bundleOUT.add("/enq/buzz");
+  if (displayOK) bundleOUT.add("/enq/display").add((intOSC_t)OLED_W).add((intOSC_t)OLED_H);
+}
+
+void routeEnq(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  addEnq();
 }
 
 void routeState(OSCMessage &msg, int addrOffset) {
@@ -176,19 +215,35 @@ void routeState(OSCMessage &msg, int addrOffset) {
   addState();
 }
 
+// /enq/btn in the enq bundle is a promise that this works, not just that
+// the button rides along in the stream (ADDRESSES.md).
+void routeBtn(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  addBtn();
+}
+
 static void dispatchAll(OSCBundle &b) {
   if (b.hasError()) return;
-  b.route("/disp", routeDisp);
+  b.route("/display", routeDisplay);
   b.route("/buzz", routeBuzz);
-  b.route("/led",  routeLed);
+  b.route("/s/l",  routeLed);
   b.route("/rate", routeRate);
-  b.route("/xc6",  routeState);
+  b.route("/state", routeState);
+  b.route("/btn",   routeBtn);
+  b.route("/enq", routeEnq);
 }
 
 // ---- BLE plumbing ----------------------------------------------------------
 class ServerCB : public BLEServerCallbacks {
   void onConnect(BLEServer *s) override {
-    (void)s;
+    // Hand the server over so BLEStream can ask what MTU the central actually
+    // granted, and send a whole bundle in one notification instead of racing
+    // 20-byte chunks against the connection interval. getPeerMTU/getConnId are
+    // declared outside this core's Bluedroid/NimBLE #ifdefs, so this works
+    // whichever stack the variant builds -- the C6 here builds NimBLE, and the
+    // Bluedroid-only onConnect(BLEServer*, esp_ble_gatts_cb_param_t*) overload
+    // does not even compile for it.
+    bleStream.setPeer(s);
     bleStream.setConnected(true);
     redraw();
   }
@@ -240,7 +295,7 @@ void setup() {
   BLEDevice::startAdvertising();
 
   delay(300);
-  bundleOUT.add("/hello").add("XiaoC6ExpBLE").add((intOSC_t)displayOK);
+  addEnq();
   SLIPSerial.beginPacket();
   bundleOUT.send(SLIPSerial);
   SLIPSerial.endPacket();
@@ -266,7 +321,7 @@ void loop() {
   if (buzzUntil && millis() >= buzzUntil) { noTone(PIN_BUZZ); buzzUntil = 0; }
 
   static uint32_t lastReport = 0;
-  if (millis() - lastReport >= reportMs) {
+  if (reportMs != 0 && millis() - lastReport >= reportMs) {
     lastReport = millis();
     seq++;
     if (bleStream.connected()) {

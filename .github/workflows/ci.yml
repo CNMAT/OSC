@@ -29,6 +29,8 @@ jobs:
         run: make -C test/host asan
       - name: python firmwares (codec cross-check vs oscprobe and the oracle)
         run: python3 extras/python/test_host.py
+      - name: contractprobe against a simulated board (no hardware)
+        run: python3 test/hardware/test_contractprobe.py
 
   webserial:
     # The Web Serial pages are generated from a template; this fails if a

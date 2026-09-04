@@ -30,26 +30,69 @@
 // the other, never both. This sketch reads it as the IR input and does not
 // touch Serial1.
 //
+// The address space is ADDRESSES.md: capabilities, not a board prefix.
+// Everything the board says goes out as a bundle.
+//
 // Outbound
-//   /hello ,sTTTi  name, oledOK, shtOK, motorOK, rgbCount
-//                 -- the OK flags are OSC booleans: their tags are T or F
-//                    with no payload, NOT i
-//   /pb ,iiiii ff  seq, button, pot (0-1023), ldr (0-1023), relay,
-//                  tempC, humidity (%)
-//                  One message, sampled in one pass, so the values share an
-//                  instant; the sequence counter makes drops visible.
+//   /enq ,s name             then one /enq/<capability> per module that is
+//                              actually present, with its shape:
+//                              /enq/display 128 64   only if the OLED answered
+//                                                    at 0x3C
+//                              /enq/rgb 1, /enq/buzz, /enq/btn 1, /enq/pot 1,
+//                              /enq/light, /enq/relay 1
+//                              /enq/temp             only if the SHTC3 answered
+//                                                    at 0x70
+//                              /enq/motor 2, /enq/servo 4   only if the driver
+//                                                    answered at 0x22
+//   The stream, every /rate ms, is one bundle sampled in one pass so the
+//   values share an instant:
+//   /state ,ii  seq millis     the sequence counter makes drops visible
+//   /btn ,i     1 = pressed
+//   /pot ,i     0-1023
+//   /light ,i   the LDR, 0-1023
+//   /relay/0 ,i what the relay is actually doing, so a page cannot drift
+//               from it
+//   /temp ,f    degC from the SHTC3. The same conversion also yields
+//               relative humidity, but the contract has no humidity address,
+//               so that reading is not sent.
+//   Every write below is echoed on its own address, and /btn, /pot, /light,
+//   /temp and /relay/0 answer on the same address when asked with no
+//   argument.
 // Inbound
-//   /pb/led ,i 0|1          the red LED on GP7
-//   /pb/rgb ,iii r g b      the single WS2812 on GP6
-//   /pb/buzz ,ii freq ms    passive buzzer on GP20
-//   /pb/relay ,i 0|1        the relay on GP12 -- it CLICKS and switches mains
-//                           rated contacts; that is why it is not pulsed here
-//   /pb/oled ,s...          up to four lines
-//   /pb/motor ,iii n speed dir     n 1-2, speed 0-255, dir 0|1
-//   /pb/servo ,ii n angle          n 1-4, angle 0-180
-//   /pb/rate ,i ms          report interval, 20..2000
-//   /hello                  ask again: the boot one is lost to USB
-//                           re-enumeration before the host opens the port
+//   /s/l ,i 0|1                the red LED on GP7
+//   /rgb ,iii r g b            the single WS2812 on GP6; /rgb/0 and a
+//                              one-triple /rgb/pixels mean the same pixel, and
+//                              each is echoed on the address it arrived on
+//   /rgb/bright ,i 0..255      scales the colour in software (the WS2812 has
+//                              no brightness register); echoed
+//   /buzz ,ii hz ms            passive buzzer on GP20; hz 0 stops
+//   /relay/0 ,i 0|1            the relay on GP12 -- it CLICKS and switches
+//                              mains-rated contacts; that is why it is not
+//                              pulsed here
+//   /display/text ,s...        up to four lines; answered with the number of
+//                              lines drawn
+//   /motor/<n> ,ii speed dir   n 0-1 on the wire (the driver counts 1-2),
+//                              speed 0-255, dir 0|1
+//   /servo/<n> ,i angle        n 0-3 on the wire (the driver counts 1-4),
+//                              angle 0-180
+//   /rate ,i ms                stream period, 20..2000; 0 stops it
+//   /enq                     ask again: the boot one is lost to USB
+//                              re-enumeration before the host opens the port
+//
+// STATUS: verified on the board when first added (commit f332fb1,
+// 2026-08-14): every module answered over one stream -- OLED 0x3C, SHTC3
+// 0x70 reading 25.0 C / 51.1 % RH, I2C motor driver 0x22, WS2812, LED,
+// button, relay, buzzer, pot and LDR tracking. The audit pass of 2026-08-17
+// (the two SHTC3 reads alternated on a 500 ms cadence) recompiled and
+// recorded no re-run. Addresses renamed onto ADDRESSES.md on 2026-09-03
+// (/pb/led -> /s/l, /pb/rgb -> /rgb and /rgb/0, /pb/buzz -> /buzz,
+// /pb/relay -> /relay/0, /pb/oled -> /display/text, /pb/motor <n> ->
+// /motor/<n>, /pb/servo <n> -> /servo/<n>, /pb/rate -> /rate, the /pb blob
+// -> /state + /btn + /pot + /light + /relay/0 + /temp with the blob's
+// humidity dropped because the contract has no address for it, /enq <name>
+// <bool>... -> /enq <name> + /enq/..., and /rgb/bright added as the
+// contract's rgb row lists it); that build is compile-checked and has not
+// been re-run on the board.
 #include <Wire.h>
 #include <picobricks.h>
 
@@ -75,7 +118,13 @@ SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 #define PIN_SDA     4      // scanned, not taken from the silkscreen
 #define PIN_SCL     5
 
-SSD1306     oled(ADDR_OLED, 128, 64);
+#define OLED_W      128    // /enq/display shape, in pixels
+#define OLED_H       64
+#define TEXT_LINES    4    // what /display/text can show at this font
+#define MOTOR_COUNT   2    // the driver's DC outputs, /motor/0 and /motor/1
+#define SERVO_COUNT   4    // its servo headers, /servo/0 .. /servo/3
+
+SSD1306     oled(ADDR_OLED, OLED_W, OLED_H);
 NeoPixel    strip(RGB_PIN, RGB_COUNT);
 SHTC3       shtc(ADDR_SHTC);
 motorDriver motor;
@@ -84,7 +133,9 @@ static bool oledOK = false, shtOK = false, motorOK = false;
 static int32_t  seq = 0;
 static uint32_t reportMs = 50, buzzUntil = 0;
 static int32_t  relayState = 0;
-static char lines[4][22] = { "PicoBricks", "OSC over USB", "", "" };
+static char lines[TEXT_LINES][22] = { "PicoBricks", "OSC over USB", "", "" };
+static float    tempC = 0;                // the SHTC3 cache, see loop()
+static uint8_t  rgbR = 0, rgbG = 0, rgbB = 0, rgbBright = 255;
 
 static bool present(uint8_t a) {
   Wire.beginTransmission(a);
@@ -94,71 +145,165 @@ static bool present(uint8_t a) {
 static void redraw() {
   if (!oledOK) return;
   oled.clear();
-  for (uint8_t i = 0; i < 4; i++) {
+  for (uint8_t i = 0; i < TEXT_LINES; i++) {
     oled.setCursor(0, (uint8_t)(i * 12));
     oled.print(lines[i]);
   }
   oled.show();
 }
 
-/* ----------------------------------------------------------------- inbound */
+/* ---------------------------------------------------------------- outbound */
 
-static void routeLed(OSCMessage &m) {
-  if (m.size() >= 1 && m.isInt(0)) digitalWrite(LED_PIN, m.getInt(0) ? HIGH : LOW);
+// Everything the board says goes out as a bundle: the /enq answer, the
+// echoes, and the stream. Handlers add to it; flushOut() sends whatever has
+// accumulated after a dispatch pass or a stream tick.
+static OSCBundle bundleOUT;
+
+static void flushOut() {
+  if (bundleOUT.size() == 0) return;
+  SLIPSerial.beginPacket(); bundleOUT.send(SLIPSerial); SLIPSerial.endPacket();
+  bundleOUT.empty();
 }
 
-static void routeRgb(OSCMessage &m) {
-  if (m.size() < 3) return;
-  strip.setPixelColor(0, m.getInt(0) & 0xFF, m.getInt(1) & 0xFF, m.getInt(2) & 0xFF);
+// Pressed == HIGH: see the pinMode note in setup().
+static void addBtn()   { bundleOUT.add("/btn").add((intOSC_t) (digitalRead(BUTTON_PIN) == HIGH ? 1 : 0)); }
+static void addPot()   { bundleOUT.add("/pot").add((intOSC_t) analogRead(POT_PIN)); }
+static void addLight() { bundleOUT.add("/light").add((intOSC_t) analogRead(LDR_PIN)); }
+static void addRelay() { bundleOUT.add("/relay/0").add((intOSC_t) relayState); }
+static void addTemp()  { if (shtOK) bundleOUT.add("/temp").add(tempC); }
+
+// The answer is the name followed by one /enq/<capability> per module this
+// board can prove it has, with the shape as parameters. The I2C modules
+// detach, so their lines are only there when the address answered at boot.
+static void addEnq() {
+  bundleOUT.add("/enq").add("PicoBricksOscuino");
+  if (oledOK) bundleOUT.add("/enq/display").add((intOSC_t) OLED_W).add((intOSC_t) OLED_H);
+  bundleOUT.add("/enq/rgb").add((intOSC_t) RGB_COUNT);
+  bundleOUT.add("/enq/buzz");
+  bundleOUT.add("/enq/btn").add((intOSC_t) 1);
+  bundleOUT.add("/enq/pot").add((intOSC_t) 1);
+  bundleOUT.add("/enq/light");
+  bundleOUT.add("/enq/relay").add((intOSC_t) 1);
+  if (shtOK) bundleOUT.add("/enq/temp");
+  if (motorOK) {
+    bundleOUT.add("/enq/motor").add((intOSC_t) MOTOR_COUNT);
+    bundleOUT.add("/enq/servo").add((intOSC_t) SERVO_COUNT);
+  }
+}
+
+/* ----------------------------------------------------------------- inbound */
+
+// The /<n> after a route's prefix as a number, or -1 for anything else.
+static int indexAfter(OSCMessage &m, int offset) {
+  char rest[8];
+  m.getAddress(rest, offset, sizeof rest);
+  if (rest[0] != '/' || !isdigit((unsigned char) rest[1])) return -1;
+  return atoi(rest + 1);
+}
+
+static void routeLed(OSCMessage &m) {                // /s/l 0|1
+  if (m.size() < 1 || !m.isInt(0)) return;
+  const int32_t v = m.getInt(0) ? 1 : 0;
+  digitalWrite(LED_PIN, v ? HIGH : LOW);
+  bundleOUT.add("/s/l").add((intOSC_t) v);
+}
+
+// The WS2812 has no brightness register and the PicoBricks driver no
+// brightness call, so /rgb/bright is a scale applied here to the last colour
+// written; the colour itself is kept unscaled so a later /rgb/bright can
+// restore it.
+static void showRgb() {
+  strip.setPixelColor(0, (uint8_t) (rgbR * rgbBright / 255),
+                         (uint8_t) (rgbG * rgbBright / 255),
+                         (uint8_t) (rgbB * rgbBright / 255));
   strip.Show();
 }
 
-static void routeBuzz(OSCMessage &m) {
+// /rgb r g b, /rgb/0 r g b, /rgb/pixels r g b, /rgb/bright n. One pixel, so
+// the first three all mean it; each is echoed on the address it arrived on.
+static void routeRgb(OSCMessage &m, int offset) {
+  char addr[16];
+  m.getAddress(addr, 0, sizeof addr);
+  if (m.fullMatch("/bright", offset)) {
+    if (m.size() < 1 || !m.isInt(0)) return;
+    rgbBright = (uint8_t) constrain(m.getInt(0), 0, 255);
+    showRgb();
+    bundleOUT.add(addr).add((intOSC_t) rgbBright);
+    return;
+  }
+  const bool bare = m.getAddressLength(offset) == 0;
+  if (!bare && indexAfter(m, offset) != 0 && !m.fullMatch("/pixels", offset)) return;
+  if (m.size() < 3) return;
+  rgbR = m.getInt(0) & 0xFF; rgbG = m.getInt(1) & 0xFF; rgbB = m.getInt(2) & 0xFF;
+  showRgb();
+  bundleOUT.add(addr).add((intOSC_t) rgbR).add((intOSC_t) rgbG).add((intOSC_t) rgbB);
+}
+
+static void routeBuzz(OSCMessage &m) {               // /buzz hz [ms]; 0 stops
   if (m.size() < 1 || !m.isInt(0)) return;
   const int32_t f = m.getInt(0);
   const int32_t ms = (m.size() > 1 && m.isInt(1)) ? m.getInt(1) : 150;
-  if (f <= 0) { noTone(BUZZER_PIN); buzzUntil = 0; return; }
-  tone(BUZZER_PIN, (unsigned int) f);
-  buzzUntil = millis() + (uint32_t) constrain(ms, 10, 5000);
+  if (f <= 0) { noTone(BUZZER_PIN); buzzUntil = 0; }
+  else {
+    tone(BUZZER_PIN, (unsigned int) f);
+    buzzUntil = millis() + (uint32_t) constrain(ms, 10, 5000);
+  }
+  bundleOUT.add("/buzz").add((intOSC_t) f).add((intOSC_t) ms);
 }
 
-static void routeRelay(OSCMessage &m) {
-  if (m.size() < 1 || !m.isInt(0)) return;
-  relayState = m.getInt(0) ? 1 : 0;
-  digitalWrite(RELAY_PIN, relayState ? HIGH : LOW);
+static void routeRelay(OSCMessage &m, int offset) {  // /relay/0 [0|1]
+  if (indexAfter(m, offset) != 0) return;
+  if (m.size() >= 1 && m.isInt(0)) {
+    relayState = m.getInt(0) ? 1 : 0;
+    digitalWrite(RELAY_PIN, relayState ? HIGH : LOW);
+  }
+  addRelay();                                        // the echo, or the answer
 }
 
-static void routeOled(OSCMessage &m) {
-  for (uint8_t i = 0; i < 4; i++) lines[i][0] = '\0';
-  const int n = m.size() < 4 ? m.size() : 4;
+static void routeText(OSCMessage &m) {               // /display/text up to four lines
+  for (uint8_t i = 0; i < TEXT_LINES; i++) lines[i][0] = '\0';
+  const int n = m.size() < TEXT_LINES ? m.size() : TEXT_LINES;
   for (int i = 0; i < n; i++)
     if (m.isString(i)) m.getString(i, lines[i], sizeof lines[i]);
   redraw();
+  bundleOUT.add("/display/text").add((intOSC_t) (oledOK ? n : 0));
 }
 
-static void routeMotor(OSCMessage &m) {
-  if (!motorOK || m.size() < 3) return;
-  motor.dc(constrain(m.getInt(0), 1, 2),
-           constrain(m.getInt(1), 0, 255),
-           m.getInt(2) ? 1 : 0);
+// The wire counts from 0 like every other indexed address in the contract;
+// Robotistan's driver counts its outputs from 1.
+static void routeMotor(OSCMessage &m, int offset) {  // /motor/<n> speed dir
+  const int n = indexAfter(m, offset);
+  if (!motorOK || n < 0 || n >= MOTOR_COUNT || m.size() < 2) return;
+  const int32_t speed = constrain(m.getInt(0), 0, 255);
+  const int32_t dir   = m.getInt(1) ? 1 : 0;
+  motor.dc(n + 1, speed, dir);
+  char addr[16];
+  m.getAddress(addr, 0, sizeof addr);
+  bundleOUT.add(addr).add((intOSC_t) speed).add((intOSC_t) dir);
 }
 
-static void routeServo(OSCMessage &m) {
-  if (!motorOK || m.size() < 2) return;
-  motor.servo(constrain(m.getInt(0), 1, 4), constrain(m.getInt(1), 0, 180));
+static void routeServo(OSCMessage &m, int offset) {  // /servo/<n> angle
+  const int n = indexAfter(m, offset);
+  if (!motorOK || n < 0 || n >= SERVO_COUNT || m.size() < 1) return;
+  const int32_t angle = constrain(m.getInt(0), 0, 180);
+  motor.servo(n + 1, angle);
+  char addr[16];
+  m.getAddress(addr, 0, sizeof addr);
+  bundleOUT.add(addr).add((intOSC_t) angle);
 }
 
-static void routeRate(OSCMessage &m) {
-  if (m.size() >= 1 && m.isInt(0)) reportMs = constrain(m.getInt(0), 20, 2000);
+static void routeRate(OSCMessage &m) {               // /rate <ms>, 0 stops
+  if (m.size() < 1 || !m.isInt(0)) return;
+  const int32_t v = m.getInt(0);
+  reportMs = v <= 0 ? 0 : constrain(v, 20, 2000);
+  bundleOUT.add("/rate").add((intOSC_t) reportMs);
 }
 
-static void sendHello() {
-  OSCMessage h("/hello");
-  h.add("PicoBricksOscuino").add(oledOK).add(shtOK).add(motorOK)
-   .add((intOSC_t) RGB_COUNT);
-  SLIPSerial.beginPacket(); h.send(SLIPSerial); SLIPSerial.endPacket();
-}
-static void routeHello(OSCMessage &) { sendHello(); }
+static void routeBtn(OSCMessage &)   { addBtn(); }
+static void routePot(OSCMessage &)   { addPot(); }
+static void routeLight(OSCMessage &) { addLight(); }
+static void routeTemp(OSCMessage &)  { addTemp(); }
+static void routeEnq(OSCMessage &) { addEnq(); }
 
 void setup() {
   SLIPSerial.begin(115200);
@@ -185,7 +330,7 @@ void setup() {
 
   // Probe each address before trusting a begin(): the modules detach, and a
   // driver that initialises happily against an empty bus reports nothing
-  // wrong while streaming zeros.
+  // wrong while streaming zeros. The probe results are what /enq announces.
   oledOK  = present(ADDR_OLED);
   shtOK   = present(ADDR_SHTC);
   motorOK = present(ADDR_MOTOR);
@@ -193,7 +338,7 @@ void setup() {
   if (oledOK) { oled.init(); redraw(); }
   if (shtOK)  shtc.begin();
 
-  sendHello();          // usually lost; the page asks again
+  addEnq(); flushOut();   // usually lost; the page asks again
 }
 
 // Non-blocking receive, the extras/webserial/template.ino pattern. Two rules,
@@ -223,44 +368,48 @@ void loop() {
 
   if (pollOSC()) {
     if (!inMsg.hasError()) {
-      inMsg.dispatch("/pb/led",   routeLed);
-      inMsg.dispatch("/pb/rgb",   routeRgb);
-      inMsg.dispatch("/pb/buzz",  routeBuzz);
-      inMsg.dispatch("/pb/relay", routeRelay);
-      inMsg.dispatch("/pb/oled",  routeOled);
-      inMsg.dispatch("/pb/motor", routeMotor);
-      inMsg.dispatch("/pb/servo", routeServo);
-      inMsg.dispatch("/pb/rate",  routeRate);
-      inMsg.dispatch("/hello",    routeHello);
+      inMsg.dispatch("/s/l",          routeLed);
+      inMsg.route("/rgb",             routeRgb);      // /rgb, /rgb/0, /rgb/pixels, /rgb/bright
+      inMsg.dispatch("/buzz",         routeBuzz);
+      inMsg.route("/relay",           routeRelay);    // /relay/0
+      inMsg.dispatch("/display/text", routeText);
+      inMsg.route("/motor",           routeMotor);    // /motor/<n>
+      inMsg.route("/servo",           routeServo);    // /servo/<n>
+      inMsg.dispatch("/rate",         routeRate);
+      inMsg.dispatch("/btn",          routeBtn);
+      inMsg.dispatch("/pot",          routePot);
+      inMsg.dispatch("/light",        routeLight);
+      inMsg.dispatch("/temp",         routeTemp);
+      inMsg.dispatch("/enq",        routeEnq);
     }
     inMsg.empty();
+    flushOut();                               // echoes and answers, one bundle
   }
 
   const uint32_t now = millis();
   if (buzzUntil && now >= buzzUntil) { noTone(BUZZER_PIN); buzzUntil = 0; }
-  if (now - last < reportMs) return;
+  if (!reportMs || now - last < reportMs) return;
   last = now;
 
   // Each SHTC3 read runs a full conversion with a blocking delay(100)
-  // inside the PicoBricks library, so reading both per report cost 200 ms
-  // and silently tripled the 50 ms report period. Room temperature does not
-  // move at 20 Hz: sample once a second, alternating the two conversions so
-  // no single pass blocks more than ~100 ms, and reuse the cache between.
-  static float tempC = 0, humid = 0;
+  // inside the PicoBricks library, which read on every report would have
+  // tripled the 50 ms default period. Room temperature does not move at
+  // 20 Hz: convert once a second and reuse the cache between. (Humidity used
+  // to alternate with it on this timer; it has no contract address and is
+  // no longer read.)
   static uint32_t lastSht = 0;
-  static bool whichSht = false;
-  if (shtOK && now - lastSht >= 500) {
+  if (shtOK && now - lastSht >= 1000) {
     lastSht = now;
-    if (whichSht) tempC = shtc.readTemperature(); else humid = shtc.readHumidity();
-    whichSht = !whichSht;
+    tempC = shtc.readTemperature();
   }
 
-  OSCMessage m("/pb");
-  m.add((intOSC_t) seq++)
-   .add((intOSC_t) (digitalRead(BUTTON_PIN) == HIGH ? 1 : 0))
-   .add((intOSC_t) analogRead(POT_PIN))
-   .add((intOSC_t) analogRead(LDR_PIN))
-   .add((intOSC_t) relayState)
-   .add(tempC).add(humid);
-  SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
+  // One bundle, sampled in one pass, so every reading in it belongs to the
+  // same instant: /state first, then one message per capability streamed.
+  bundleOUT.add("/state").add((intOSC_t) seq++).add((intOSC_t) now);
+  addBtn();
+  addPot();
+  addLight();
+  addRelay();
+  addTemp();
+  flushOut();
 }

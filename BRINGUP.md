@@ -183,7 +183,7 @@ python3 test/hardware/bench.py PORT ring 20   # ring map vs a lazy reader
 `examples/XxxOscuino/XxxOscuino.ino`, named for the board. Conventions
 from the ones that exist (PyBadge, XiaoS3Sense, Esplora):
 
-* **`/hello` first**: name plus a boolean per optional peripheral
+* **`/enq` first**: name plus a boolean per optional peripheral
   (`accelOK`, `micOK`, `cameraOK`). The page uses these to hide panels, so
   a lesser variant of the board degrades instead of failing — this is how
   one sketch serves both PyBadge (no mic) and EdgeBadge (mic).
@@ -257,13 +257,13 @@ tying it to its sketch, since `make check` cannot see hand-written pages —
   display that had never drawn once, silently.
 * **Draw the board to scale** (SVG, viewBox in mm×10) with controls where
   the physical controls are, and mirror outbound state — an emulated
-  screen that renders what `/screen/text` sent, a backlight that dims with
-  `/screen/backlight`. The page is the board's mirror, not a dashboard.
+  screen that renders what `/display/text` sent, a backlight that dims with
+  `/display/bl`. The page is the board's mirror, not a dashboard.
 * **Instrument like an instrument**: dBFS meters with a floor (a linear
   bar pins a −64 dBFS room at the left stop), peak-hold with the clip
   indicator latched to the *held* peak, shape-only scopes labelled as
   such, level history over time.
-* **Hide what isn't there**, driven by `/hello`'s booleans.
+* **Hide what isn't there**, driven by `/enq`'s booleans.
 
 ## Phase 6 — record
 

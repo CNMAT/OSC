@@ -1,5 +1,6 @@
 /*
-*   Make an OSC message for controlling a remote LED blinking rates.
+*   Make an OSC message for controlling a remote LED blinking rates:
+*   /s/l <on ms> <off ms>, as SerialReceiveInfiniteLoop expects.
 */
 
 #include <OSCBoards.h>
@@ -25,7 +26,7 @@ void setup()
 void loop()
 {
     //the message wants an OSC address as first argument
-    OSCMessage msg("/led");
+    OSCMessage msg("/s/l");
 
     auto i = rand() % (blinkRatesSize - 1);
     auto blinkRateOn = blinkRates[i];

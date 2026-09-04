@@ -15,12 +15,60 @@
 //
 // Open XiaoS3SenseOscuino.html to see it. Chrome or Edge, served over
 // http://localhost — Web Serial does not work from a file:// URL.
+//
+// Addresses: the capability-named space of ADDRESSES.md. Nothing is sent
+// under this board's name.
+//
+// Inbound
+//   /enq              ask for the capability bundle again -- see below
+//   /rate ,i ms         stream period, 20..10000; 0 stops the stream. Echoed.
+//                       ONE rate paces everything: the analog inputs, the
+//                       die temperature, the microphone AND the camera frames
+//                       all travel in the same bundle, every /rate ms. It
+//                       starts at 200 ms, the old frame gap, so the mic and
+//                       the sensors now arrive at the frame rate too.
+//   /stream ,i 0|1      camera frames on or off; the rest of the stream
+//                       keeps going. Only the JPEG costs real wire.
+//   /cam/size ,i 0..3   QQVGA 160x120, QVGA 320x240, VGA 640x480, SVGA 800x600
+//   /cam/quality ,i     JPEG quality 4..63, lower is better and bigger
+//   /s/l ,i 0|1         the XIAO's own LED (active LOW on the board). Echoed.
+//   /s/a                analog input count -> /s/a ,i
+//   /temp               read the die temperature once -> /temp ,f
+//   /mic                read the microphone once -> /mic ,ii (mic up only)
+//   /a/0 .. /a/5        read one analog input once -> /a/<n> ,i
+//                       Every request that reads something answers on its
+//                       own address, so with /rate 0 the board can be
+//                       polled instead of streamed. The write form of
+//                       /a/<n> (an argument) is not implemented here.
+// Outbound, the /enq bundle: the name, then one /enq per capability that
+// is actually here. Booleans became presence: a board whose camera or
+// microphone failed to initialise answers a shorter list, not a false one.
+//   /enq ,s           "XiaoS3SenseOscuino"
+//   /enq/temp           the die temperature is always there
+//   /enq/diag           free-text diagnostics (free heap)
+//   /enq/cam ,ii        width, height of the current frame size
+//   /enq/mic            the PDM microphone
+// Outbound, the stream: one bundle every /rate ms, everything sampled in the
+// same pass so every reading in it belongs to the same instant.
+//   /state ,ii          sequence, millis -- the gap detector
+//   /a/0 .. /a/5 ,i     the six analog inputs, 0..4095
+//   /temp ,f            die temperature, degrees C
+//   /diag ,s            "heap <n> KB" -- free text, never parsed
+//   /mic ,ii            rms, peak, full scale 0..32767 (when the mic is up)
+//   /cam ,b             one JPEG frame (camera up and /stream 1)
+//
+// The stream bundle is written to the wire element by element rather than
+// built with OSCBundle: OSCMessage::add(uint8_t*,int) mallocs len+4 and
+// copies the whole JPEG, and at 14 KB a VGA frame that is a copy and a
+// fragmentation risk for no benefit. The bundle format is a header, then
+// each element's byte count followed by the element.
 
 #define OSC_SLIP_TX_BUFFER 1024   // must precede the include; the header is #ifndef.
                                   // A VGA frame is ~14 KB, and 64 bytes a block
                                   // makes that hundreds of writes.
 
 #include <OSCMessage.h>
+#include <OSCBundle.h>
 #include <OSCBoards.h>
 #include <SLIPEncodedSerial.h>
 #include "esp_camera.h"
@@ -40,17 +88,15 @@ static bool micOK = false;
 // the USB bus before it could be flashed. The camera path above it is
 // measured (19/19 valid JPEGs); treat /mic as unconfirmed until a capture
 // shows real audio. The pin map and PDM-mono-16k constraint are from Seeed's
-// wiki, not from this hardware.
+// wiki, not from this hardware. Addresses renamed onto ADDRESSES.md on
+// 2026-09-03 (/led -> /s/l; /cam/rate and /mic/rate -> /rate; /xiao ->
+// /state + /a/<n> + /temp + /diag in one bundle; /cam ,iiiib -> /cam ,b;
+// /mic ,iiib -> /mic ,ii; /enq ,siTF -> /enq ,s + /enq/...; /temp, /mic
+// and /a/<n> asks added); that build is compile-checked and has not been
+// re-run on the board.
 //
-// A scope trace to draw, and a level to meter with. 128 samples at 16 kHz is
-// 8 ms of audio -- enough to see waveform shape without costing much wire.
-#define SCOPE_POINTS 128
-// /mic is hand-written rather than built with OSCMessage::add(), so nothing
-// pads its blob for it; 128 divides by 4 and no pad bytes are emitted. Assert
-// the invariant instead of trusting the comment beside the write -- /cam pads
-// explicitly because a JPEG length is arbitrary, but this one relies on the
-// constant, and a constant is exactly what a later edit changes.
-static_assert(SCOPE_POINTS % 4 == 0, "OSC blob payload must be a multiple of 4");
+// 512 samples at 16 kHz is 32 ms of audio per reading: enough for an rms
+// and a peak that mean something.
 static int16_t pcm[512];
 
 // Pin map for CAMERA_MODEL_XIAO_ESP32S3, copied from the esp32 core's own
@@ -75,13 +121,18 @@ static int16_t pcm[512];
 static const uint8_t ANALOG_PINS[] = { A0, A1, A2, A3, A4, A5 };
 static const int     NANALOG       = sizeof ANALOG_PINS;
 
+// The four sizes /cam/size selects, with the dimensions /enq/cam announces.
+struct FrameSize { framesize_t fs; uint16_t w, h; };
+static const FrameSize SIZES[] = {
+  { FRAMESIZE_QQVGA, 160, 120 }, { FRAMESIZE_QVGA, 320, 240 },
+  { FRAMESIZE_VGA,   640, 480 }, { FRAMESIZE_SVGA, 800, 600 },
+};
+
 static bool     cameraOK   = false;
-static bool     streaming  = true;
-static int32_t  frameSeq   = 0;
-static uint32_t frameEvery = 200;      // ms between frames; /cam/rate changes it
-static uint32_t sensorEvery = 100;
-static uint32_t micEvery    = 50;      // 20 Hz scope + level
-static framesize_t curSize = FRAMESIZE_QVGA;
+static bool     streaming  = true;     // /stream: camera frames in the bundle
+static int32_t  seq        = 0;        // /state sequence
+static uint32_t rateMs     = 200;      // /rate: ms between bundles; 0 stops
+static int      curSizeIdx = 1;        // QVGA
 static int      curQuality = 12;       // 0..63, lower is better and bigger
 
 /* ------------------------------------------------------------------ camera */
@@ -116,9 +167,8 @@ static bool cameraBegin(framesize_t fs, int quality) {
   return esp_camera_init(&c) == ESP_OK;
 }
 
-// Write the frame straight to the wire. OSCMessage::add(uint8_t*,int) mallocs
-// len+4 and copies the whole JPEG; at 14 KB a frame that is a copy and a
-// fragmentation risk for no benefit, and the message format is four lines.
+/* ------------------------------------------------------------ wire helpers */
+
 static void writePadded(Print &p, const char *s) {
   size_t n = strlen(s) + 1;
   p.write((const uint8_t *)s, n);
@@ -129,76 +179,149 @@ static void writeBE32(Print &p, uint32_t v) {
   p.write(b, 4);
 }
 
-// /cam ,iiiib  seq, millis, width, height, jpeg
-static void sendFrame(camera_fb_t *fb) {
-  SLIPSerial.beginPacket();
-  writePadded(SLIPSerial, "/cam");
-  writePadded(SLIPSerial, ",iiiib");
-  writeBE32(SLIPSerial, (uint32_t) frameSeq++);
-  writeBE32(SLIPSerial, millis());
-  writeBE32(SLIPSerial, fb->width);
-  writeBE32(SLIPSerial, fb->height);
-  writeBE32(SLIPSerial, fb->len);          // OSC blob: length then bytes
-  SLIPSerial.write(fb->buf, fb->len);
-  for (size_t pad = (4 - (fb->len & 3)) & 3; pad; pad--) SLIPSerial.write((uint8_t)0);
-  SLIPSerial.endPacket();
+// "#bundle" then the immediate timetag (0, 1).
+static void beginBundle(Print &p) {
+  static const uint8_t header[16] = { '#','b','u','n','d','l','e',0, 0,0,0,0, 0,0,0,1 };
+  p.write(header, 16);
+}
+// One element: its byte count, then the message.
+static void bundleAdd(Print &p, OSCMessage &m) {
+  writeBE32(p, (uint32_t) m.bytes());
+  m.send(p);
+}
+// /cam ,b -- the JPEG straight from the frame buffer to the wire.
+// "/cam\0" pads to 8, ",b\0" to 4, then the blob: its length and its bytes
+// padded to a multiple of 4.
+static void bundleAddFrame(Print &p, camera_fb_t *fb) {
+  const uint32_t len    = fb->len;
+  const uint32_t padded = (len + 3) & ~3u;
+  writeBE32(p, 8 + 4 + 4 + padded);
+  writePadded(p, "/cam");
+  writePadded(p, ",b");
+  writeBE32(p, len);
+  p.write(fb->buf, len);
+  for (uint32_t pad = padded - len; pad; pad--) p.write((uint8_t)0);
+}
+
+// A one-message reply or echo.
+static void reply(OSCMessage &m) {
+  SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
 }
 
 /* ------------------------------------------------------------------ mic */
 
-// /mic ,iiib  rmsQ15, peakQ15, sampleRate, scope
-// The scope is SCOPE_POINTS signed bytes -- the top 8 bits of each sample --
-// sent as a blob. Full 16-bit PCM would be twice the wire for detail no
-// on-screen trace can show.
-static void sendMic() {
-  const size_t want = sizeof pcm;
-  const size_t got  = I2Sin.readBytes((char *) pcm, want);
+// rms and peak of one reading, both on the 16-bit scale (0..32767).
+static bool readMic(int32_t &rms, int32_t &peak) {
+  const size_t got = I2Sin.readBytes((char *) pcm, sizeof pcm);
   const int n = got / sizeof(int16_t);
-  if (n <= 0) return;
+  if (n <= 0) return false;
 
   // uint64, not a pre-shift: (s*s)>>16 truncates every sample quieter than
   // 256 counts to zero, so a quiet room reads rms 0. That exact failure was
   // measured on the PyBadge's mic before this sketch could repeat it.
   uint64_t sumsq = 0;
-  int16_t peak = 0;
+  int16_t pk = 0;
   for (int i = 0; i < n; i++) {
     const int32_t s = pcm[i];
     sumsq += (uint32_t)(s * s);
     const int16_t a = s < 0 ? -s : s;
-    if (a > peak) peak = a;
+    if (a > pk) pk = a;
   }
-  const int32_t rms = (int32_t) sqrtf((float) sumsq / (float) n);
+  rms  = (int32_t) sqrtf((float) sumsq / (float) n);
+  peak = pk;
+  return true;
+}
 
-  int8_t scope[SCOPE_POINTS];
-  const int step = n > SCOPE_POINTS ? n / SCOPE_POINTS : 1;
-  for (int i = 0; i < SCOPE_POINTS; i++) {
-    const int j = i * step;
-    scope[i] = (int8_t) (j < n ? (pcm[j] >> 8) : 0);
-  }
+/* ----------------------------------------------------------------- stream */
 
+// One bundle, everything sampled in one pass, so every reading in it belongs
+// to the same instant. The frame goes last: it is the only element that
+// costs real wire, and a reader can act on /state before it arrives.
+static void sendStream(uint32_t now) {
   SLIPSerial.beginPacket();
-  writePadded(SLIPSerial, "/mic");
-  writePadded(SLIPSerial, ",iiib");
-  writeBE32(SLIPSerial, (uint32_t) rms);
-  writeBE32(SLIPSerial, (uint32_t) peak);
-  writeBE32(SLIPSerial, 16000);
-  writeBE32(SLIPSerial, SCOPE_POINTS);
-  SLIPSerial.write((const uint8_t *) scope, SCOPE_POINTS);   // already a multiple of 4
+  beginBundle(SLIPSerial);
+  {
+    OSCMessage m("/state");
+    m.add((intOSC_t) seq++).add((intOSC_t) now);
+    bundleAdd(SLIPSerial, m);
+  }
+  for (int i = 0; i < NANALOG; i++) {
+    char addr[8];
+    snprintf(addr, sizeof addr, "/a/%d", i);
+    OSCMessage m(addr);
+    m.add((intOSC_t) analogRead(ANALOG_PINS[i]));
+    bundleAdd(SLIPSerial, m);
+  }
+  {
+    OSCMessage m("/temp");
+    m.add(temperatureRead());                       // float, degrees C
+    bundleAdd(SLIPSerial, m);
+  }
+  {
+    char text[32];
+    snprintf(text, sizeof text, "heap %u KB", (unsigned) (ESP.getFreeHeap() / 1024));
+    OSCMessage m("/diag");
+    m.add((const char *) text);
+    bundleAdd(SLIPSerial, m);
+  }
+  if (micOK) {
+    int32_t rms, peak;
+    if (readMic(rms, peak)) {
+      OSCMessage m("/mic");
+      m.add((intOSC_t) rms).add((intOSC_t) peak);
+      bundleAdd(SLIPSerial, m);
+    }
+  }
+  if (cameraOK && streaming) {
+    camera_fb_t *fb = esp_camera_fb_get();
+    if (fb) { bundleAddFrame(SLIPSerial, fb); esp_camera_fb_return(fb); }
+  }
   SLIPSerial.endPacket();
 }
 
 /* ----------------------------------------------------------------- inbound */
 
-static void routeLed(OSCMessage &m) {                 // /led 0|1
+static void routeLed(OSCMessage &m) {                 // /s/l 0|1, echoed
   if (m.size() < 1 || !m.isInt(0)) return;
+  const int on = m.getInt(0) ? 1 : 0;
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, m.getInt(0) ? LOW : HIGH);   // active LOW
+  digitalWrite(LED_BUILTIN, on ? LOW : HIGH);         // active LOW
+  OSCMessage r("/s/l"); r.add((intOSC_t) on); reply(r);
 }
-static void routeStream(OSCMessage &m) {              // /stream 0|1
+static void routeAnalogCount(OSCMessage &) {          // /s/a -> /s/a <count>
+  OSCMessage r("/s/a"); r.add((intOSC_t) NANALOG); reply(r);
+}
+static void routeTemp(OSCMessage &) {                 // /temp -> /temp <deg C>
+  OSCMessage r("/temp"); r.add(temperatureRead()); reply(r);
+}
+static void routeMic(OSCMessage &) {                  // /mic -> /mic <rms> <peak>
+  int32_t rms, peak;
+  if (!micOK || !readMic(rms, peak)) return;          // not announced, not answered
+  OSCMessage r("/mic"); r.add((intOSC_t) rms).add((intOSC_t) peak); reply(r);
+}
+// /a/<n> with no argument -> /a/<n> <0..4095>: the same six inputs the stream
+// carries, by index. addrOffset points past "/a"; the rest must be exactly
+// "/<n>". The write form (an argument) is not implemented on this board.
+static void routeAnalog(OSCMessage &m, int addrOffset) {
+  for (int i = 0; i < NANALOG; i++) {
+    char tail[4];
+    snprintf(tail, sizeof tail, "/%d", i);
+    if (!m.fullMatch(tail, addrOffset)) continue;
+    if (m.size() > 0) return;
+    char addr[8];
+    snprintf(addr, sizeof addr, "/a/%d", i);
+    OSCMessage r(addr); r.add((intOSC_t) analogRead(ANALOG_PINS[i])); reply(r);
+    return;
+  }
+}
+static void routeStream(OSCMessage &m) {              // /stream 0|1: camera frames
   if (m.size() >= 1 && m.isInt(0)) streaming = m.getInt(0) != 0;
 }
-static void routeRate(OSCMessage &m) {                // /cam/rate <ms>
-  if (m.size() >= 1 && m.isInt(0)) frameEvery = constrain(m.getInt(0), 0, 10000);
+static void routeRate(OSCMessage &m) {                // /rate <ms>; 0 stops; echoed
+  if (m.size() < 1 || !m.isInt(0)) return;
+  const int32_t v = m.getInt(0);
+  rateMs = v <= 0 ? 0 : (uint32_t) constrain(v, 20, 10000);
+  OSCMessage r("/rate"); r.add((intOSC_t) rateMs); reply(r);
 }
 static void routeQuality(OSCMessage &m) {             // /cam/quality <0..63>
   if (m.size() < 1 || !m.isInt(0)) return;
@@ -206,33 +329,36 @@ static void routeQuality(OSCMessage &m) {             // /cam/quality <0..63>
   sensor_t *s = esp_camera_sensor_get();
   if (s) s->set_quality(s, curQuality);
 }
-static void routeMicRate(OSCMessage &m) {              // /mic/rate <ms>
-  if (m.size() >= 1 && m.isInt(0)) micEvery = constrain(m.getInt(0), 20, 5000);
-}
 static void routeSize(OSCMessage &m) {                // /cam/size 0..3
   if (m.size() < 1 || !m.isInt(0)) return;
-  static const framesize_t sizes[] = { FRAMESIZE_QQVGA, FRAMESIZE_QVGA,
-                                       FRAMESIZE_VGA,   FRAMESIZE_SVGA };
-  curSize = sizes[constrain(m.getInt(0), 0, 3)];
+  curSizeIdx = constrain(m.getInt(0), 0, 3);
   sensor_t *s = esp_camera_sensor_get();
-  if (s) s->set_framesize(s, curSize);
+  if (s) s->set_framesize(s, SIZES[curSizeIdx].fs);
 }
 
 /* -------------------------------------------------------------------- main */
 
-// The boot /hello is very nearly always lost: the board resets, its USB
+// The boot /enq is very nearly always lost: the board resets, its USB
 // device re-enumerates, and the host opens the port some hundreds of
 // milliseconds later, by which time setup() has long finished. Measured on
 // this repo's ESP32 and SAMD boards -- a probe opening the port straight
-// after flashing never once caught it. So /hello is also an INBOUND address
+// after flashing never once caught it. So /enq is also an INBOUND address
 // and the page asks for it on connect.
-static void sendHello() {
-  OSCMessage hello("/hello");
-  hello.add("XiaoS3SenseOscuino").add((intOSC_t) NANALOG).add(cameraOK).add(micOK);
-  SLIPSerial.beginPacket(); hello.send(SLIPSerial); SLIPSerial.endPacket();
+//
+// The capability bundle of ADDRESSES.md: the name, then one /enq per thing
+// that is actually here. What failed to initialise is simply not listed.
+static void sendEnq() {
+  OSCBundle b;
+  b.add("/enq").add("XiaoS3SenseOscuino");
+  b.add("/enq/temp");
+  b.add("/enq/diag");
+  if (cameraOK) b.add("/enq/cam").add((intOSC_t) SIZES[curSizeIdx].w)
+                                 .add((intOSC_t) SIZES[curSizeIdx].h);
+  if (micOK)    b.add("/enq/mic");
+  SLIPSerial.beginPacket(); b.send(SLIPSerial); SLIPSerial.endPacket();
 }
 
-static void routeHello(OSCMessage &) { sendHello(); }
+static void routeEnq(OSCMessage &) { sendEnq(); }
 
 void setup() {
 #if defined(ARDUINO_USB_MODE) && ARDUINO_USB_MODE == 1
@@ -245,13 +371,13 @@ void setup() {
   SLIPSerial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);          // off; active LOW
-  cameraOK = cameraBegin(curSize, curQuality);
+  cameraOK = cameraBegin(SIZES[curSizeIdx].fs, curQuality);
 
   I2Sin.setPinsPdmRx(PDM_CLK_PIN, PDM_DATA_PIN);
   micOK = I2Sin.begin(I2S_MODE_PDM_RX, 16000,
                       I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
 
-  sendHello();          // nearly always lost; the page asks again
+  sendEnq();          // nearly always lost; the page asks again
 }
 
 // Non-blocking receive, the extras/webserial/template.ino pattern. Two rules,
@@ -277,45 +403,28 @@ static bool pollOSC() {
 }
 
 void loop() {
-  static uint32_t lastSensors = 0, lastFrame = 0, lastMic = 0;
+  static uint32_t lastStream = 0;
 
   // inbound first, so a /stream 0 takes effect before the next capture
   if (pollOSC()) {
     if (!inMsg.hasError()) {
-      inMsg.dispatch("/led",         routeLed);
+      inMsg.dispatch("/s/l",         routeLed);
+      inMsg.dispatch("/s/a",         routeAnalogCount);
+      inMsg.dispatch("/temp",        routeTemp);
+      inMsg.dispatch("/mic",         routeMic);
+      inMsg.route("/a",              routeAnalog);
       inMsg.dispatch("/stream",      routeStream);
-      inMsg.dispatch("/cam/rate",    routeRate);
+      inMsg.dispatch("/rate",        routeRate);
       inMsg.dispatch("/cam/quality", routeQuality);
       inMsg.dispatch("/cam/size",    routeSize);
-      inMsg.dispatch("/mic/rate",    routeMicRate);
-      inMsg.dispatch("/hello",       routeHello);
+      inMsg.dispatch("/enq",       routeEnq);
     }
     inMsg.empty();
   }
 
-  uint32_t now = millis();
-
-  if (now - lastSensors >= sensorEvery) {
-    lastSensors = now;
-    // One message, everything sampled in one pass, so every reading in it
-    // belongs to the same instant -- the same shape as EsploraOscuino.
-    OSCMessage m("/xiao");
-    for (int i = 0; i < NANALOG; i++) m.add((intOSC_t) analogRead(ANALOG_PINS[i]));
-    m.add((intOSC_t) (temperatureRead() * 100.0f));   // centi-degrees C
-    m.add((intOSC_t) (ESP.getFreeHeap() / 1024));
-    m.add((intOSC_t) frameSeq);
-    m.add(cameraOK);
-    SLIPSerial.beginPacket(); m.send(SLIPSerial); SLIPSerial.endPacket();
-  }
-
-  if (micOK && streaming && now - lastMic >= micEvery) {
-    lastMic = now;
-    sendMic();
-  }
-
-  if (cameraOK && streaming && frameEvery && now - lastFrame >= frameEvery) {
-    lastFrame = now;
-    camera_fb_t *fb = esp_camera_fb_get();
-    if (fb) { sendFrame(fb); esp_camera_fb_return(fb); }
+  const uint32_t now = millis();
+  if (rateMs && now - lastStream >= rateMs) {
+    lastStream = now;
+    sendStream(now);
   }
 }

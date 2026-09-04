@@ -1,7 +1,7 @@
 /*
   Receive an OSC message over WiFi and dispatch it
 
-  Send an integer 0 or 1 to "/led" at this board's IP, port 8888, to turn the
+  Send an integer 0 or 1 to "/s/l" at this board's IP, port 8888, to turn the
   built-in LED off and on.
 
   The current Arduino WiFi libraries all present the same WiFiUDP object, so one
@@ -12,6 +12,9 @@
   Compiled with arduino-cli 1.5.1 for the UNO R4 WiFi, Nano 33 IoT, Portenta C33
   and ESP32. The ESP8266 branch has not been compiled — that core is not
   installed on the development machine — and this has not been run on hardware.
+
+  Addresses renamed onto ADDRESSES.md on 2026-09-03 (/led -> /s/l);
+  that build is compile-checked and has not been re-run on the board.
 
   Adrian Freed
  */
@@ -121,7 +124,7 @@ void connectWiFi() {
 void led(OSCMessage &msg) {
   int state = msg.getInt(0);
   digitalWrite(LED_BUILTIN, state ? HIGH : LOW);
-  Serial.print("/led: ");
+  Serial.print("/s/l: ");
   Serial.println(state);
 }
 
@@ -146,7 +149,7 @@ void loop() {
       msg.fill((uint8_t)c);
 
     if (!msg.hasError()) {
-      msg.dispatch("/led", led);
+      msg.dispatch("/s/l", led);
     } else {
       error = msg.getError();
       Serial.print("error: ");

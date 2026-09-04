@@ -31,50 +31,52 @@ void setup() {
 }
 
 void loop(){
-  //a heavily patterned message address
-  OSCMessage msg0("/{input,output}/[0-2]/[!ab]/*");
+  //a heavily patterned message address: an analog or digital pin address from
+  //ADDRESSES.md, any pin number, then a one-character sub-address that is not
+  //a or b (the contract's /u pull-up read is one)
+  OSCMessage msg0("/{a,d}/[0-9]*/[!ab]");
   //match will traverse as far as it can in the pattern
   //it returns the number of characters matched from the pattern
-  int patternOffset = msg0.match("/input/1");
+  int patternOffset = msg0.match("/d/13");
   if (patternOffset>0){
     //string multiple 'match' methods together using the pattern offset parameter to continue matching where it left off
     //use 'fullMatch' to test if the entire pattern was matched. 
-    if(msg0.fullMatch("/c/anything", patternOffset)){
-      Serial.println("Match: '/input/1/c/anything' against the pattern '/{input,output}/[0-2]/[abc]/*'");
+    if(msg0.fullMatch("/u", patternOffset)){
+      Serial.println("Match: '/d/13/u' against the pattern '/{a,d}/[0-9]*/[!ab]'");
     }
   }
   //write over the other message address
-  OSCMessage msg1("/partialMatch");
+  OSCMessage msg1("/display");
   //match will return 0 if it did not reach the end or a '/'
-  if(!msg1.match("/partial")){
-    Serial.println("No Match: '/partial' against the pattern '/partialMatch'");
+  if(!msg1.match("/d")){
+    Serial.println("No Match: '/d' against the pattern '/display'");
   }
-  OSCMessage msg2("/output/[0-2]");
+  OSCMessage msg2("/d/[0-2]");
   //'route' is uses 'match' to allow for partial matches
   //it invokes the callback with the matched message and the pattern offset as parameters to the callback
-  msg2.route("/output", routeOutput);
+  msg2.route("/d", routeDigital);
   //'dispatch' uses 'fullMatch' so it does not allow for partial matches
   //invokes the callback with only one argument which is the matched message
-  msg2.dispatch("/output/1", routeOutputOne);
+  msg2.dispatch("/d/1", routeDigitalOne);
   delay(1000);
 }
 
-//called after matching '/output' 
+//called after matching '/d' 
 //the matched message and the number of matched characters as the parameters
-void routeOutput(OSCMessage &msg, int patternOffset){
-  Serial.println("Match: '/output'");
+void routeDigital(OSCMessage &msg, int patternOffset){
+  Serial.println("Match: '/d'");
   //string multiple 'route' methods together using the pattern offset parameter. 
   msg.route("/0", routeZero, patternOffset);
 }
 
 //called after matching '/0'
 void routeZero(OSCMessage &msg, int addressOffset){
-  Serial.println("Match: '/output/0'");
+  Serial.println("Match: '/d/0'");
 }
 
-//called after matching '/output/1' 
-void routeOutputOne(OSCMessage &msg){
-  Serial.println("Match: '/output/1'");
+//called after matching '/d/1' 
+void routeDigitalOne(OSCMessage &msg){
+  Serial.println("Match: '/d/1'");
 }
 
 

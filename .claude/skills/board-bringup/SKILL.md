@@ -37,15 +37,18 @@ by fingerprint, then add the BOARDS.md row.
 
 ## Demo flow (boards with built-in peripherals)
 
-Phase 4 sketch: `/hello` with a capability boolean per optional
-peripheral; probe capabilities at runtime by *signal* (not `begin()`'s
+Phase 4 sketch: `/enq` answered by a bundle — the sketch name, then one
+`/enq/<capability>` line per peripheral actually present, carrying its
+shape (absence is silence, never a boolean or a sentinel; see
+ADDRESSES.md); probe capabilities at runtime by *signal* (not `begin()`'s
 return — buses exist without parts on them); respect ISR-shaped driver
 contracts; uint64 square-accumulators, float division, window-relative
 scope normalisation, full-scale wire values, measured gain; pace with
-`millis()` + `/xxx/rate`. Phase 5 page: serve on localhost with no-store;
+`millis()` + `/rate` (0 stops; clamping it to a minimum is a bug — it makes
+"be quiet" stream faster). Phase 5 page: serve on localhost with no-store;
 decode every OSC tag including blobs; draw the board to scale and mirror
 outbound state; dBFS meters with peak-hold and latched clip; hide absent
-peripherals via `/hello`. Hand-written pages get a contract test
+peripherals via `/enq`. Hand-written pages get a contract test
 (`extras/webserial/test/test-cpx-contract.mjs` is the pattern).
 
 ## Record

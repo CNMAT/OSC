@@ -11,6 +11,9 @@
   and ESP32. The ESP8266 branch has not been compiled — that core is not
   installed on the development machine — and this has not been run on hardware.
 
+  Addresses renamed onto ADDRESSES.md on 2026-09-03 (/analog/0 -> /a/0);
+  that build is compile-checked and has not been re-run on the board.
+
   Adrian Freed
  */
 
@@ -123,8 +126,8 @@ void setup() {
 }
 
 void loop() {
-  //the message wants an OSC address as first argument
-  OSCMessage msg("/analog/0");
+  //the message wants an OSC address as first argument: /a/<pin> is an analog reading
+  OSCMessage msg("/a/0");
   msg.add((intOSC_t)analogRead(A0));
 
   Udp.beginPacket(outIp, outPort);

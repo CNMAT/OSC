@@ -81,8 +81,12 @@
 <p class="lede">
   Live values sit under the part they come from, and the actuators are the
   badges: the RGB LED opens a colour picker, the relay toggles, the buzzer
-  plays. Everything arrives in one <code>/pb</code> message so the readings
-  share an instant. Web Serial needs <code>http://localhost</code>.
+  plays. The readings arrive in one bundle &mdash; <code>/state</code>, then
+  <code>/btn</code>, <code>/pot</code>, <code>/light</code>,
+  <code>/relay/0</code> and <code>/temp</code> &mdash; so they share an
+  instant; <code>/enq</code> answers with one <code>/enq/&hellip;</code> line
+  per module that is actually fitted, and a badge stays dim until its line
+  arrives. Web Serial needs <code>http://localhost</code>.
   <strong>Note:</strong> this is Robotistan's stock photo — a v2.1 board like
   yours carries an <code>SHTC3</code> on I²C where the picture shows a blue
   DHT11, and its motor driver is an I²C slave rather than direct GPIO.
@@ -140,13 +144,13 @@
 
 <div class="strip">
   <div class="card">
-    <h3>OLED <em>0x3C</em></h3>
+    <h3>OLED <em>/display/text</em></h3>
     <div id="glass" contenteditable="true" spellcheck="false"></div>
     <div style="color:var(--dim);font-size:10px;margin-top:6px;font-family:var(--mono)">
       type here — four lines, sent on pause</div>
   </div>
   <div class="card">
-    <h3>Buzzer <em>GP20</em></h3>
+    <h3>Buzzer <em>/buzz hz ms</em></h3>
     <div class="keys" id="keyrow">
       <i data-f="262">C</i><i data-f="294">D</i><i data-f="330">E</i><i data-f="349">F</i>
       <i data-f="392">G</i><i data-f="440">A</i><i data-f="494">B</i><i data-f="523">C</i>
@@ -158,7 +162,7 @@
     </div>
   </div>
   <div class="card">
-    <h3>Motors <em>I²C 0x22</em></h3>
+    <h3>Motors <em>/motor/0 · /motor/1 · /servo/0</em></h3>
     <div style="display:flex;gap:7px;align-items:center">
       <span style="color:var(--dim);font-size:10px">M1</span>
       <input type="range" class="sl" id="m1" min="-255" max="255" value="0">
@@ -179,11 +183,10 @@
     <h3>Board</h3>
     <table style="width:100%;font-size:12px">
       <tr><td style="color:var(--dim)">sketch</td><td style="text-align:right;font-family:var(--mono)" id="name">–</td></tr>
-      <tr><td style="color:var(--dim)">temp</td><td style="text-align:right;font-family:var(--mono)" id="t2">–</td></tr>
-      <tr><td style="color:var(--dim)">humidity</td><td style="text-align:right;font-family:var(--mono)" id="h2">–</td></tr>
+      <tr><td style="color:var(--dim)">temp <em style="font-style:normal;font-family:var(--mono);color:#5f6b7d">/temp</em></td><td style="text-align:right;font-family:var(--mono)" id="t2">–</td></tr>
     </table>
     <div style="display:flex;gap:6px;margin-top:8px">
-      <button id="led1" style="flex:1;padding:5px">LED on</button>
+      <button id="led1" style="flex:1;padding:5px">/s/l on</button>
       <button id="led0" style="flex:1;padding:5px">off</button>
     </div>
     <div id="log" style="margin-top:8px">idle</div>
@@ -229,6 +232,26 @@ function decodeMessage(bytes){
     }}
   return {address,args};
 }
+// A SLIP frame carries either one message or a #bundle: 8 bytes of
+// timetag, then size-prefixed messages. The board sends bundles for
+// everything -- the /enq answer, echoes, and the stream -- so this
+// returns a flat list either way.
+function decodePacket(bytes){
+  if(bytes.length<8||dec.decode(bytes.subarray(0,8))!=="#bundle\0")
+    return [decodeMessage(bytes)];
+  const out=[];
+  const dv=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+  let pos=16;                                   // "#bundle\0" + timetag
+  while(pos+4<=bytes.length){
+    const n=dv.getInt32(pos);pos+=4;
+    if(n<=0||pos+n>bytes.length)break;
+    const sub=bytes.subarray(pos,pos+n);pos+=n;
+    if(sub.length>=8&&dec.decode(sub.subarray(0,8))==="#bundle\0")
+      out.push(...decodePacket(sub));           // nested, allowed by OSC
+    else out.push(decodeMessage(sub));
+  }
+  return out;
+}
 const pad4=b=>{const n=(b.length+3)&~3,o=new Uint8Array(n);o.set(b);return o;};
 function encodeMessage(address,args){
   const parts=[pad4(enc.encode(address+"\0"))];
@@ -266,46 +289,91 @@ const logLine=(t,s)=>{const e=$("log");
   e.textContent=(t?t+" ":"")+s+"\n"+e.textContent;
   if(e.textContent.length>900)e.textContent=e.textContent.slice(0,900);};
 
-function onFrame(payload){
-  let m;try{m=decodeMessage(payload);}catch{return;}
+// Which I2C modules the last /enq proved fitted, by badge. /enq resets
+// it; each /enq line that follows lights one badge again.
+const fitted=new Set();
+const badgeOf={"/enq/display":["h-oled","oled"],"/enq/temp":["h-sht","shtc3"],
+               "/enq/motor":["h-motor","motor"]};
+const showFitted=()=>$("hv-dock").textContent=[...fitted].join(" ")||"none";
 
-  if(m.address==="/pb"){
-    const [seq,button,pot,ldr,relay,tempC,hum]=m.args;
-    if(lastSeq!==null&&seq>lastSeq+1)dropped+=seq-lastSeq-1;
-    lastSeq=seq;
-    $("seq").textContent=seq;$("drop").textContent=dropped;
-    frames++;if(!t0)t0=performance.now();
-    const secs=(performance.now()-t0)/1000;
-    if(secs>0.5)$("hz").textContent=(frames/secs).toFixed(1)+" Hz";
-
-    $("hv-btn").textContent=button?"PRESSED":"released";
-    $("h-btn").classList.toggle("hot",!!button);
-    $("hv-sht").textContent=`${tempC.toFixed(1)}°C  ${hum.toFixed(0)}%`;
-    $("t2").textContent=tempC.toFixed(2)+" °C";
-    $("h2").textContent=hum.toFixed(1)+" %";
+function onMessage(m){
+  switch(m.address){
+    case "/state":{                              // seq, millis -- the stream's heartbeat
+      const [seq]=m.args;
+      if(typeof seq!=="number")return;
+      if(lastSeq!==null&&seq>lastSeq+1)dropped+=seq-lastSeq-1;
+      lastSeq=seq;
+      $("seq").textContent=seq;$("drop").textContent=dropped;
+      frames++;if(!t0)t0=performance.now();
+      const secs=(performance.now()-t0)/1000;
+      if(secs>0.5)$("hz").textContent=(frames/secs).toFixed(1)+" Hz";
+      return;
+    }
+    case "/btn":{
+      const [button]=m.args;
+      $("hv-btn").textContent=button?"PRESSED":"released";
+      $("h-btn").classList.toggle("hot",!!button);
+      return;
+    }
+    case "/temp":{                               // degC, one float, as the contract says
+      const [tempC]=m.args;
+      if(typeof tempC!=="number")return;
+      $("hv-sht").textContent=tempC.toFixed(1)+"°C";
+      $("t2").textContent=tempC.toFixed(2)+" °C";
+      return;
+    }
     // The RP2040 ADC is 12-bit but analogRead() reports 10-bit by default,
     // so 1023 is full scale here, not 4095.
-    $("hv-pot").textContent=pot;
-    $("potbar").style.width=(pot/1023*100).toFixed(0)+"%";
-    $("hv-ldr").textContent=ldr;
-    $("ldrbar").style.width=(ldr/1023*100).toFixed(0)+"%";
-    if(!relayPending){
+    case "/pot":{
+      const [pot]=m.args;
+      if(typeof pot!=="number")return;
+      $("hv-pot").textContent=pot;
+      $("potbar").style.width=(pot/1023*100).toFixed(0)+"%";
+      return;
+    }
+    case "/light":{
+      const [ldr]=m.args;
+      if(typeof ldr!=="number")return;
+      $("hv-ldr").textContent=ldr;
+      $("ldrbar").style.width=(ldr/1023*100).toFixed(0)+"%";
+      return;
+    }
+    case "/relay/0":{                            // streamed, and the echo of a toggle
+      const [relay]=m.args;
+      if(typeof relay!=="number"||relayPending)return;
+      relayOn=!!relay;
       $("hv-relay").textContent=relay?"CLOSED":"open";
       $("h-relay").classList.toggle("hot",!!relay);
+      return;
     }
-    return;
+    case "/enq":{
+      const [name]=m.args;
+      $("name").textContent=name??"–";
+      // Presence is announced by the /enq lines that follow; assume every
+      // detachable module absent until its line arrives.
+      fitted.clear();
+      for(const [id] of Object.values(badgeOf))$(id).classList.add("off");
+      showFitted();
+      logLine("","board: "+m.args.join(" "));
+      return;
+    }
+    default:
+      if(m.address.startsWith("/enq/")){
+        const b=badgeOf[m.address];
+        if(b){$(b[0]).classList.remove("off");fitted.add(b[1]);showFitted();}
+        logLine("",m.address.slice(5)+(m.args.length?" "+m.args.join(" "):""));
+        return;
+      }
+      // Echoes of what the page just sent: /s/l, /rgb, /buzz, /motor/<n>,
+      // /servo/<n>, /display/text, /rate -- and /rgb/bright, which the
+      // sketch answers but this page has no control for.
+      logLine("",m.address+" "+m.args.join(" "));
   }
+}
 
-  if(m.address==="/hello"){
-    const [name,oled,sht,motor,rgbn]=m.args;
-    $("name").textContent=name??"–";
-    const off=(id,ok)=>$(id).classList.toggle("off",!ok);
-    off("h-oled",oled);off("h-sht",sht);off("h-motor",motor);
-    $("hv-dock").textContent=[oled&&"oled",sht&&"shtc3",motor&&"motor"]
-      .filter(Boolean).join(" ")||"none";
-    logLine("","board: "+m.args.join(" "));
-    return;
-  }
+function onFrame(payload){
+  let msgs;try{msgs=decodePacket(payload);}catch{return;}
+  for(const m of msgs)onMessage(m);
 }
 
 /* ---------------------------------------------------------------- serial */
@@ -343,9 +411,9 @@ $("connect").onclick=async()=>{
     $("status").textContent="connected";
     $("connect").disabled=true;$("disconnect").disabled=false;
     frames=0;t0=0;lastSeq=null;dropped=0;
-    // Ask for /hello: the boot one goes out before USB has re-enumerated and
+    // Ask for /enq: the boot one goes out before USB has re-enumerated and
     // this page has opened the port, so it is always lost.
-    setTimeout(()=>send("/hello",[]),150);
+    setTimeout(()=>send("/enq",[]),150);
   }catch(e){logLine("!",String(e));}
 };
 $("disconnect").onclick=async()=>{
@@ -361,7 +429,7 @@ $("disconnect").onclick=async()=>{
 /* -------------------------------- controls, at the point each thing shows */
 $("hrgbpick").oninput=e=>{
   const h=e.target.value;
-  send("/pb/rgb",[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
+  send("/rgb",[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
   $("hv-rgb").textContent=h; $("hrgbsw").style.background=h;
 };
 
@@ -371,7 +439,7 @@ $("hrgbpick").oninput=e=>{
 let relayPending=false, relayOn=false;
 $("h-relay").onclick=()=>{
   relayOn=!relayOn; relayPending=true;
-  send("/pb/relay",[relayOn?1:0]);
+  send("/relay/0",[relayOn?1:0]);
   $("hv-relay").textContent=relayOn?"CLOSED":"open";
   $("h-relay").classList.toggle("hot",relayOn);
   setTimeout(()=>relayPending=false,400);
@@ -380,7 +448,7 @@ $("h-relay").onclick=()=>{
 let buzLen=180;
 $("buzlen").oninput=e=>{buzLen=+e.target.value;$("buzlenv").textContent=buzLen;};
 function buzz(f){
-  send("/pb/buzz",[f,buzLen]);
+  send("/buzz",[f,buzLen]);
   $("hv-buz").textContent=f+" Hz";
   clearTimeout(window._bz);
   window._bz=setTimeout(()=>$("hv-buz").textContent="silent",buzLen);
@@ -391,25 +459,26 @@ document.querySelectorAll("#keyrow i").forEach(k=>{
 });
 $("h-buz").onclick=()=>buzz(880);
 
-// motors: one slider each, signed, so direction and speed are one gesture
-const motorSend=(n,v)=>send("/pb/motor",[n,Math.abs(v),v<0?1:0]);
-$("m1").oninput=e=>{const v=+e.target.value;$("m1v").textContent=v;motorSend(1,v);
+// motors: one slider each, signed, so direction and speed are one gesture.
+// The wire counts from 0: slider M1 is /motor/0, M2 is /motor/1, S1 is /servo/0.
+const motorSend=(n,v)=>send("/motor/"+n,[Math.abs(v),v<0?1:0]);
+$("m1").oninput=e=>{const v=+e.target.value;$("m1v").textContent=v;motorSend(0,v);
   $("hv-motor").textContent=v||+$("m2").value?"running":"stopped";};
-$("m2").oninput=e=>{const v=+e.target.value;$("m2v").textContent=v;motorSend(2,v);
+$("m2").oninput=e=>{const v=+e.target.value;$("m2v").textContent=v;motorSend(1,v);
   $("hv-motor").textContent=v||+$("m1").value?"running":"stopped";};
-$("s1").oninput=e=>{const v=+e.target.value;$("s1v").textContent=v;send("/pb/servo",[1,v]);};
+$("s1").oninput=e=>{const v=+e.target.value;$("s1v").textContent=v;send("/servo/0",[v]);};
 $("h-motor").onclick=()=>{ $("m1").value=0;$("m2").value=0;$("m1v").textContent="0";
-  $("m2v").textContent="0";motorSend(1,0);motorSend(2,0);
+  $("m2v").textContent="0";motorSend(0,0);motorSend(1,0);
   $("hv-motor").textContent="stopped"; logLine("","motors stopped"); };
 
-$("led1").onclick=()=>send("/pb/led",[1]);
-$("led0").onclick=()=>send("/pb/led",[0]);
+$("led1").onclick=()=>send("/s/l",[1]);
+$("led0").onclick=()=>send("/s/l",[0]);
 
 let oledT=null;
 const pushOled=()=>{
   const rows=$("glass").innerText.replace(/ /g," ").split("\n").slice(0,4);
   while(rows.length<4)rows.push("");
-  send("/pb/oled",rows.map(r=>r.slice(0,21)));
+  send("/display/text",rows.map(r=>r.slice(0,21)));
   $("hv-oled").textContent=(rows[0]||"").slice(0,14)||"(blank)";
 };
 $("glass").addEventListener("input",()=>{clearTimeout(oledT);oledT=setTimeout(pushOled,260);});

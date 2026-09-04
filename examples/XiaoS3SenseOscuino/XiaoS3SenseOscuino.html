@@ -21,6 +21,14 @@
 
   The board enumerates as Espressif 0x303a. "show all ports" drops the
   filter if yours differs.
+
+  Addresses are the capability-named space of ADDRESSES.md. The page asks
+  /enq on connect and reads the /enq lines back to label what is there;
+  every /rate ms a bundle arrives with /state, /a/0../a/5, /temp, /diag,
+  /mic (rms, peak) and /cam (one JPEG in an OSC blob). It also asks /s/a
+  once for the analog input count, and the "read once" button asks
+  /a/0../a/5, /temp and /mic outright -- each answers on its own address,
+  which is how to read the board with the stream stopped (/rate 0).
 -->
 <html lang="en">
 <head>
@@ -79,10 +87,14 @@
 
 <h1>XIAO ESP32S3 Sense</h1>
 <p class="lede">
-  Six analog inputs, the die temperature and free heap arrive as a single
-  <code>/xiao</code> message so every reading in one belongs to the same
-  instant. Camera frames arrive separately as <code>/cam</code>, the JPEG
-  carried in an OSC blob. Chrome or Edge, over Web Serial.
+  Every <code>/rate</code> milliseconds one bundle arrives: <code>/state</code>
+  (sequence, millis), the six analog inputs as <code>/a/0</code> &hellip;
+  <code>/a/5</code>, the die temperature as <code>/temp</code>, free heap as
+  <code>/diag</code>, the microphone as <code>/mic</code> (rms, peak) and the
+  camera frame as <code>/cam</code>, the JPEG carried in an OSC blob. Every
+  reading in a bundle belongs to the same instant. The page asks
+  <code>/enq</code> on connect and labels what the <code>/enq</code> lines
+  say is there. Chrome or Edge, over Web Serial.
 </p>
 
 <div class="panel">
@@ -104,12 +116,18 @@
     </select>
     <label for="quality">quality</label>
     <input type="number" id="quality" value="12" min="4" max="63">
-    <label for="rate">frame gap ms</label>
+    <label for="rate">rate ms</label>
     <input type="number" id="rate" value="200" min="0" max="10000" step="50">
-    <label for="micrate">mic gap ms</label>
-    <input type="number" id="micrate" value="50" min="20" max="5000" step="10">
-    <button id="stream">pause</button>
+    <button id="stream">pause frames</button>
     <button id="led">LED</button>
+    <button id="hello">hello</button>
+    <button id="readonce">read once</button>
+  </div>
+  <div class="row" style="color:var(--dim); font-size:13px">
+    <span>one <code>/rate</code> paces everything, frames included; <code>/rate 0</code> stops the stream.
+    <code>/stream 0</code> pauses only the camera frames. <code>read once</code> asks
+    <code>/a/0</code>&hellip;<code>/a/5</code>, <code>/temp</code> and <code>/mic</code>
+    outright: each answers on its own address, so the board can be polled with the stream stopped.</span>
   </div>
 </div>
 
@@ -123,12 +141,10 @@
 
   <div>
     <div class="panel">
-      <canvas id="scope" width="288" height="70"
-              style="width:100%;height:70px;background:#0c0f15;border:1px solid var(--line);border-radius:6px"></canvas>
-      <table style="margin-top:8px">
-        <tr><td class="k">mic level</td><td class="v" id="miclevel">–</td></tr>
+      <table>
+        <tr><td class="k">mic rms</td><td class="v" id="miclevel">–</td></tr>
         <tr><td colspan="2"><div class="bar"><i id="micb"></i></div></td></tr>
-        <tr><td class="k">peak</td><td class="v" id="micpeak">–</td></tr>
+        <tr><td class="k">mic peak</td><td class="v" id="micpeak">–</td></tr>
         <tr><td colspan="2"><div class="bar"><i id="micpb" style="background:var(--err)"></i></div></td></tr>
       </table>
     </div>
@@ -145,9 +161,10 @@
         <tr><td class="k">A4</td><td class="v" id="a4">–</td></tr>
         <tr><td class="k">A5</td><td class="v" id="a5">–</td></tr>
         <tr><td class="k">die temperature</td><td class="v" id="temp">–</td></tr>
-        <tr><td class="k">free heap</td><td class="v" id="heap">–</td></tr>
-        <tr><td class="k">frames sent</td><td class="v" id="seq">–</td></tr>
+        <tr><td class="k">diag</td><td class="v" id="diag">–</td></tr>
+        <tr><td class="k">state seq</td><td class="v" id="seq">–</td></tr>
         <tr><td class="k">camera</td><td class="v" id="cam">–</td></tr>
+        <tr><td class="k">mic</td><td class="v" id="mic">–</td></tr>
       </table>
     </div>
     <div class="panel" style="padding:10px">
@@ -212,6 +229,25 @@ function decodeMessage(bytes) {
     }
   }
   return { address, args };
+}
+
+// A packet is either one message or a "#bundle": 8-byte header, 8-byte
+// timetag, then elements each prefixed by an int32 byte count. The stream
+// and the /enq reply are bundles; echoes are bare messages.
+function decodePacket(bytes) {
+  if (bytes.length >= 16 && bytes[0] === 0x23) {          // '#'
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const out = [];
+    let pos = 16;
+    while (pos + 4 <= bytes.length) {
+      const size = dv.getInt32(pos); pos += 4;
+      if (size <= 0 || pos + size > bytes.length) break;
+      out.push(decodeMessage(bytes.subarray(pos, pos + size)));
+      pos += size;
+    }
+    return out;
+  }
+  return [decodeMessage(bytes)];
 }
 
 function encodeMessage(address, ints) {
@@ -287,6 +323,11 @@ async function connect() {
   pipeDone = readLoop();
   setConnected(true);
   logLine("", "connected");
+  // The boot /enq is lost to USB enumeration on every board measured, so
+  // ask; the /enq lines that come back label the camera and mic rows. Then
+  // the core /s/a ask: the analog input count, logged when it answers.
+  await send("/enq", []);
+  await send("/s/a", []);
 }
 
 async function readLoop() {
@@ -295,7 +336,7 @@ async function readLoop() {
       const { value, done } = await reader.read();
       if (done) break;
       // contain render throws so one bad frame cannot stop reception
-      try { onFrame(value); } catch (e) { logLine("!", "render: " + e); }
+      try { onPacket(value); } catch (e) { logLine("!", "render: " + e); }
     }
   } catch (e) { logLine("warn", "read error: " + e.message); }
 }
@@ -332,13 +373,40 @@ async function send(address, ints) {
    4. Inbound
    ============================================================ */
 let lastUrl = null, frames = 0, bytes = 0, tStart = 0;
+let lastSeq = null, lost = 0;
 
-function onFrame(payload) {
-  let m;
-  try { m = decodeMessage(payload); } catch { return; }
+// Width and height from the JPEG itself: the SOF marker (0xFFC0 baseline,
+// 0xFFC2 progressive) is followed by length(2), precision(1), height(2),
+// width(2). The frame no longer carries them as separate arguments.
+function jpegSize(b) {
+  for (let i = 2; i + 9 < b.length; ) {
+    if (b[i] !== 0xFF) { i++; continue; }
+    const marker = b[i + 1];
+    if (marker === 0xFF) { i++; continue; }
+    if (marker === 0xC0 || marker === 0xC2)
+      return { w: (b[i + 7] << 8) | b[i + 8], h: (b[i + 5] << 8) | b[i + 6] };
+    if (marker === 0xD8 || (marker >= 0xD0 && marker <= 0xD7)) { i += 2; continue; }
+    i += 2 + ((b[i + 2] << 8) | b[i + 3]);          // skip this segment
+  }
+  return null;
+}
+
+function onPacket(payload) {
+  let msgs;
+  try { msgs = decodePacket(payload); } catch { return; }
+  fresh();                                  // anything inbound proves the board is alive
+  for (const m of msgs) onMessage(m);
+}
+
+function fresh() {
+  document.querySelectorAll(".stale").forEach(n => n.classList.remove("stale"));
+}
+
+function onMessage(m) {
+  const a = m.args;
 
   if (m.address === "/cam") {
-    const [seq, ms, w, h, jpeg] = m.args;
+    const jpeg = a[0];
     if (!(jpeg instanceof Uint8Array) || jpeg.length < 4) return;
     // Object URLs must be revoked or this leaks a frame's worth per frame.
     // Revoke the PREVIOUS one only after the new src is set, or Chrome can
@@ -352,32 +420,46 @@ function onFrame(payload) {
     frames++; bytes += jpeg.length;
     if (!tStart) tStart = performance.now();
     const secs = (performance.now() - tStart) / 1000;
+    const dim = jpegSize(jpeg);
     $("frameinfo").textContent =
-      `${w}×${h}  ${(jpeg.length / 1024).toFixed(1)} KB  ` +
-      `#${seq}  ${(frames / Math.max(secs, .001)).toFixed(1)} fps  ` +
+      (dim ? `${dim.w}×${dim.h}  ` : "") +
+      `${(jpeg.length / 1024).toFixed(1)} KB  ` +
+      `${frames} frames  ${(frames / Math.max(secs, .001)).toFixed(1)} fps  ` +
       `${((bytes / secs) / 1024).toFixed(0)} KB/s`;
     return;
   }
 
-  if (m.address === "/xiao") {
-    const a = m.args;
-    document.querySelectorAll(".stale").forEach(n => n.classList.remove("stale"));
-    for (let i = 0; i < 6; i++) {
-      const v = a[i];
-      if (typeof v !== "number") continue;
-      $("a" + i).textContent = v;
-      const bar = $("a" + i + "b");
-      if (bar) bar.style.width = Math.max(0, Math.min(100, v / 4095 * 100)) + "%";
-    }
-    if (typeof a[6] === "number") $("temp").textContent = (a[6] / 100).toFixed(1) + " °C";
-    if (typeof a[7] === "number") $("heap").textContent = a[7] + " KB";
-    if (typeof a[8] === "number") $("seq").textContent  = a[8];
-    if (typeof a[9] === "boolean") $("cam").textContent = a[9] ? "ok" : "FAILED";
+  if (m.address === "/state") {                     // seq, millis
+    const seq = a[0];
+    if (typeof seq !== "number") return;
+    if (lastSeq !== null && seq > lastSeq + 1) lost += seq - lastSeq - 1;
+    lastSeq = seq;
+    $("seq").textContent = lost ? `${seq}  (${lost} lost)` : `${seq}`;
     return;
   }
 
-  if (m.address === "/mic") {
-    const [rms, peak, rate, scope] = m.args;
+  const an = /^\/a\/(\d)$/.exec(m.address);          // /a/0 .. /a/5
+  if (an) {
+    const i = +an[1], v = a[0];
+    if (typeof v !== "number" || !$("a" + i)) return;
+    $("a" + i).textContent = v;
+    const bar = $("a" + i + "b");
+    if (bar) bar.style.width = Math.max(0, Math.min(100, v / 4095 * 100)) + "%";
+    return;
+  }
+
+  if (m.address === "/temp") {                      // degrees C, float
+    if (typeof a[0] === "number") $("temp").textContent = a[0].toFixed(1) + " °C";
+    return;
+  }
+
+  if (m.address === "/diag") {                      // free text, shown as is
+    $("diag").textContent = a.filter(x => typeof x === "string").join(" ");
+    return;
+  }
+
+  if (m.address === "/mic") {                       // rms, peak, 0..32767
+    const [rms, peak] = a;
     if (typeof rms === "number") {
       $("miclevel").textContent = rms;
       // Same full 16-bit scale as the peak bar beneath it: dividing by 128
@@ -388,33 +470,31 @@ function onFrame(payload) {
       $("micpeak").textContent = peak;
       $("micpb").style.width = Math.min(100, peak / 32768 * 100) + "%";
     }
-    if (scope instanceof Uint8Array && scope.length) drawScope(scope);
     return;
   }
 
-  if (m.address === "/hello") {
-    logLine("", "board: " + m.args.join(" "));
+  if (m.address === "/enq") {                     // name; the /enq lines follow
+    logLine("", "board: " + a.join(" "));
+    $("cam").textContent = "absent";
+    $("mic").textContent = "absent";
+    return;
   }
-}
+  if (m.address === "/enq/cam") {                   // width, height
+    $("cam").textContent = a.length >= 2 ? `ok ${a[0]}×${a[1]}` : "ok";
+    return;
+  }
+  if (m.address === "/enq/mic") { $("mic").textContent = "ok"; return; }
+  if (m.address.startsWith("/enq/")) { logLine("", "has " + m.address.slice(5)); return; }
 
-// The scope blob is SCOPE_POINTS signed bytes -- the top 8 bits of each PCM
-// sample. OSC has no signed-byte type, so they arrive inside a blob and have
-// to be reinterpreted: a Uint8Array element of 200 is really -56.
-const scopeCtx = $("scope").getContext("2d");
-function drawScope(bytes) {
-  const w = $("scope").width, h = $("scope").height, mid = h / 2;
-  scopeCtx.clearRect(0, 0, w, h);
-  scopeCtx.strokeStyle = "#2a3140"; scopeCtx.lineWidth = 1;
-  scopeCtx.beginPath(); scopeCtx.moveTo(0, mid); scopeCtx.lineTo(w, mid); scopeCtx.stroke();
-  scopeCtx.strokeStyle = "#5eead4"; scopeCtx.lineWidth = 1.5;
-  scopeCtx.beginPath();
-  for (let i = 0; i < bytes.length; i++) {
-    const v = bytes[i] > 127 ? bytes[i] - 256 : bytes[i];   // to signed
-    const x = i / (bytes.length - 1) * w;
-    const y = mid - (v / 128) * (mid - 2);
-    i ? scopeCtx.lineTo(x, y) : scopeCtx.moveTo(x, y);
+  if (m.address === "/s/l") {                       // echo of the LED write
+    if (typeof a[0] === "number") { led = a[0] !== 0; $("led").textContent = led ? "LED on" : "LED"; }
+    return;
   }
-  scopeCtx.stroke();
+  if (m.address === "/rate") {                      // echo of the rate write
+    if (typeof a[0] === "number") { $("rate").value = a[0]; logLine("", "rate " + a[0] + " ms"); }
+    return;
+  }
+  if (m.address === "/s/a") { logLine("", "analog inputs: " + a[0]); }
 }
 
 setInterval(() => {                       // grey the readouts if the board stops
@@ -438,19 +518,28 @@ if (!("serial" in navigator)) {
 
 $("connect").onclick    = () => connect().catch(e => logLine("warn", e.message));
 $("disconnect").onclick = () => disconnect();
+$("hello").onclick      = () => send("/enq", []);
+$("readonce").onclick   = () => readOnce();
+
+// One ask per reading, each answered on its own address as a bare message;
+// the same onMessage branches that take the stream bundle take these.
+async function readOnce() {
+  for (let i = 0; i < 6; i++) await send("/a/" + i, []);
+  await send("/temp", []);
+  await send("/mic", []);
+}
 $("size").onchange      = e => send("/cam/size",    [parseInt(e.target.value, 10)]);
 $("quality").onchange   = e => send("/cam/quality", [parseInt(e.target.value, 10) || 12]);
-$("rate").onchange      = e => send("/cam/rate",    [parseInt(e.target.value, 10) || 0]);
-$("micrate").onchange   = e => send("/mic/rate",    [parseInt(e.target.value, 10) || 50]);
+$("rate").onchange      = e => send("/rate",        [parseInt(e.target.value, 10) || 0]);
 
 let streaming = true;
 $("stream").onclick = () => {
   streaming = !streaming;
-  $("stream").textContent = streaming ? "pause" : "resume";
+  $("stream").textContent = streaming ? "pause frames" : "resume frames";
   send("/stream", [streaming ? 1 : 0]);
 };
 let led = false;
-$("led").onclick = () => { led = !led; send("/led", [led ? 1 : 0]); };
+$("led").onclick = () => { send("/s/l", [led ? 0 : 1]); };   // the echo flips the button
 
 // The OS-level unplug event: without it the page read "connected" forever
 // after the board vanished, and only a manual click reset the UI.

@@ -237,19 +237,15 @@ void routeTouch(OSCMessage &msg, int addrOffset )
  *   /d = number of digital pins
  *   /a = number of analog pins
  *  /l integer = set the led
- *  /t = temperature
- *  /s = power supply voltage
+ *  /v = power supply voltage, answered as /s/v (float, volts)
+ *
+ * the die temperature has its own address, "/temp", below
  */
 // 
 void routeSystem(OSCMessage &msg, int addrOffset ){
-#ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
-  if (msg.fullMatch("/t", addrOffset)){
-    bundleOUT.add("/s/t").add(getTemperature());
-  }
-#endif 
 #ifdef BOARD_HAS_DIE_POWER_SUPPLY_MEASUREMENT
-  if (msg.fullMatch("/s", addrOffset)){
-    bundleOUT.add("/s/s").add(getSupplyVoltage());
+  if (msg.fullMatch("/v", addrOffset)){
+    bundleOUT.add("/s/v").add(getSupplyVoltage());
   }
 #endif
   if (msg.fullMatch("/m", addrOffset)){
@@ -273,6 +269,26 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
   }
 #endif
 }
+
+#ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
+/**
+ * TEMPERATURE
+ *
+ * called when the address matches "/temp"
+ *
+ * format:
+ * /temp
+ *   (no value) = read the die temperature, answered as /temp (float)
+ *
+ * getTemperature() in OSCBoards.cpp returns degrees C on Teensy 3.x and the
+ * raw ADC fraction (0..1) on AVR; the value is passed on as it comes
+ *
+ **/
+
+void routeTemperature(OSCMessage &msg, int addrOffset ){
+  bundleOUT.add("/temp").add(getTemperature());
+}
+#endif
 
 /**
  * MAIN METHODS
@@ -307,6 +323,9 @@ void loop(){
       bundleIN.route("/s", routeSystem);
       bundleIN.route("/a", routeAnalog);
       bundleIN.route("/d", routeDigital);
+#ifdef BOARD_HAS_DIE_TEMPERATURE_SENSOR
+      bundleIN.route("/temp", routeTemperature);
+#endif
 #ifdef BOARD_HAS_TONE
       bundleIN.route("/tone", routeTone);
 #endif

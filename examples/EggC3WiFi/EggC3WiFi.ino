@@ -10,20 +10,23 @@
  * Board : EGG ESP32-C3 (ESP32-C3, single core 160 MHz, 4 MB flash)
  * FQBN  : esp32:esp32:esp32c3:CDCOnBoot=cdc
  * Libs  : U8g2
+ * Page  : EggC3WiFi.html, generated beside this sketch by extras/webserial;
+ *         pick HTTP there (extras/webserial/oscuino.html is the same page
+ *         for any board)
  *
  * TWO WAYS IN, one OSC vocabulary:
  *   UDP port 8000    for real OSC software — replies go to whoever asked.
  *   HTTP port 80     for the browser page (browsers cannot send UDP):
  *                    POST raw OSC bytes to /osc, GET /state for the latest
- *                    /egg packet, GET /hello for board facts as JSON.
+ *                    state bundle, GET /enq for the OSC enq bundle.
  *
  * ADDRESSES (matching the USB twin where they overlap):
- *   /egg/t <s> [...] up to 5 strings: lines on the OLED (replaces screen)
- *   /egg/net         back to the network panel (IP, port, RSSI)
- *   /egg/rate <ms>   state-packet period, 20..2000
+ *   /display/text <s> [...] up to 5 strings: lines on the OLED (replaces screen)
+ *   /display/net         back to the network panel (IP, port, RSSI)
+ *   /rate <ms>   state-packet period, 20..2000
  *   /s/l <int>       the LED (active low, measured)
  * State packet, sent as the UDP reply and served at GET /state:
- *   /egg <seq> <button> <millis> — seq advances only on the periodic tick.
+ *   /state <seq> <millis> + /btn <pressed> — seq advances only on the periodic tick.
  *
  * The OLED shows the IP once connected — on WiFi a board that cannot tell
  * you its address is a board you cannot talk to.
@@ -40,6 +43,7 @@
 #include <Wire.h>
 #include <U8g2lib.h>
 #include <OSCMessage.h>
+#include <OSCBundle.h>
 
 // ---------------------------------------------------------------------------
 // CREDENTIALS LIVE OUTSIDE THIS FILE, and outside the repository.
@@ -127,7 +131,11 @@ static void routeLed(OSCMessage &m) {
 }
 
 static void routeRate(OSCMessage &m) {
-  if (m.size() >= 1 && m.isInt(0)) reportMs = constrain(m.getInt(0), 20, 2000);
+  // 0 STOPS the stream (ADDRESSES.md); constrain turned 0 into 20 and made the
+  // board stream faster when asked to be quiet (measured 2026-09-04).
+  if (!(m.size() >= 1 && m.isInt(0))) return;
+  const int32_t v = m.getInt(0);
+  reportMs = (v <= 0) ? 0 : (uint32_t) constrain(v, 20, 2000);
 }
 
 // One entry point for both transports.
@@ -135,28 +143,29 @@ static void handlePacket(const uint8_t *data, size_t len) {
   OSCMessage m;
   m.fill((uint8_t *)data, (int)len);
   if (m.hasError()) return;
-  m.dispatch("/egg/t",    routeText);
-  m.dispatch("/egg/net",  routeNet);
-  m.dispatch("/egg/rate", routeRate);
-  m.dispatch("/s/l",      routeLed);
+  m.dispatch("/display/text", routeText);
+  m.dispatch("/display/net",  routeNet);
+  m.dispatch("/rate",      routeRate);
+  m.dispatch("/s/l",       routeLed);
 }
 
 // The last state packet, kept encoded so GET /state and the UDP reply are
 // byte-identical. seq advances only on the periodic tick in loop().
-static uint8_t stateBuf[48];
+static uint8_t stateBuf[96];
 static size_t  stateLen = 0;
 
+// A bundle of /state + /btn, the way every other board streams: a page
+// renders capabilities, not a board-named blob (ADDRESSES.md).
 static void buildState() {
-  OSCMessage m("/egg");
-  m.add((intOSC_t)seq)
-   .add((intOSC_t)(digitalRead(PIN_BOOT_BTN) == LOW ? 1 : 0))
-   .add((intOSC_t)millis());
+  OSCBundle b;
+  b.add("/state").add((intOSC_t)seq).add((intOSC_t)millis());
+  b.add("/btn").add((intOSC_t)(digitalRead(PIN_BOOT_BTN) == LOW ? 1 : 0));
   struct Cap : public Print {
     uint8_t *b; size_t n, cap;
     size_t write(uint8_t c) override { if (n < cap) b[n++] = c; return 1; }
   } cap;
   cap.b = stateBuf; cap.n = 0; cap.cap = sizeof stateBuf;
-  m.send(cap);
+  b.send(cap);
   stateLen = cap.n;
 }
 
@@ -198,15 +207,26 @@ static void httpState() {
   http.send_P(200, "application/octet-stream", (const char *)stateBuf, stateLen);
 }
 
-static void httpHello() {
+// GET /enq answers the same OSC enq bundle every other transport gets
+// (ADDRESSES.md): the name, one /enq line per capability, and /enq/net with
+// the address a page needs. One decoder on the page side, not a JSON shape
+// per board.
+static void httpEnq() {
   cors();
-  char j[128];
-  snprintf(j, sizeof j,
-           "{\"name\":\"EggC3WiFi\",\"display\":%s,\"ip\":\"%s\","
-           "\"rssi\":%d,\"udp\":%d}",
-           dispOK ? "true" : "false", WiFi.localIP().toString().c_str(),
-           (int)WiFi.RSSI(), OSC_PORT);
-  http.send(200, "application/json", j);
+  OSCBundle b;
+  b.add("/enq").add("EggC3WiFi");
+  b.add("/enq/btn").add((intOSC_t)1);
+  if (dispOK) b.add("/enq/display").add((intOSC_t)15).add((intOSC_t)5);  // columns, lines: EggC3Oscuino's OLED_COLS/OLED_LINES
+  b.add("/enq/net").add(WiFi.localIP().toString().c_str())
+                   .add((intOSC_t)WiFi.RSSI()).add((intOSC_t)OSC_PORT);
+  static uint8_t buf[160];
+  struct Cap : public Print {
+    uint8_t *b; size_t n, cap;
+    size_t write(uint8_t c) override { if (n < cap) b[n++] = c; return 1; }
+  } cap;
+  cap.b = buf; cap.n = 0; cap.cap = sizeof buf;
+  b.send(cap);
+  http.send_P(200, "application/octet-stream", (const char *)buf, cap.n);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -243,7 +263,7 @@ void setup() {
     http.on("/osc",   HTTP_POST,    httpOsc, httpOscRaw);
     http.on("/osc",   HTTP_OPTIONS, httpOsc);
     http.on("/state", HTTP_GET,     httpState);
-    http.on("/hello", HTTP_GET,     httpHello);
+    http.on("/enq", HTTP_GET,     httpEnq);
     http.begin();
     Serial.print("OSC/UDP on ");
     Serial.print(WiFi.localIP());
@@ -275,7 +295,7 @@ void loop() {
 
   const uint32_t now = millis();
   static uint32_t lastReport = 0, lastNet = 0;
-  if (now - lastReport >= reportMs) {
+  if (reportMs != 0 && now - lastReport >= reportMs) {
     lastReport = now;
     seq++;
     buildState();

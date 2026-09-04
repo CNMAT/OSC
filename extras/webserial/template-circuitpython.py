@@ -245,6 +245,8 @@ def run():
             out.append(message('/s/l', a0))
         elif addr == '/s/q':
             raise SystemExit
+        elif addr == '/enq':
+            out.append(message('/enq', '{{ID}}Oscuino'))
         elif addr.startswith('/tone/'):
             n = _num(addr[6:])
             p = dpins[n] if 0 <= n < len(dpins) else None
@@ -288,7 +290,7 @@ def run():
                 out.append(message(addr, 1 if o.value else 0))
 
     dec = SlipDecoder()
-    ser.write(slip_encode(bundle([message('/hello', '{{ID}}Oscuino')])))
+    ser.write(slip_encode(bundle([message('/enq', '{{ID}}Oscuino')])))
     while True:
         n = ser.in_waiting
         if n:

@@ -21,8 +21,9 @@
  *     _SLIPSerial<BLEStream> SLIPBle(bleStream);
  *
  * The service is the Nordic UART Service on all three, so ONE Web Bluetooth
- * page — examples/XiaoBLEOscuino/XiaoBLEOscuino.html — drives every one of
- * them. The GATT database here is built at runtime with sl_bt_gattdb_*,
+ * page drives every one of them: XiaoMG24BLE.html, generated beside this
+ * sketch by extras/webserial (extras/webserial/oscuino.html is the same
+ * page for any board). The GATT database here is built at runtime with sl_bt_gattdb_*,
  * adapted from the core's own ble_spp example.
  *
  * WHY NOT ezBLE? The core ships ezBLE, which is already a Stream and would
@@ -31,11 +32,10 @@
  * to poll it. Notifications are what make this board work with the same
  * page as the others, so the GATT database is built by hand.
  *
- * ADDRESSES — the standard Oscuino set (/d /a /tone /s) plus:
- *   /mg/led <int>     the user LED
- *   /mg/rate <ms>     state period, 20..2000; 0 stops the stream
- * State, streamed at that rate and on request:
- *   /mg <seq> <millis>
+ * ADDRESSES — the standard Oscuino set (/d /a /s, see ADDRESSES.md). The
+ * user LED is /s/l, as on every board; there is no board-named address.
+ *   /rate <ms>        stream /state every <ms>, 20..2000; 0 stops
+ *   /state            -> /state <seq> <millis>, also streamed at /rate
  *
  * TRANSPORT WARNING, measured (see BOARDS.md): this board's USB serial is a
  * CMSIS-DAP VCOM bridge that tolerates only ~242 bytes per write. Past that
@@ -46,17 +46,27 @@
  * client hammering this board over USB should keep single writes small.
  * The BLE path has no such limit.
  *
- * STATUS — VERIFIED over USB, 2026-09-02: /hello, the standard set
- * (/s/m, /s/d = 19, /s/a = 19), /mg state and /mg/led all answer, and the
- * ladder on this board passed echo 22/22 and widths 11/11 in a separate
- * build. The BLE half is **NOT yet verified on hardware**: advertising,
- * the dynamic GATT database, notifications and SLIP reassembly across
- * them are written to the documented sl_bt_* API and compile, but nothing
- * has connected to this board over the air. The nRF52840 and ESP32-C6
- * twins ARE verified and this follows their shape, which is an argument,
- * not a measurement. Treat the radio as untested until someone runs it —
- * point a Web Bluetooth central at XiaoBLEOscuino.html and look for
- * "XiaoMG24BLE" in the picker.
+ * STATUS — VERIFIED over USB, 2026-09-02: /enq, the standard set
+ * (/s/m, /s/d = 19, /s/a = 19), the state packet and the LED all answer,
+ * and the ladder on this board passed echo 22/22 and widths 11/11 in a
+ * separate build. VERIFIED over the air, 2026-09-03, from Chrome through
+ * the Web Bluetooth page: the board appeared in the picker as
+ * "XiaoMG24BLE", /enq answered over BLE, and the LED and the state
+ * stream worked (three tests, run by hand, three passes). The addresses
+ * were then renamed onto ADDRESSES.md the same day (/mg -> /state,
+ * /mg/led -> /s/l, /mg/rate -> /rate), and the renamed build was flashed
+ * and RE-VERIFIED over USB on 2026-09-03: oscprobe passed every probe
+ * (/s/d = 19, /s/a = 19, /a/0 = 352), and test/hardware/contractprobe.py
+ * passed 9 of 9 — /enq answers "XiaoMG24BLE", /state carries a sequence
+ * and millis, /s/l echoes 1 and 0, /rate 50 streams 21 /state packets in
+ * about a second with the sequence strictly increasing, /rate 0 echoes and
+ * is followed by zero bytes, and the retired /mg, /mg/led and /mg/rate get
+ * no reply at all. That last one is the point of the rename: the old
+ * dialect is gone from the wire, not merely undocumented.
+ *
+ * The BLE half has NOT been re-run since the rename — the over-the-air
+ * pass above was on the /mg build. The addresses it carries are transport
+ * independent, so this is a formality, but it is an untested formality.
  */
 
 #include <OSCBundle.h>
@@ -169,27 +179,25 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
 }
 
 static void addState() {
-  bundleOUT.add("/mg").add((intOSC_t)seq).add((intOSC_t)millis());
+  bundleOUT.add("/state").add((intOSC_t)seq).add((intOSC_t)millis());
 }
 
-void routeMG(OSCMessage &msg, int addrOffset) {
-  if (msg.fullMatch("/led", addrOffset) && msg.isInt(0)) {
-    int v = msg.getInt(0);
-    pinMode(LED_BUILTIN, OUTPUT);
-    // LED_BUILTIN_ACTIVE comes from the variant rather than folklore about
-    // which way round the LED is wired.
-    digitalWrite(LED_BUILTIN, v > 0 ? LED_BUILTIN_ACTIVE : LED_BUILTIN_INACTIVE);
-    bundleOUT.add("/mg/led").add((intOSC_t)v);
-    return;
-  }
-  if (msg.fullMatch("/rate", addrOffset) && msg.isInt(0)) {
-    int r = msg.getInt(0);
-    reportMs = (r <= 0) ? 0 : constrain(r, 20, 2000);
-    bundleOUT.add("/mg/rate").add((intOSC_t)reportMs);
-    return;
-  }
-  // Bare "/mg" with nothing after it is a request for the state packet.
+void routeState(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
   addState();
+}
+
+void routeRate(OSCMessage &msg, int addrOffset) {
+  (void)addrOffset;
+  if (!msg.isInt(0)) return;
+  int r = msg.getInt(0);
+  reportMs = (r <= 0) ? 0 : constrain(r, 20, 2000);
+  bundleOUT.add("/rate").add((intOSC_t)reportMs);
+}
+
+void routeEnq(OSCMessage &msg, int addrOffset) {
+  (void)msg; (void)addrOffset;
+  bundleOUT.add("/enq").add("XiaoMG24BLE");
 }
 
 static void dispatchAll(OSCBundle &b) {
@@ -197,7 +205,9 @@ static void dispatchAll(OSCBundle &b) {
   b.route("/d", routeDigital);
   b.route("/a", routeAnalog);
   b.route("/s", routeSystem);
-  b.route("/mg", routeMG);
+  b.route("/enq", routeEnq);
+  b.route("/state", routeState);
+  b.route("/rate",  routeRate);
 }
 
 // ---- GATT database, built at runtime (pattern from the core's ble_spp) -----
@@ -319,7 +329,7 @@ void setup() {
   digitalWrite(LED_BUILTIN, LED_BUILTIN_INACTIVE);
 
   delay(300);
-  bundleOUT.add("/hello").add("XiaoMG24BLE");
+  bundleOUT.add("/enq").add("XiaoMG24BLE");
   SLIPSerial.beginPacket();
   bundleOUT.send(SLIPSerial);
   SLIPSerial.endPacket();

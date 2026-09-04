@@ -3,7 +3,8 @@
   Open Sound Control (OSC) library for the ESP8266/ESP32
 
   Example for sending messages from the ESP8266/ESP32 to a remote computer
-  The example is sending "hello, osc." to the address "/test".
+  The example is sending "hello, osc." to the address "/diag", the free-text address
+  every board may use.
 
   This example code is in the public domain.
 
@@ -56,7 +57,7 @@ void setup() {
 }
 
 void loop() {
-    OSCMessage msg("/test");
+    OSCMessage msg("/diag");
     msg.add("hello, osc.");
     Udp.beginPacket(outIp, outPort);
     msg.send(Udp);

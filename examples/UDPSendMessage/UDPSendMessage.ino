@@ -26,12 +26,12 @@ void setup() {
 
 
 void loop(){
-  //the message wants an OSC address as first argument
-  OSCMessage msg("/analog/0");
+  //the message wants an OSC address as first argument: /a/<pin> is an analog reading
+  OSCMessage msg("/a/0");
   msg.add((intOSC_t)analogRead(0));
   
   Udp.beginPacket(outIp, outPort);
-    msg.send(Udp); // send the bytes to the SLIP stream
+    msg.send(Udp); // send the bytes into the UDP packet
   Udp.endPacket(); // mark the end of the OSC Packet
   msg.empty(); // free space occupied by message
 

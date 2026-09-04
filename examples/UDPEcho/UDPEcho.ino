@@ -75,9 +75,9 @@ void loop(){
              {
                 static intOSC_t sequencenumber=0;
 
-                // we can sneak an addition onto the end of the bundle
-               bndl.add("/micros").add((intOSC_t)micros()); // (intOSC_t) is the type of OSC Integers
-                bndl.add("/sequencenumber").add(sequencenumber++);
+                // we can sneak an addition onto the end of the bundle: the
+                // /state heartbeat every stream carries (sequence, millis)
+                bndl.add("/state").add(sequencenumber++).add((intOSC_t)millis()); // (intOSC_t) is the type of OSC Integers
 
                 Udp.beginPacket(Udp.remoteIP(), outPort);
                 bndl.send(Udp);
