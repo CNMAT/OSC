@@ -59,6 +59,8 @@ CAPS = {
     'rtc':   dict(ask='/rtc',   reply='/rtc',   tag='i', n=6),
     'mic':   dict(ask='/mic',   reply='/mic',   tag='i', n=('min', 2)),
     'volts': dict(ask='/s/v',   reply='/s/v',   tag='f', n=1),
+    'dist':  dict(ask='/dist',  reply='/dist',  tag='f', n=1),
+    'gas':   dict(ask='/gas',   reply='/gas',   tag='i', n=1),
 }
 
 # Actuators: written with a value chosen to be harmless, then checked for the
@@ -81,6 +83,7 @@ PASSIVE = {
     'net':   'address and signal came in the enq bundle',
     'diag':  'free text, never parsed',
     'rfid':  'needs a tag present to mean anything',
+    'ir':    'sent once when a remote is pressed; nothing to ask for until then',
 }
 
 
@@ -218,7 +221,7 @@ def main():
     # in it should be one the board announced.
     streamed = sorted({m[0] for m in r} - {'/state', '/rate'})
     if streamed:
-        roots = {a.split('/')[1] for a in streamed}
+        roots = {a.split('/')[1] for a in streamed if a.startswith('/') and len(a) > 1}
         stray = sorted(roots - set(enq) - {'d', 'a', 's', 'tone'})
         check('every streamed capability was announced', not stray,
               f"streamed {', '.join(streamed)}" + (f"; unannounced: {stray}" if stray else ''))

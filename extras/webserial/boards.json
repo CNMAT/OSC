@@ -1106,6 +1106,95 @@
         }
       ],
       "note": "The hand-written Arduino sketch for the Fruit Jam (arduino-pico >= 6.0.0; needs Adafruit NeoPXL8, Adafruit TLV320 I2S and Adafruit DVI HSTX -- not PicoDVI, which wedges the boot on this board). The CircuitPython firmware in extras/python/FruitJamOscuino/ speaks the same addresses. /btn reads the three user buttons (1 = pressed), /rgb drives the five NeoPixels (/rgb/<n> for one), /buzz plays a sine through the headphone/speaker codec, /display/text prints a line on the DVI output; /enq/buzz and /enq/display appear in /enq only when the codec and the display came up. The USB filter matches Adafruit's and Raspberry Pi's vendor ids to cover both firmwares' CDC identities."
+    },
+    {
+      "id": "ElecrowPico2",
+      "name": "Elecrow All-in-one Starter Kit for Pico 2",
+      "mcu": "RP2350A",
+      "fqbn": "rp2040:rp2040:rpipico2",
+      "handwritten": true,
+      "transport": "serial",
+      "bundles": false,
+      "nativeUSB": true,
+      "usbFilters": [
+        {
+          "usbVendorId": "0x2E8A",
+          "usbProductId": "0x000F"
+        }
+      ],
+      "chips": [
+        {
+          "label": "red LED on",
+          "addr": "/s/l",
+          "args": "1"
+        },
+        {
+          "label": "red LED off",
+          "addr": "/s/l",
+          "args": "0"
+        },
+        {
+          "label": "green LED on",
+          "addr": "/d/19",
+          "args": "1"
+        },
+        {
+          "label": "yellow LED on",
+          "addr": "/d/20",
+          "args": "1"
+        },
+        {
+          "label": "all pixels dim white",
+          "addr": "/rgb",
+          "args": "20 20 20"
+        },
+        {
+          "label": "pixels off",
+          "addr": "/rgb",
+          "args": "0 0 0"
+        },
+        {
+          "label": "buzz C5",
+          "addr": "/buzz",
+          "args": "523 200"
+        },
+        {
+          "label": "relay on",
+          "addr": "/relay/0",
+          "args": "1"
+        },
+        {
+          "label": "relay off",
+          "addr": "/relay/0",
+          "args": "0"
+        },
+        {
+          "label": "servo 90",
+          "addr": "/servo/0",
+          "args": "90"
+        },
+        {
+          "label": "vibrate",
+          "addr": "/motor/0",
+          "args": "200 0"
+        },
+        {
+          "label": "vibrate off",
+          "addr": "/motor/0",
+          "args": "0 0"
+        },
+        {
+          "label": "hall sensor",
+          "addr": "/d/21",
+          "args": ""
+        },
+        {
+          "label": "rate 50 ms",
+          "addr": "/rate",
+          "args": "50"
+        }
+      ],
+      "note": "Hand-written sketch (examples/ElecrowPico2Oscuino); only this page is generated. Elecrow's mainboard carries an RP2350A with 8 MB flash (picotool), not a socketed Pico 2; the rpipico2 definition is what Elecrow's lessons use and what its factory firmware reports. Sensors and actuators only in this pass: /btn is the four buttons on one ADC ladder (order unverified), /pot the slide pot, /mic the analog sound module, /gas the MQ-2 raw, /dist the HC-SR04 in cm, /ir the remote's raw code, /cap the touch pad, /light the BH1750, /temp and /hum the DHT20, /imu the LSM6DS3TR-C at 0x6B (the datasheet says an MPU6050 at 0x68; the bus sweep, reported in /diag, says otherwise) -- the three I2C chips announced only if they answer on GP2/GP3 at boot. /s/l is the red LED, green and yellow are /d/19 and /d/20, the hall sensor /d/21. /relay/0 clicks a real relay; /servo/0 and /motor/0 (the vibration motor) move things. The 20 WS2812 need the kit's LED switch ON. Needs Adafruit NeoPixel and IRremote 4. Flash with the 1200-baud touch and picotool load -x (BOARDS.md). The TFT and touch panel are not yet driven."
     }
   ]
 }

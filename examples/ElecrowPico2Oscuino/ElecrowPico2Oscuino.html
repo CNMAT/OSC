@@ -9,7 +9,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>XiaoC3WiFi &mdash; OSC in the browser</title>
+<title>ElecrowPico2Oscuino &mdash; OSC in the browser</title>
 <style>
   :root {
     --bg: #10131a;
@@ -107,8 +107,8 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>XiaoC3WiFi</h1>
-  <div class="sub">OSC for <span class="board">Seeed XIAO ESP32-C3, WiFi twin</span> (ESP32-C3) over WiFi (HTTP bridge). Browser &harr; OSC &harr; the CNMAT OSC library. Pair with <code>XiaoC3WiFi.ino</code>. No server, no dependencies.</div>
+  <h1>ElecrowPico2Oscuino</h1>
+  <div class="sub">OSC for <span class="board">Elecrow All-in-one Starter Kit for Pico 2</span> (RP2350A) over USB serial. Browser &harr; OSC &harr; the CNMAT OSC library. Pair with <code>ElecrowPico2Oscuino.ino</code>. No server, no dependencies.</div>
 
   <div class="panel" id="connPanel">
     <div class="row">
@@ -460,21 +460,31 @@ the browser</textarea>
     <div class="row">
       <input type="text" id="addr" class="grow" value="/s/m" placeholder="address" aria-label="OSC address">
       <input type="text" id="args" class="grow" value="" placeholder="args, e.g.  1  0.5  f:1  s:hi  T" aria-label="OSC arguments">
-      <label><input type="checkbox" id="bundle" checked> bundle</label>
+      <label><input type="checkbox" id="bundle"> bundle</label>
       <button id="send" disabled>Send</button>
     </div>
     <div class="chips">
-      <button data-a="/btn" data-g="">read button</button>
-      <button data-a="/state" data-g="">state now</button>
-      <button data-a="/rate" data-g="100">rate 100 ms</button>
-      <button data-a="/rate" data-g="0">stop stream</button>
+      <button data-a="/s/l" data-g="1">red LED on</button>
+      <button data-a="/s/l" data-g="0">red LED off</button>
+      <button data-a="/d/19" data-g="1">green LED on</button>
+      <button data-a="/d/20" data-g="1">yellow LED on</button>
+      <button data-a="/rgb" data-g="20 20 20">all pixels dim white</button>
+      <button data-a="/rgb" data-g="0 0 0">pixels off</button>
+      <button data-a="/buzz" data-g="523 200">buzz C5</button>
+      <button data-a="/relay/0" data-g="1">relay on</button>
+      <button data-a="/relay/0" data-g="0">relay off</button>
+      <button data-a="/servo/0" data-g="90">servo 90</button>
+      <button data-a="/motor/0" data-g="200 0">vibrate</button>
+      <button data-a="/motor/0" data-g="0 0">vibrate off</button>
+      <button data-a="/d/21" data-g="">hall sensor</button>
+      <button data-a="/rate" data-g="50">rate 50 ms</button>
     </div>
     <div class="note">
       Args are typed automatically: <code>1</code> &rarr; int, <code>0.5</code> &rarr; float, anything else &rarr; string.
       Force a type with <code>i:</code> <code>f:</code> <code>s:</code>, or use bare <code>T</code> <code>F</code> <code>N</code>.
-      <b>bundle</b> is ticked by default because <code>XiaoC3WiFi.ino</code> reads bundles, as do the stock Oscuino examples and the CNMAT Max patches.
+      <b>bundle</b> is unticked because <code>ElecrowPico2Oscuino.ino</code> parses each packet as one OSCMessage and would drop a bundle.
       <br><br>
-      <b>Seeed XIAO ESP32-C3, WiFi twin.</b> Hand-written sketch (examples/XiaoC3WiFi); only this page is generated. UDP on 8000 for real OSC software, and an HTTP bridge for the browser, which cannot open UDP sockets: POST /osc with raw OSC bytes, GET /state for the state bundle, GET /enq for the greeting -- all OSC bytes, not JSON, so the page needs one decoder. The board has no display, so it prints its IP once over USB serial at boot and reports it again in /enq/net. Verified 2026-09-04: 7/7, UDP 20/20 round trips at a 13 ms median.
+      <b>Elecrow All-in-one Starter Kit for Pico 2.</b> Hand-written sketch (examples/ElecrowPico2Oscuino); only this page is generated. Elecrow's mainboard carries an RP2350A with 8 MB flash (picotool), not a socketed Pico 2; the rpipico2 definition is what Elecrow's lessons use and what its factory firmware reports. Sensors and actuators only in this pass: /btn is the four buttons on one ADC ladder (order unverified), /pot the slide pot, /mic the analog sound module, /gas the MQ-2 raw, /dist the HC-SR04 in cm, /ir the remote's raw code, /cap the touch pad, /light the BH1750, /temp and /hum the DHT20, /imu the LSM6DS3TR-C at 0x6B (the datasheet says an MPU6050 at 0x68; the bus sweep, reported in /diag, says otherwise) -- the three I2C chips announced only if they answer on GP2/GP3 at boot. /s/l is the red LED, green and yellow are /d/19 and /d/20, the hall sensor /d/21. /relay/0 clicks a real relay; /servo/0 and /motor/0 (the vibration motor) move things. The 20 WS2812 need the kit's LED switch ON. Needs Adafruit NeoPixel and IRremote 4. Flash with the 1200-baud touch and picotool load -x (BOARDS.md). The TFT and touch panel are not yet driven.
     </div>
   </div>
 
@@ -496,14 +506,14 @@ the browser</textarea>
    0. Board identity — the only generated part of this script
    ============================================================ */
 
-const BOARD_NAME  = "Seeed XIAO ESP32-C3, WiFi twin";
-const BOARD_FQBN  = "esp32:esp32:XIAO_ESP32C3";
+const BOARD_NAME  = "Elecrow All-in-one Starter Kit for Pico 2";
+const BOARD_FQBN  = "rp2040:rp2040:rpipico2";
 const USB_FILTERS = [
-  { usbVendorId: 0x303A, usbProductId: 0x1001 },
+  { usbVendorId: 0x2E8A, usbProductId: 0x000F },
 ];
 const NATIVE_USB  = true;
-const SUPPORT_HTML = "<b>Seeed XIAO ESP32-C3, WiFi twin</b> has native USB, so the baud rate above is ignored by the hardware &mdash; Web Serial still requires one. Build for <code>esp32:esp32:XIAO_ESP32C3</code>.";
-const DEFAULT_TRANSPORT = "http";   // "serial" | "ble" | "http"
+const SUPPORT_HTML = "<b>Elecrow All-in-one Starter Kit for Pico 2</b> has native USB, so the baud rate above is ignored by the hardware &mdash; Web Serial still requires one. Build for <code>rp2040:rp2040:rpipico2</code>.";
+const DEFAULT_TRANSPORT = "serial";   // "serial" | "ble" | "http"
 
 /* ============================================================
    1. OSC 1.0 codec  —  zero dependencies, Uint8Array in/out

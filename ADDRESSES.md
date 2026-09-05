@@ -92,6 +92,9 @@ after the name tell the page the shape.
 | **rfid** — tag reader | — | `/rfid/diag` | `/rfid <T\|F> <s>` present, UID hex |
 | **cam** — camera | `<i> <i>` width height | `/cam/size <i>`; `/cam/quality <i>`; `/stream <i>` | `/cam <b>` a JPEG frame |
 | **motor**, **servo**, **relay** — actuators | `<i>` count | `/motor/<n> <i> <i>` speed dir; `/servo/<n> <i>` angle; `/relay/<n> <i>` | echoed |
+| **dist** — a rangefinder | — | `/dist` | `/dist <f>` centimetres; absent from a stream tick that got no echo |
+| **gas** — a gas or smoke sensor | — | `/gas` | `/gas <i>` raw counts. Raw or nothing: an MQ-series cell is uncalibrated |
+| **ir** — an infrared remote receiver | — | `/ir` the last code | `/ir <i>` the raw 32-bit code, sent once when a code arrives |
 | **net** — a network transport | `<s> <i> <i> [<s> <s>]` ip, rssi, port, then name and mac on a board that has a name (the WiFi twins send the first three). Sent in the enq bundle, so `/enq` to the network's broadcast address finds every board | `/display/net` show the network panel on the display; `/net/dest <s> [<i>]` where the stream goes, ip and port, `"0.0.0.0"` = whoever last spoke; `/net/name <s>`; `/net/save` write the settings; `/net/join <s> [<s>]` ssid, password: save and restart onto that network; `/net/setup` restart onto the board's own setup network; `/net/forget` factory settings | `/net/dest <s> <i>` and `/net/name <s>` echoed |
 | **diag** — a board's own diagnostics | — | — | `/diag <s>…` free text, never parsed. Announced by `/enq/diag` like anything else |
 

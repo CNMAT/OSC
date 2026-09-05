@@ -27,6 +27,7 @@ const ALLOWED = new Set([
   "rgb", "display", "buzz", "btn", "imu", "mic", "light", "temp", "hum", "bat", "chg",
   "c", "touch", "cap", "joy", "pot", "enc", "rtc", "rfid", "cam", "stream",
   "motor", "servo", "relay", "net", "diag",
+  "dist", "gas", "ir",          // the Elecrow kit's rangefinder, MQ-2 and remote receiver (2026-09-04)
 ]);
 
 // Page-internal HTTP routes are URLs, not OSC addresses.

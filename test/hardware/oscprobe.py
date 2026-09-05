@@ -30,8 +30,16 @@ def slip_encode(payload):
 
 
 def slip_frames(buf):
-    """Split a raw byte stream into decoded SLIP frames."""
-    frames, cur, esc = [], bytearray(), False
+    """Split a raw byte stream into decoded SLIP frames.
+
+    A capture that starts mid-frame -- which it does whenever the board is
+    streaming and the read began between two ENDs -- must not treat the tail
+    of that cut frame as a frame (RFC 1055: a receiver discards whatever
+    precedes the first END). Before this, the Elecrow kit's 13-message
+    stream bundle handed contractprobe an address of 'ght' (the end of
+    '/light') and crashed it; only the encoder's own END..END frames count.
+    """
+    frames, cur, esc, synced = [], bytearray(), False, False
     for b in buf:
         if esc:
             cur.append(END if b == ESC_END else ESC if b == ESC_ESC else b)
@@ -39,9 +47,10 @@ def slip_frames(buf):
         elif b == ESC:
             esc = True
         elif b == END:
-            if cur:
+            if cur and synced:
                 frames.append(bytes(cur))
-                cur = bytearray()
+            cur = bytearray()
+            synced = True
         else:
             cur.append(b)
     return frames

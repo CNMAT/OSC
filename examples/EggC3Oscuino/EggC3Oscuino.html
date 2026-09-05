@@ -267,6 +267,21 @@ the browser</textarea>
     <div class="row"><span class="v" id="humV">&ndash;</span><button id="humRead">/hum</button></div>
   </div>
 
+  <div class="panel cap" data-cap="dist" hidden>
+    <div class="ph"><label>dist</label><span class="shape">rangefinder; a tick with no echo sends nothing</span></div>
+    <div class="row"><span class="v" id="distV">&ndash;</span><button id="distRead">/dist</button></div>
+  </div>
+
+  <div class="panel cap" data-cap="gas" hidden>
+    <div class="ph"><label>gas</label><span class="shape">raw counts, uncalibrated</span></div>
+    <div class="row"><span class="v" id="gasV">&ndash;</span><button id="gasRead">/gas</button></div>
+  </div>
+
+  <div class="panel cap" data-cap="ir" hidden>
+    <div class="ph"><label>ir</label><span class="shape">remote receiver; a code arrives once per press</span></div>
+    <div class="row"><span class="v" id="irV">&ndash;</span><span class="dim" id="irN"></span><button id="irRead">/ir</button></div>
+  </div>
+
   <div class="panel cap" data-cap="bat" hidden>
     <div class="ph"><label>bat</label></div>
     <div class="row"><span class="v" id="batV">&ndash;</span><button id="batRead">/bat</button></div>
@@ -704,7 +719,7 @@ class SlipDecoder {                   // a TransformStream transformer; the BLE
 // The panels, in page order. /enq/<name> for anything else is still listed
 // in the capability chips, it just has no panel.
 const PANEL_ORDER = ["rgb", "display", "buzz", "btn", "imu", "mic", "light", "temp",
-  "hum", "led", "volts", "bat", "chg", "touch", "cap", "joy", "pot", "enc", "rtc", "rfid", "cam",
+  "hum", "dist", "gas", "ir", "led", "volts", "bat", "chg", "touch", "cap", "joy", "pot", "enc", "rtc", "rfid", "cam",
   "motor", "servo", "relay", "net"];
 
 function newModel() {
@@ -1376,6 +1391,15 @@ const RENDER = {
   light(m) { const v = m.values.light; if (v) $("lightV").textContent = fmt(v[0]) + " (raw)"; },
   temp(m)  { const v = m.values.temp;  if (v) $("tempV").textContent = fmt(v[0], 1) + " °C"; },
   hum(m)   { const v = m.values.hum;   if (v) $("humV").textContent  = fmt(v[0], 1) + " %"; },
+  dist(m)  { const v = m.values.dist;  if (v) $("distV").textContent = fmt(v[0], 1) + " cm"; },
+  gas(m)   { const v = m.values.gas;   if (v) $("gasV").textContent  = fmt(v[0]) + " (raw)"; },
+  ir(m) {
+    const v = m.values.ir;
+    if (!v) return;
+    $("irV").textContent = "0x" + ((v[0] >>> 0).toString(16).toUpperCase().padStart(8, "0"));
+    irCount++;
+    $("irN").textContent = irCount + (irCount === 1 ? " code" : " codes");
+  },
   volts(m) { const v = m.values["s/v"] || m.values.volts;
              if (v) $("voltsV").textContent = fmt(v[0], 2) + " V"; },
   bat(m)   { const v = m.values.bat;   if (v) $("batV").textContent = fmt(v[0]) + " mV"; },
@@ -1497,6 +1521,10 @@ $("micGain").onchange = () => send("/mic/gain", [+$("micGain").value]);
 $("lightRead").onclick = () => send("/light");
 $("tempRead").onclick = () => send("/temp");
 $("humRead").onclick  = () => send("/hum");
+$("distRead").onclick = () => send("/dist");
+$("gasRead").onclick  = () => send("/gas");
+$("irRead").onclick   = () => send("/ir");
+let irCount = 0;
 $("batRead").onclick = () => send("/bat");
 $("chgRead").onclick = () => send("/chg");
 $("chgSet").onclick = () => send("/chg", [+$("chgMa").value]);
