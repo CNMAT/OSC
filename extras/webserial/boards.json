@@ -1124,6 +1124,31 @@
       ],
       "chips": [
         {
+          "label": "TFT text",
+          "addr": "/display/text",
+          "args": "s:OSC-over-USB s:Elecrow-Pico-2"
+        },
+        {
+          "label": "big HELLO",
+          "addr": "/display/big",
+          "args": "s:HELLO"
+        },
+        {
+          "label": "clear",
+          "addr": "/display/clear",
+          "args": ""
+        },
+        {
+          "label": "fill blue",
+          "addr": "/display/fill",
+          "args": "0 0 128"
+        },
+        {
+          "label": "invert",
+          "addr": "/display/invert",
+          "args": "1"
+        },
+        {
           "label": "red LED on",
           "addr": "/s/l",
           "args": "1"
@@ -1194,7 +1219,7 @@
           "args": "50"
         }
       ],
-      "note": "Hand-written sketch (examples/ElecrowPico2Oscuino); only this page is generated. Elecrow's mainboard carries an RP2350A with 8 MB flash (picotool), not a socketed Pico 2; the rpipico2 definition is what Elecrow's lessons use and what its factory firmware reports. Sensors and actuators only in this pass: /btn is the four buttons on one ADC ladder (order unverified), /pot the slide pot, /mic the analog sound module, /gas the MQ-2 raw, /dist the HC-SR04 in cm, /ir the remote's raw code, /cap the touch pad, /light the BH1750, /temp and /hum the DHT20, /imu the LSM6DS3TR-C at 0x6B (the datasheet says an MPU6050 at 0x68; the bus sweep, reported in /diag, says otherwise) -- the three I2C chips announced only if they answer on GP2/GP3 at boot. /s/l is the red LED, green and yellow are /d/19 and /d/20, the hall sensor /d/21. /relay/0 clicks a real relay; /servo/0 and /motor/0 (the vibration motor) move things. The 20 WS2812 need the kit's LED switch ON. Needs Adafruit NeoPixel and IRremote 4. Flash with the 1200-baud touch and picotool load -x (BOARDS.md). The TFT and touch panel are not yet driven."
+      "note": "Hand-written sketch (examples/ElecrowPico2Oscuino); only this page is generated. Elecrow's mainboard carries an RP2350A with 8 MB flash (picotool), not a socketed Pico 2; the rpipico2 definition is what Elecrow's lessons use and what its factory firmware reports. Every module: the 2.4\" ST7789 TFT is /display (240x320, up to 8 lines of 20 at text size 2, /display/big, /clear, /fill, /rect, /circle, /bl, /invert), its FT6336U touch panel /touch x y while a finger is down (announced when the controller answers on I2C0; /touch/map turns the axes), /btn is the four buttons on one ADC ladder (order unverified), /pot the slide pot, /mic the analog sound module, /gas the MQ-2 raw, /dist the HC-SR04 in cm, /ir the remote's raw code, /cap the touch pad, /light the BH1750, /temp and /hum the DHT20, /imu the LSM6DS3TR-C at 0x6B (the datasheet says an MPU6050 at 0x68; the bus sweep, reported in /diag, says otherwise) -- the three I2C chips announced only if they answer on GP2/GP3 at boot. /s/l is the red LED, green and yellow are /d/19 and /d/20, the hall sensor /d/21. /relay/0 clicks a real relay; /servo/0 and /motor/0 (the vibration motor) move things. The 20 WS2812 (GRB) need the kit's LED switch ON. The panel rests on a live sensor dashboard; /display/clear brings it back after any drawing. Needs Adafruit NeoPixel and IRremote 4. Flash with the 1200-baud touch and picotool load -x (BOARDS.md)."
     }
   ]
 }

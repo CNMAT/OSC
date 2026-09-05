@@ -1,5 +1,5 @@
-// Elecrow All-in-one Starter Kit for Pico 2: the sensors and actuators over
-// OSC. The 2.4" TFT and its touch panel come in a later pass.
+// Elecrow All-in-one Starter Kit for Pico 2: every module over OSC -- the
+// sensors, the actuators, the 2.4" TFT and its capacitive touch panel.
 //
 //   http://localhost/ElecrowPico2Oscuino.html   (Web Serial; not file://)
 //
@@ -17,19 +17,24 @@
 // mainboards V1.1-1.3; this is a v1.2. None had been measured when this was
 // written -- see STATUS.
 //
-//   GP18/19/20  red / green / yellow LEDs     GP10  passive buzzer
+//   GP18/19/20  red / green / yellow LEDs -- on the silkscreen, left to
+//               right: red 18, yellow 20, green 19   GP10  passive buzzer
 //   GP12  relay (with its red indicator)      GP13  servo header
 //   GP15  vibration motor                     GP14  capacitive touch pad
 //   GP21  hall sensor (digital)               GP11  IR receiver
-//   GP22  20 x WS2812, GP23 their power enable (and a physical LED switch)
+//   GP22  20 x WS2812 in GRB order, GP23 their power enable (and a switch)
 //   GP9   HC-SR04 trigger, GP8 its echo
-//   GP26  MQ-2 gas (A0)   GP27  four buttons on one resistor ladder (A1)
+//   GP26  MQ-2 gas (A0)   GP27  four buttons on one resistor ladder (A1):
+//                          K1 above, then K2 K3 K4 left to right
 //   GP28  slide pot (A2)  GP29  sound sensor (A3)
 //   GP2/GP3  I2C1: DHT20 0x38, BH1750 0x5C, and at 0x6B an ST LSM6DS3TR-C
 //            (WHO_AM_I 0x6A) where the datasheet promises an MPU6050 at 0x68.
 //            The boot sweep that found it is reported in /diag.
-//   GP4/GP5  I2C0 touch panel, GP6/7/16/17 TFT on SPI0, GP0 backlight,
-//            GP24/25 touch reset/interrupt -- all untouched here
+//   GP6 SCK, GP7 MOSI, GP17 CS, GP16 DC  the ST7789T3 TFT on SPI0, a 240x320
+//            panel mounted landscape (320x240, rotation 3),
+//            no reset line of its own; GP0 its backlight (PWM)
+//   GP4/GP5  I2C0: the FT6x36 touch controller at 0x38 (a different bus from
+//            the DHT20's 0x38), GP24 its reset, GP25 its interrupt
 //
 // The address space is ADDRESSES.md: capabilities, not a board prefix.
 // Everything the board says goes out as a bundle.
@@ -39,9 +44,10 @@
 //                              /enq/led, /enq/rgb 20, /enq/buzz, /enq/btn 4,
 //                              /enq/pot 1, /enq/mic, /enq/gas, /enq/dist,
 //                              /enq/ir, /enq/cap 1, /enq/relay 1,
-//                              /enq/servo 1, /enq/motor 1 -- fixed to the
-//                              board -- and, only when the chip answered on
-//                              I2C1 at boot: /enq/light (BH1750),
+//                              /enq/servo 1, /enq/motor 1, /enq/display 320 240
+//                              -- fixed to the board -- and, only when the
+//                              chip answered at boot: /enq/touch 320 240
+//                              (FT6x36 on I2C0), /enq/light (BH1750),
 //                              /enq/temp + /enq/hum (DHT20), /enq/imu 6
 //                              (LSM6DS3TR-C, WHO_AM_I checked).
 //   The stream, every /rate ms, one bundle sampled in one pass:
@@ -59,6 +65,7 @@
 //   /imu ,ffffff        LSM6DS3TR-C g x3 then deg/s x3
 //   /dist ,f    HC-SR04 centimetres -- only in ticks that got an echo
 //   /ir ,i      the raw 32-bit code, once, in the tick after a remote press
+//   /touch ,ii  x y, while a finger is down, after /touch/map
 // Inbound (every write is echoed on its own address)
 //   /s/l ,i 0|1           the red LED; green and yellow are /d/19 and /d/20
 //   /rgb ,iii  /rgb/<n> ,iii  /rgb/pixels ,iii...  /rgb/bright ,i
@@ -67,6 +74,13 @@
 //   /servo/0 ,i angle     0..180
 //   /motor/0 ,ii speed dir  the vibration motor: speed 0..255 is PWM, dir
 //                         is accepted and ignored, it only goes one way
+//   The panel rests on a live view of every sensor (5 Hz); any drawing
+//   command below takes it over, and /display/clear hands it back.
+//   /display/text ,s...   up to 8 lines of 26 at text size 2; answers the
+//                         number drawn   /display/big ,s  one centred line
+//   /display/clear  /display/fill ,iii  /display/rect ,iiiiiii x y w h r g b
+//   /display/circle ,iiiiii x y r r g b  /display/bl ,i 0..255  /display/invert ,i
+//   /touch/map ,iii swapXY mirrorX mirrorY   how raw panel coordinates map
 //   /rate ,i ms           20..2000; 0 stops the stream
 //   /d/<pin> [,i|,f] /a/<n> [,i|,f] /s/m /s/d /s/a   the core pin set, so
 //                         the hall sensor is /d/21 and the LEDs /d/19, /d/20
@@ -86,13 +100,34 @@
 // what caught it; and sampling the sound module 100 us after the
 // rangefinder's 40 kHz ping produced a /mic spike of 15882 rms in silence,
 // gone once the samples were taken before the ping (one run each way).
-// NOT yet seen: which physical button is which on the ladder, the WS2812
-// colour order (the factory sketch says NEO_RGB), the touch pad's and hall
-// sensor's polarity, the remote's protocol, and every actuator's motion --
-// the relay, servo, vibration motor and buzzer were commanded and echoed,
-// not watched. The display and its touch panel are deliberately absent.
+// Adrian heard the buzzer, the servo and the relay's click on that pass, and
+// read the silkscreen: LEDs left to right red 18, yellow 20, green 19; keys
+// K1 above K2 K3 K4. The pixels commanded red showed GREEN, so the strip is
+// GRB and the factory sketch's NEO_RGB was wrong; fixed.
+// With the TFT and touch panel added, contractprobe --actuate --sound: 46
+// passed, 0 failed, 3 skipped. The panel came up portrait, then upside down
+// at rotation 1; rotation 3 is the kit's orientation (Adrian's eyes).
+// TOUCH, DISTANCE AND THE TOUCH PAD ALL WORK -- Adrian confirmed each on the
+// dashboard -- after an evening in which they seemed not to. Two causes,
+// both this sketch's: the rangefinder ping and the touch poll ran only
+// inside the stream tick, and every bench script ended by stopping the
+// stream, so the dashboard's dist and touch lines froze and read as a dead
+// sensor and a missing touch layer; and the touch init that finally
+// reported fingers is LovyanGFX's (Elecrow's own firmware, which did report
+// them): a 1 ms reset, 300 ms to settle, DEV_MODE 0 and G_MODE 0 written,
+// NOTHING written to the power register 0xA5, the bus at 400 kHz, reads
+// only while INT is low. Which of the differences mattered was not isolated.
+// Ping and poll now run on their own clocks. In the run that confirmed it:
+// 44 of 44 reads with a finger down had INT low and a point in the
+// registers; /dist swept 2.1..71.6 cm with a hand.
+// NOT yet seen: which ladder value is K1..K4, the hall sensor's polarity,
+// the remote's protocol, the vibration motor. The touch map for rotation 3
+// is swap + mirror Y, from a touched top-left corner reading 28,239 unmirrored.
 
 #include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_ST7789.h>
 #include <Servo.h>
 #include <Adafruit_NeoPixel.h>
 #include <IRremote.hpp>
@@ -123,6 +158,20 @@ SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 #define PIN_KEYS        27      // A1: four buttons on one ladder
 #define PIN_POT         28      // A2
 #define PIN_SOUND       29      // A3
+#define PIN_TFT_SCK      6
+#define PIN_TFT_MOSI     7
+#define PIN_TFT_CS      17
+#define PIN_TFT_DC      16
+#define PIN_TFT_BL       0
+#define PIN_TP_RST      24
+#define PIN_TP_INT      25
+#define ADDR_TOUCH    0x38    // FT6x36 on I2C0 (Wire, GP4/GP5)
+#define PANEL_W        240    // the ST7789's native frame ...
+#define PANEL_H        320
+#define TFT_W          320    // ... mounted landscape in the kit: rotation 3
+#define TFT_H          240
+#define TEXT_LINES       8    // at text size 2: 12 x 16 px glyphs, 26 per line
+#define TEXT_COLS       26
 #define PIN_SDA1         2
 #define PIN_SCL1         3
 #define ADDR_DHT20    0x38
@@ -137,10 +186,23 @@ SLIPEncodedUSBSerial SLIPSerial(thisBoardsSerialUSB);
 static const int KEY_CENTRE[BTN_COUNT] = { 745, 805, 865, 910 };
 static const int KEY_TOL = 25;
 
-Adafruit_NeoPixel strip(RGB_COUNT, PIN_RGB, NEO_RGB + NEO_KHZ800);   // NEO_RGB per the factory sketch
+Adafruit_NeoPixel strip(RGB_COUNT, PIN_RGB, NEO_GRB + NEO_KHZ800);   // GRB: commanded red, the factory
+                                                                     // sketch's NEO_RGB showed green (2026-09-04)
 Servo servo;
+Adafruit_ST7789 tft(&SPI, PIN_TFT_CS, PIN_TFT_DC, -1);              // no reset line: it shares the board's
 
-static bool     lightOK = false, dhtOK = false, imuOK = false;
+static bool     lightOK = false, dhtOK = false, imuOK = false, touchOK = false;
+static char     lines[TEXT_LINES][TEXT_COLS + 1] = { "Elecrow Pico 2", "OSC over USB" };
+static int      nLines = 2;
+static char     bigLine[12] = "";
+static bool     bigMode = false;
+static bool     showDash = true;             // the board's own sensor view; any /display/* takes over, /display/clear brings it back
+static char     dashPrev[13][TEXT_COLS + 1];
+static uint16_t fillColor = 0;               // ST77XX_BLACK
+static bool     tSwap = true, tMx = false, tMy = true;    // rotation 3: swap and mirror Y -- the top-left corner read 28,239 before the mirror (2026-09-04)
+static int      touchX = 0, touchY = 0;
+static bool     touchDown = false;
+static uint32_t touchReads = 0, touchFails = 0, touchHits = 0;   // for /diag
 static char     i2cDiag[128] = "";           // "i2c1: 0x38 0x5c ..." from the boot sweep
 static int32_t  seq = 0;
 static uint32_t reportMs = 50, buzzUntil = 0;
@@ -276,6 +338,83 @@ static bool imuRead(float g[3], float dps[3]) {
   return true;
 }
 
+/* ------------------------------------------------------ display and touch */
+
+static void redraw() {
+  tft.fillScreen(fillColor);
+  tft.setTextColor(ST77XX_WHITE, fillColor);
+  tft.setTextWrap(false);
+  if (bigMode) {
+    tft.setTextSize(4);                        // 24 x 32 px glyphs
+    const int16_t w = (int16_t) strlen(bigLine) * 24;
+    tft.setCursor(w < TFT_W ? (TFT_W - w) / 2 : 0, (TFT_H - 32) / 2);
+    tft.print(bigLine);
+    return;
+  }
+  tft.setTextSize(2);
+  for (int i = 0; i < nLines; i++) {
+    tft.setCursor(0, (int16_t) (i * 18 + 2));
+    tft.print(lines[i]);
+  }
+}
+
+// FT6x36 at 0x38 on I2C0: reg 0x02 is the touch count, 0x03..0x06 the first
+// point's X and Y (12 bits each, the top nibble of the high byte is an event
+// flag). Vendor id at 0xA8 reads 0x11; the chip id at 0xA3 names the part.
+static bool ftRead(uint8_t reg, uint8_t *b, size_t n) {
+  Wire.beginTransmission(ADDR_TOUCH);
+  Wire.write(reg);
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom((uint8_t) ADDR_TOUCH, (uint8_t) n) != n) return false;
+  for (size_t i = 0; i < n; i++) b[i] = (uint8_t) Wire.read();
+  return true;
+}
+
+// The sequence is LovyanGFX's Touch_FT5x06::init(), which Elecrow's factory
+// firmware uses and which does report touches on this panel: reset low for
+// 1 ms, INT pulled up, then at once DEV_MODE 0x00 = 0, read the six id
+// registers from 0xA3, G_MODE 0xA4 = 0 (INT low while touched). Nothing is
+// written to the power register 0xA5 -- an earlier build here did, and saw
+// a configured chip report no finger for a whole evening.
+static bool ftWrite(uint8_t reg, uint8_t val) {
+  Wire.beginTransmission(ADDR_TOUCH); Wire.write(reg); Wire.write(val);
+  return Wire.endTransmission() == 0;
+}
+static bool touchBegin(uint8_t &chipId) {
+  pinMode(PIN_TP_RST, OUTPUT);
+  digitalWrite(PIN_TP_RST, LOW);  delay(1);
+  digitalWrite(PIN_TP_RST, HIGH);
+  pinMode(PIN_TP_INT, INPUT_PULLUP);
+  delay(300);                               // asked sooner, it did not answer here
+  uint8_t vendor = 0;
+  if (!ftRead(0xA8, &vendor, 1) || vendor != 0x11) return false;
+  ftRead(0xA3, &chipId, 1);
+  return ftWrite(0x00, 0x00) && ftWrite(0xA4, 0x00);
+}
+
+// The first finger, mapped by /touch/map onto the display's own axes.
+static bool touchRead(int &x, int &y) {
+  uint8_t b[5];
+  touchReads++;
+  if (!ftRead(0x02, b, 5)) { touchFails++; return false; }
+  const uint8_t n = b[0] & 0x0F;
+  if (n == 0 || n > 2) return false;
+  touchHits++;
+  int rx = ((b[1] & 0x0F) << 8) | b[2];     // 0..239 across the panel's short side
+  int ry = ((b[3] & 0x0F) << 8) | b[4];     // 0..319 along its long side
+  if (tSwap) { const int t = rx; rx = ry; ry = t; }
+  if (tMx) rx = TFT_W - 1 - rx;
+  if (tMy) ry = TFT_H - 1 - ry;
+  x = rx; y = ry;
+  return true;
+}
+
+static uint16_t rgb565(OSCMessage &m, int i) {
+  return tft.color565((uint8_t) constrain(m.getInt(i), 0, 255),
+                      (uint8_t) constrain(m.getInt(i + 1), 0, 255),
+                      (uint8_t) constrain(m.getInt(i + 2), 0, 255));
+}
+
 /* ------------------------------------------------------------- sampling */
 
 static void readButtons(int b[BTN_COUNT]) {
@@ -305,6 +444,48 @@ static void sampleSound(int32_t &rms, int32_t &peak) {
   if (rms > 32767) rms = 32767;
   if (peak > 32767) peak = 32767;
 }
+
+// The resting view: every sensor, live, 13 lines of 26 at text size 2.
+// Only lines whose text changed are redrawn, over their own background, so
+// the panel does not flicker at the 5 Hz this runs at.
+static void drawDash(bool full) {
+  char L[13][TEXT_COLS + 1];
+  int32_t light = -1; if (lightOK) bh1750Read(light);
+  float g[3] = {0, 0, 0}, dps[3] = {0, 0, 0}; const bool imu = imuOK && imuRead(g, dps);
+  int32_t rms = 0, peak = 0; sampleSound(rms, peak);
+  int b[BTN_COUNT]; readButtons(b);
+  snprintf(L[0],  27, "Elecrow Pico 2   OSC/USB");
+  snprintf(L[1],  27, "pot %4d      gas %4d", (int) analogRead(PIN_POT), (int) analogRead(PIN_GAS));
+  if (distAt) snprintf(L[2], 27, "dist %6.1f cm", (double) distCm); else snprintf(L[2], 27, "dist   no echo");
+  if (lightOK) snprintf(L[3], 27, "light %4ld raw", (long) light); else snprintf(L[3], 27, "light   --");
+  if (dhtOK) snprintf(L[4], 27, "temp %5.1f C  hum %4.1f %%", (double) tempC, (double) humPct); else snprintf(L[4], 27, "temp/hum  --");
+  if (imu) { snprintf(L[5], 27, "acc %5.2f %5.2f %5.2f g", (double) g[0], (double) g[1], (double) g[2]);
+             snprintf(L[6], 27, "gyr %5.1f %5.1f %5.1f dps", (double) dps[0], (double) dps[1], (double) dps[2]); }
+  else     { snprintf(L[5], 27, "imu  --"); L[6][0] = '\0'; }
+  snprintf(L[7],  27, "mic rms %5ld  peak %5ld", (long) rms, (long) peak);
+  snprintf(L[8],  27, "btn %d %d %d %d  cap %d  hall %d", b[0], b[1], b[2], b[3], digitalRead(PIN_TOUCH), digitalRead(PIN_HALL));
+  snprintf(L[9],  27, "relay %ld servo %ld vib %ld", (long) relayState, (long) servoAngle, (long) motorSpeed);
+  if (irSeen) snprintf(L[10], 27, "ir 0x%08lx", (unsigned long) lastIr); else snprintf(L[10], 27, "ir   none yet");
+  if (!touchOK) snprintf(L[11], 27, "touch  no controller");
+  else if (touchHits) snprintf(L[11], 27, "touch %3d,%3d %s n=%lu", touchX, touchY, touchDown ? "down" : "up  ", (unsigned long) touchHits);
+  else snprintf(L[11], 27, "touch  none yet");
+  // the controller's first six registers, raw, and its INT pin: what the bus
+  // says while a finger is on the glass, for the bench
+  { uint8_t r[7] = {0}; if (touchOK) ftRead(0x00, r, 7);
+    snprintf(L[12], 27, "ft %02x %02x %02x %02x %02x %02x int%d %lus", r[0], r[1], r[2], r[3], r[4], r[5], digitalRead(PIN_TP_INT), (unsigned long) (millis() / 1000)); }
+  tft.setTextSize(2);
+  tft.setTextWrap(false);
+  tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
+  for (int i = 0; i < 13; i++) {
+    if (!full && strcmp(L[i], dashPrev[i]) == 0) continue;
+    // pad to the full width so a shorter new line wipes the old one
+    char pad[TEXT_COLS + 1]; snprintf(pad, sizeof pad, "%-26s", L[i]);
+    tft.setCursor(0, (int16_t) (i * 18 + 2));
+    tft.print(pad);
+    strcpy(dashPrev[i], L[i]);
+  }
+}
+
 
 /* ---------------------------------------------------------------- outbound */
 
@@ -349,12 +530,41 @@ static void addDist(bool onlyFresh) {
   if (onlyFresh && millis() - distAt > 200) return;
   bundleOUT.add("/dist").add(distCm);
 }
+
+// Bench cross-check, on /diag when asked: a blocking pulseIn() measurement
+// beside the interrupt-timed one, because the interrupt path read a steady
+// 70 cm all day while a hand in front of the sensor changed nothing.
+static void addDistDiag() {
+  detachInterrupt(digitalPinToInterrupt(PIN_US_ECHO));
+  digitalWrite(PIN_US_TRIG, LOW); delayMicroseconds(4);
+  digitalWrite(PIN_US_TRIG, HIGH); delayMicroseconds(10);
+  digitalWrite(PIN_US_TRIG, LOW);
+  const unsigned long us = pulseIn(PIN_US_ECHO, HIGH, 40000);
+  attachInterrupt(digitalPinToInterrupt(PIN_US_ECHO), echoISR, CHANGE);
+  char t[80];
+  snprintf(t, sizeof t, "us pulseIn %lu us = %.1f cm; isr last %.1f cm width %lu us; echo pin idle %d",
+           us, us / 58.0, (double) distCm, (unsigned long) echoWidth, digitalRead(PIN_US_ECHO));
+  bundleOUT.add("/diag").add(t);
+}
 static void addIr()    { if (irSeen) bundleOUT.add("/ir").add((intOSC_t) lastIr); }
 
 static void addEnq() {
   bundleOUT.add("/enq").add("ElecrowPico2Oscuino");
   bundleOUT.add("/enq/diag");
   bundleOUT.add("/diag").add(i2cDiag);
+  if (touchOK) {
+    char t[96];
+    snprintf(t, sizeof t, "touch reads %lu fails %lu with-finger %lu int=%d",
+             (unsigned long) touchReads, (unsigned long) touchFails, (unsigned long) touchHits, digitalRead(PIN_TP_INT));
+    bundleOUT.add("/diag").add(t);
+    uint8_t r[7] = {0}, th = 0, pm = 0, im = 0, fw = 0, lib[2] = {0, 0}, period = 0;
+    ftRead(0x00, r, 7); ftRead(0x80, &th, 1); ftRead(0xA5, &pm, 1); ftRead(0xA4, &im, 1);
+    ftRead(0xA6, &fw, 1); ftRead(0xA1, lib, 2); ftRead(0x88, &period, 1);
+    snprintf(t, sizeof t, "ft regs 00..06 %02x %02x %02x %02x %02x %02x %02x th %02x pwr %02x irq %02x fw %02x lib %02x%02x rate %02x",
+             r[0], r[1], r[2], r[3], r[4], r[5], r[6], th, pm, im, fw, lib[0], lib[1], period);
+    bundleOUT.add("/diag").add(t);
+  }
+  addDistDiag();
   bundleOUT.add("/enq/led");
   bundleOUT.add("/enq/rgb").add((intOSC_t) RGB_COUNT);
   bundleOUT.add("/enq/buzz");
@@ -368,6 +578,8 @@ static void addEnq() {
   bundleOUT.add("/enq/relay").add((intOSC_t) 1);
   bundleOUT.add("/enq/servo").add((intOSC_t) 1);
   bundleOUT.add("/enq/motor").add((intOSC_t) 1);
+  bundleOUT.add("/enq/display").add((intOSC_t) TFT_W).add((intOSC_t) TFT_H);
+  if (touchOK) bundleOUT.add("/enq/touch").add((intOSC_t) TFT_W).add((intOSC_t) TFT_H);
   if (lightOK) bundleOUT.add("/enq/light");
   if (dhtOK)   { bundleOUT.add("/enq/temp"); bundleOUT.add("/enq/hum"); }
   if (imuOK)   bundleOUT.add("/enq/imu").add((intOSC_t) 6);
@@ -465,6 +677,75 @@ static void routeMotor(OSCMessage &m, int offset) {  // /motor/0 speed dir
   const int32_t dir = (m.size() > 1 && m.isInt(1)) ? (m.getInt(1) ? 1 : 0) : 0;
   analogWrite(PIN_VIB, (int) motorSpeed);
   bundleOUT.add("/motor/0").add((intOSC_t) motorSpeed).add((intOSC_t) dir);
+}
+
+static void routeText(OSCMessage &m) {               // /display/text up to 8 lines
+  nLines = 0;
+  const int n = m.size() < TEXT_LINES ? m.size() : TEXT_LINES;
+  for (int i = 0; i < n; i++)
+    if (m.isString(i)) { m.getString(i, lines[nLines], sizeof lines[0]); nLines++; }
+  bigMode = false; showDash = false;
+  redraw();
+  bundleOUT.add("/display/text").add((intOSC_t) nLines);
+}
+
+static void routeBig(OSCMessage &m) {                // /display/big one centred line
+  if (m.size() < 1 || !m.isString(0)) return;
+  m.getString(0, bigLine, sizeof bigLine);
+  bigMode = true; showDash = false;
+  redraw();
+  bundleOUT.add("/display/big").add(bigLine);
+}
+
+static void routeClear(OSCMessage &) {
+  // Clear hands the panel back to the board's own sensor view.
+  nLines = 0; bigLine[0] = '\0'; bigMode = false; fillColor = 0;
+  tft.fillScreen(0);
+  showDash = true; memset(dashPrev, 0, sizeof dashPrev); drawDash(true);
+  bundleOUT.add("/display/clear");
+}
+
+static void routeFill(OSCMessage &m) {               // /display/fill r g b
+  if (m.size() < 3) return;
+  fillColor = rgb565(m, 0);
+  nLines = 0; bigMode = false; showDash = false;
+  redraw();
+  bundleOUT.add("/display/fill").add((intOSC_t) m.getInt(0)).add((intOSC_t) m.getInt(1)).add((intOSC_t) m.getInt(2));
+}
+
+static void routeRect(OSCMessage &m) {               // /display/rect x y w h r g b
+  if (m.size() < 7) return;
+  showDash = false;
+  tft.fillRect(m.getInt(0), m.getInt(1), m.getInt(2), m.getInt(3), rgb565(m, 4));
+  OSCMessage &e = bundleOUT.add("/display/rect");
+  for (int i = 0; i < 7; i++) e.add((intOSC_t) m.getInt(i));
+}
+
+static void routeCircle(OSCMessage &m) {             // /display/circle x y r r g b
+  if (m.size() < 6) return;
+  showDash = false;
+  tft.fillCircle(m.getInt(0), m.getInt(1), m.getInt(2), rgb565(m, 3));
+  OSCMessage &e = bundleOUT.add("/display/circle");
+  for (int i = 0; i < 6; i++) e.add((intOSC_t) m.getInt(i));
+}
+
+static void routeBl(OSCMessage &m) {                 // /display/bl 0..255
+  if (m.size() < 1 || !m.isInt(0)) return;
+  const int32_t v = constrain(m.getInt(0), 0, 255);
+  analogWrite(PIN_TFT_BL, (int) v);
+  bundleOUT.add("/display/bl").add((intOSC_t) v);
+}
+
+static void routeInvert(OSCMessage &m) {             // /display/invert 0|1
+  if (m.size() < 1 || !m.isInt(0)) return;
+  tft.invertDisplay(m.getInt(0) != 0);
+  bundleOUT.add("/display/invert").add((intOSC_t) (m.getInt(0) ? 1 : 0));
+}
+
+static void routeTouchMap(OSCMessage &m) {           // /touch/map swapXY mirrorX mirrorY
+  if (m.size() < 3) return;
+  tSwap = m.getInt(0) != 0; tMx = m.getInt(1) != 0; tMy = m.getInt(2) != 0;
+  bundleOUT.add("/touch/map").add((intOSC_t) tSwap).add((intOSC_t) tMx).add((intOSC_t) tMy);
 }
 
 static void routeRate(OSCMessage &m) {               // /rate ms; 0 stops
@@ -566,6 +847,20 @@ void setup() {
 
   IrReceiver.begin(PIN_IR, DISABLE_LED_FEEDBACK);
 
+  // The TFT: SPI0 moved onto the kit's pins, portrait, backlight full on.
+  SPI.setSCK(PIN_TFT_SCK); SPI.setTX(PIN_TFT_MOSI);
+  tft.init(PANEL_W, PANEL_H);
+  tft.setRotation(3);                       // landscape, as the kit mounts it (1 came up upside down)
+  pinMode(PIN_TFT_BL, OUTPUT); analogWrite(PIN_TFT_BL, 255);
+  tft.fillScreen(0);                        // the dashboard is drawn once the sensors are up, at the end of setup
+
+  // The touch controller lives alone on I2C0 (GP4/GP5, the core's default
+  // Wire pins). Announced only if its vendor id reads back.
+  Wire.begin();
+  Wire.setClock(400000);
+  uint8_t touchChip = 0;
+  touchOK = touchBegin(touchChip);          // reported in /diag after the I2C1 sweep below
+
   // The sensors live on I2C1 = GP2/GP3. Probe each address before trusting
   // anything: a bus with nothing on it initialises happily and streams zeros.
   // What answered is what /enq announces.
@@ -581,6 +876,8 @@ void setup() {
   imuOK   = imuBegin();
   if (imuOK && strlen(i2cDiag) < sizeof i2cDiag - 24)
     snprintf(i2cDiag + strlen(i2cDiag), 24, " imu@0x%02x who 0x%02x", imuAddr, imuWho);
+  if (touchOK && strlen(i2cDiag) < sizeof i2cDiag - 24)
+    snprintf(i2cDiag + strlen(i2cDiag), 24, " touch@i2c0 id 0x%02x", touchChip);
   if (present(Wire1, ADDR_DHT20) && dht20Begin() && dht20Trigger()) {
     // The signal, not begin(): announce temp/hum only once a conversion
     // has actually come back. One blocking wait here, never again.
@@ -588,6 +885,9 @@ void setup() {
     dhtOK = dht20Read(tempC, humPct);
     dhtTriggered = 0;
   }
+
+  memset(dashPrev, 0, sizeof dashPrev);
+  drawDash(true);
 
   addEnq(); flushOut();   // usually lost to enumeration; the page asks again
 }
@@ -622,6 +922,15 @@ void loop() {
       inMsg.route("/servo",     routeServo);
       inMsg.route("/motor",     routeMotor);
       inMsg.dispatch("/rate",   routeRate);
+      inMsg.dispatch("/display/text",   routeText);
+      inMsg.dispatch("/display/big",    routeBig);
+      inMsg.dispatch("/display/clear",  routeClear);
+      inMsg.dispatch("/display/fill",   routeFill);
+      inMsg.dispatch("/display/rect",   routeRect);
+      inMsg.dispatch("/display/circle", routeCircle);
+      inMsg.dispatch("/display/bl",     routeBl);
+      inMsg.dispatch("/display/invert", routeInvert);
+      inMsg.dispatch("/touch/map",      routeTouchMap);
       inMsg.route("/d",         routeDigital);
       inMsg.route("/a",         routeAnalog);
       inMsg.dispatch("/s/m",    routeMicros);
@@ -647,6 +956,27 @@ void loop() {
 
   const uint32_t now = millis();
   if (buzzUntil && now >= buzzUntil) { noTone(PIN_BUZZER); buzzUntil = 0; }
+
+  // The touch controller and the rangefinder run on their own clocks, so
+  // the dashboard (and a bare ask) see them whether or not the stream is on.
+  // An earlier build did both inside the stream tick, and every bench script
+  // ended by stopping the stream -- so the dashboard's dist and touch lines
+  // froze, which read as a dead rangefinder and a missing touch layer.
+  // As LovyanGFX does: INT low means a finger, and only then are the
+  // registers read; when INT changes state the polling mode is rewritten.
+  static uint32_t lastTouch = 0;
+  if (touchOK && now - lastTouch >= 20) {
+    lastTouch = now;
+    static bool released = true;
+    const bool intHigh = digitalRead(PIN_TP_INT) == HIGH;
+    if (released != intHigh) { released = intHigh; ftWrite(0xA4, 0x00); }
+    touchDown = !released && touchRead(touchX, touchY);
+  }
+  static uint32_t lastPing = 0;
+  if (now - lastPing >= 60) { lastPing = now; pingDistance(now); }
+
+  static uint32_t lastDash = 0;
+  if (showDash && now - lastDash >= 200) { lastDash = now; drawDash(false); }
 
   // The remote: decode whenever a frame is in, remember it for the next
   // stream tick, and free the receiver at once.
@@ -677,11 +1007,11 @@ void loop() {
 
   // One bundle, sampled in one pass, so every reading in it belongs to the
   // same instant: /state first, then one message per capability streamed.
-  // The sound module is sampled BEFORE the rangefinder is pinged: with the
-  // ping first, its 40 kHz burst landed inside the 64-sample window and
-  // showed up as a /mic spike of 15882 rms in a quiet room (first run,
-  // 2026-09-04). Whether that coupling is acoustic or electrical is not
-  // known; ordering removes it either way.
+  // The rangefinder's 40 kHz burst once landed inside the sound module's
+  // 64-sample window and read as a /mic spike of 15882 rms in a quiet room
+  // (first run, 2026-09-04, ping issued 100 us before the samples). Pings now
+  // run on their own 60 ms clock, so an overlap is possible but rare; a
+  // stray spike in /mic is that, not sound.
   bundleOUT.add("/state").add((intOSC_t) seq++).add((intOSC_t) now);
   addMic();
   addBtn();
@@ -695,6 +1025,7 @@ void loop() {
   addImu();
   addDist(true);
   if (irNew) { addIr(); irNew = false; }
+  // /touch x y while a finger is down, from the poll below.
+  if (touchDown) bundleOUT.add("/touch").add((intOSC_t) touchX).add((intOSC_t) touchY);
   flushOut();
-  pingDistance(now);                        // after the samples, see addMic above
 }
