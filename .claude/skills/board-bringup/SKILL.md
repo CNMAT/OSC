@@ -27,12 +27,20 @@ the operating summary. Record results per
    board-agnostic `test/hardware/OscEcho` before any pin-driving demo; and
    treat a peripheral that "fails to probe" as a suspected wrong pin map
    first. See BRINGUP.md Phase 0, *The chip is not the board*.
-2. **Verify, don't assert.** No number leaves the session without: trickle
+2. **The vendor's peripheral list is a work list.** Having found the board's
+   documentation, do not stop at identification. Every peripheral it names
+   ends up either announced by the sketch as `/enq/<capability>` or written
+   into the board's `boards.json` note as present-but-not-wired. A pin map
+   copied into BOARDS.md and then ignored is the failure mode: the LilyGO
+   T-Encoder-Pro was brought up announcing only `/enq/btn`, its encoder pins
+   recorded and unused, on a board named after its encoder. See BRINGUP.md,
+   *The documentation is a work list*.
+3. **Verify, don't assert.** No number leaves the session without: trickle
    gate passed, 3 repeats, same-day reference board, mechanism named.
    Unverified code carries a STATUS comment saying so. If a measurement
    surprises you, suspect the instrument first — five "board bugs" in this
    repo's history were the apparatus.
-3. **Report failures faithfully**, including your own instrument errors.
+4. **Report failures faithfully**, including your own instrument errors.
 
 ## Transport flow (every board)
 

@@ -8,7 +8,7 @@
  * Board : LilyGO T-Encoder-Pro (ESP32-S3-R8)
  * FQBN  : esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,CDCOnBoot=cdc,PartitionScheme=app3M_fat9M_16MB
  *
- * No board definition exists in any installed core, so it is built as the generic esp32s3 with the four options the vendor's README specifies (https://github.com/Xinyuan-LilyGO/T-Encoder-Pro) -- omit them and the PSRAM mode and partition table are wrong. That generic variant also declares an RGB LED and an LED_BUILTIN this board does not have, which is why the entry carries OSC_NO_RGB and OSC_NO_LED: a board must not announce hardware it lacks. Documented pins for a future demo: rotary encoder A=IO1 B=IO2, encoder button=IO0, buzzer=IO17, touch SDA=IO5 SCL=IO6, screen CS=IO10, 2.04in round AMOLED. BUTTON PIN UNVERIFIED -- IO0 is the vendor's documented encoder button but no press has been observed here. Transport verified 2026-09-06: echo 22/22, widths 11/11, gate and the full burst ladder x3 all clean.
+ * No board definition exists in any installed core, so it is built as the generic esp32s3 with the four options the vendor's README specifies (https://github.com/Xinyuan-LilyGO/T-Encoder-Pro) -- omit them and the PSRAM mode and partition table are wrong. That generic variant also declares an RGB LED and an LED_BUILTIN this board does not have, hence OSC_NO_RGB and OSC_NO_LED: a board must not announce hardware it lacks. PINS, from the vendor's own libraries/Mylibrary/pin_config.h rather than a README summary: knob phases A=IO1 B=IO2, knob key=IO0, buzzer=IO17, I2C SDA=IO5 SCL=IO6, touch INT=IO9 RST=IO8, screen CS=IO10 SCLK=IO12 RST=IO4 EN=IO3 with QSPI data on IO11/IO13/IO7/IO14, panel 390x390. WIRED UP: knob (/enq/enc) and knob key (/enq/btn). PRESENT BUT NOT WIRED, each needing its own driver -- listed so the omission is visible rather than forgotten (BRINGUP.md, 'The documentation is a work list'): the 390x390 CO5300 AMOLED (/display), the CST816 touch panel (/touch), an AW8624 haptic engine, an LSM6DSL IMU (/imu), a PCF85063 RTC (/rtc), an SY6970 power-management chip (/bat, /chg) and the IO17 buzzer (/buzz). The vendor ships drivers for all of them in that repo's libraries/Arduino_DriveBus. KNOB AND KEY UNVERIFIED BY MOTION: the pins read sensibly at rest (A=1, B=0 -- a detent with one phase closed -- and key=1 pulled up), and /enc and /btn answer, but across 185 samples in a two-minute window on 2026-09-06 nothing moved, because nobody turned it. Pins confirmed against pin_config.h; motion still owed.
  *
  * Pair this with TEncoderProOscuino.html, sitting next to this file. Serve that page
  * over http://localhost or https:// (Web Serial refuses a file:// origin), click
@@ -64,6 +64,11 @@ SLIPEncodedSerial SLIPSerial(Serial);
 // /d/<pin> read still works for anyone who knows the wiring.
 #define BOARD_BUTTON_PIN 0
 #define BOARD_BUTTON_ACTIVE_LOW 1
+
+// A rotary encoder, when boards.json names its two phase pins. Same rule as
+// the button: an undeclared board simply has no /enc.
+#define BOARD_ENCODER_A 1
+#define BOARD_ENCODER_B 2
 
 static const unsigned long BAUD = 115200;   // ignored on native USB, but Web Serial still demands a value
 
@@ -282,6 +287,43 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
 static int32_t  seq      = 0;
 static uint32_t reportMs = 0;            // 0 = not streaming
 
+#ifdef BOARD_ENCODER_A
+// Quadrature, polled from loop(). A hand-turned knob moves far slower than
+// this loop runs, and polling keeps the block portable -- attachInterrupt's
+// pin-to-interrupt mapping is not the same on every core this template builds
+// for. The table is the standard one: index the previous two-bit state and the
+// current one, and it yields -1, 0 or +1. Detented encoders usually produce
+// four counts per click; /enc reports raw counts and lets the client decide.
+static int32_t encPos = 0, encLast = 0;
+static uint8_t encPrev = 0;
+
+static void encPoll() {
+  const uint8_t now = (uint8_t)((digitalRead(BOARD_ENCODER_A) << 1)
+                              |  digitalRead(BOARD_ENCODER_B));
+  if (now == encPrev) return;
+  static const int8_t step[16] = { 0, -1,  1,  0,
+                                   1,  0,  0, -1,
+                                  -1,  0,  0,  1,
+                                   0,  1, -1,  0 };
+  encPos += step[(encPrev << 2) | now];
+  encPrev = now;
+}
+
+static void addEnc() {
+  bundleOUT.add("/enc").add((intOSC_t)encPos).add((intOSC_t)(encPos - encLast));
+  encLast = encPos;                 // delta is "since the last time you asked"
+}
+
+void routeEnc(OSCMessage &msg, int addrOffset) {
+  if (msg.fullMatch("/zero", addrOffset)) {
+    encPos = 0; encLast = 0;
+    addEnc();
+    return;
+  }
+  addEnc();
+}
+#endif
+
 #ifdef BOARD_BUTTON_PIN
 static void addBtn() {
   const int raw = digitalRead(BOARD_BUTTON_PIN);
@@ -374,6 +416,9 @@ static void addEnq() {
 #ifdef BOARD_BUTTON_PIN
   bundleOUT.add("/enq/btn").add((intOSC_t)1);
 #endif
+#ifdef BOARD_ENCODER_A
+  bundleOUT.add("/enq/enc");
+#endif
 }
 
 void routeEnq(OSCMessage &msg, int addrOffset) {
@@ -390,6 +435,11 @@ void setup() {
 #endif
 #ifdef BOARD_BUTTON_PIN
   pinMode(BOARD_BUTTON_PIN, BOARD_BUTTON_ACTIVE_LOW ? INPUT_PULLUP : INPUT);
+#endif
+#ifdef BOARD_ENCODER_A
+  pinMode(BOARD_ENCODER_A, INPUT_PULLUP);
+  pinMode(BOARD_ENCODER_B, INPUT_PULLUP);
+  encPrev = (uint8_t)((digitalRead(BOARD_ENCODER_A) << 1) | digitalRead(BOARD_ENCODER_B));
 #endif
 #ifdef OSC_RGB
   oscRgbBegin();
@@ -453,6 +503,9 @@ void loop() {
 #ifdef BOARD_BUTTON_PIN
       bundleIN.route("/btn", routeBtn);
 #endif
+#ifdef BOARD_ENCODER_A
+      bundleIN.route("/enc", routeEnc);
+#endif
     }
     bundleIN.empty();
   }
@@ -460,6 +513,10 @@ void loop() {
   // Only transmit when a route actually produced something. Sending an empty
   // bundle every pass would flood the port at loop speed and drown the replies
   // you care about.
+#ifdef BOARD_ENCODER_A
+  encPoll();
+#endif
+
   static uint32_t lastReport = 0;
   const uint32_t now = millis();
   if (reportMs != 0 && now - lastReport >= reportMs) {

@@ -178,6 +178,16 @@ function defines(board) {
   }).join("\n");
 }
 
+// boards.json may name a rotary encoder: {"encoder": {"a": 1, "b": 2}}.
+// Both phase pins or nothing -- half an encoder cannot be decoded.
+function encoderDefine(board) {
+  const e = board.encoder;
+  if (!e) return "// This board declares no rotary encoder in boards.json.";
+  if (typeof e.a !== "number" || typeof e.b !== "number")
+    throw new Error(`${board.id}: encoder needs numeric a and b pins`);
+  return `#define BOARD_ENCODER_A ${e.a}\n#define BOARD_ENCODER_B ${e.b}`;
+}
+
 const TONE_UNSUPPORTED = `  // This core ships no tone()/noTone(). Left as a no-op so the address space
   // stays identical across boards and a client does not have to special-case it.
   (void)msg; (void)addrOffset;`;
@@ -285,6 +295,7 @@ export function render(board) {
     TONE_BODY: board.tone === false ? TONE_UNSUPPORTED : TONE_BODY,
     BUTTON_DEFINE: buttonDefine(board),
     DEFINES: defines(board),
+    ENCODER_DEFINE: encoderDefine(board),
     BAUD_NOTE: board.nativeUSB
       ? "ignored on native USB, but Web Serial still demands a value"
       : "must match the baud picked in the browser exactly",

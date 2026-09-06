@@ -465,6 +465,8 @@ the browser</textarea>
     </div>
     <div class="chips">
       <button data-a="/btn" data-g="">read button</button>
+      <button data-a="/enc" data-g="">read encoder</button>
+      <button data-a="/enc/zero" data-g="">zero encoder</button>
       <button data-a="/s/m" data-g="">micros</button>
       <button data-a="/enq" data-g="">greeting</button>
     </div>
@@ -473,7 +475,7 @@ the browser</textarea>
       Force a type with <code>i:</code> <code>f:</code> <code>s:</code>, or use bare <code>T</code> <code>F</code> <code>N</code>.
       <b>bundle</b> is ticked by default because <code>TEncoderProOscuino.ino</code> reads bundles, as do the stock Oscuino examples and the CNMAT Max patches.
       <br><br>
-      <b>LilyGO T-Encoder-Pro.</b> No board definition exists in any installed core, so it is built as the generic esp32s3 with the four options the vendor's README specifies (https://github.com/Xinyuan-LilyGO/T-Encoder-Pro) -- omit them and the PSRAM mode and partition table are wrong. That generic variant also declares an RGB LED and an LED_BUILTIN this board does not have, which is why the entry carries OSC_NO_RGB and OSC_NO_LED: a board must not announce hardware it lacks. Documented pins for a future demo: rotary encoder A=IO1 B=IO2, encoder button=IO0, buzzer=IO17, touch SDA=IO5 SCL=IO6, screen CS=IO10, 2.04in round AMOLED. BUTTON PIN UNVERIFIED -- IO0 is the vendor's documented encoder button but no press has been observed here. Transport verified 2026-09-06: echo 22/22, widths 11/11, gate and the full burst ladder x3 all clean.
+      <b>LilyGO T-Encoder-Pro.</b> No board definition exists in any installed core, so it is built as the generic esp32s3 with the four options the vendor's README specifies (https://github.com/Xinyuan-LilyGO/T-Encoder-Pro) -- omit them and the PSRAM mode and partition table are wrong. That generic variant also declares an RGB LED and an LED_BUILTIN this board does not have, hence OSC_NO_RGB and OSC_NO_LED: a board must not announce hardware it lacks. PINS, from the vendor's own libraries/Mylibrary/pin_config.h rather than a README summary: knob phases A=IO1 B=IO2, knob key=IO0, buzzer=IO17, I2C SDA=IO5 SCL=IO6, touch INT=IO9 RST=IO8, screen CS=IO10 SCLK=IO12 RST=IO4 EN=IO3 with QSPI data on IO11/IO13/IO7/IO14, panel 390x390. WIRED UP: knob (/enq/enc) and knob key (/enq/btn). PRESENT BUT NOT WIRED, each needing its own driver -- listed so the omission is visible rather than forgotten (BRINGUP.md, 'The documentation is a work list'): the 390x390 CO5300 AMOLED (/display), the CST816 touch panel (/touch), an AW8624 haptic engine, an LSM6DSL IMU (/imu), a PCF85063 RTC (/rtc), an SY6970 power-management chip (/bat, /chg) and the IO17 buzzer (/buzz). The vendor ships drivers for all of them in that repo's libraries/Arduino_DriveBus. KNOB AND KEY UNVERIFIED BY MOTION: the pins read sensibly at rest (A=1, B=0 -- a detent with one phase closed -- and key=1 pulled up), and /enc and /btn answer, but across 185 samples in a two-minute window on 2026-09-06 nothing moved, because nobody turned it. Pins confirmed against pin_config.h; motion still owed.
     </div>
   </div>
 

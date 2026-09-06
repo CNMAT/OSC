@@ -85,6 +85,27 @@ Evidence that *does* separate boards carrying the same chip:
   "Espressif USB JTAG/serial debug unit". So it confirms an identification
   afterwards rather than making one beforehand.
 
+### The documentation is a work list, not just an identity check
+
+Once the vendor's page names the board's peripherals, that list is the job.
+Every item on it ends up in one of exactly two places before the bringup is
+finished:
+
+* **announced by the sketch** — a `/enq/<capability>` line, per ADDRESSES.md; or
+* **written in the board's `boards.json` note**, saying it exists and is not
+  wired up yet, so the omission is visible to the next person.
+
+"Documented pins for a future demo" in a note, with nothing else said, is the
+failure this rule exists to stop. It happened on the LilyGO **T-Encoder-Pro**
+on 2026-09-06: its README was fetched, its encoder pins (A=IO1, B=IO2) were
+copied into BOARDS.md, and the generated sketch was then built, flashed and
+contract-probed announcing only `/enq/btn` — no encoder, on a board whose name
+is the encoder. The documentation had been read and then not used.
+
+The check is mechanical: list what the vendor names, and for each one point at
+the `/enq` line or the sentence in the note that accounts for it. A peripheral
+with neither is unfinished work, not a decision.
+
 **Some boards must be told to stay alive.** Several M5Stack ESP32-S3 boards
 (Capsule, Dial, DinMeter) latch their own power through **GPIO46**, and
 M5Unified drives it high as the very first statement of `begin()` — before

@@ -63,6 +63,10 @@ SLIPEncodedSerial SLIPSerial(Serial);
 // /d/<pin> read still works for anyone who knows the wiring.
 // This board declares no user button in boards.json.
 
+// A rotary encoder, when boards.json names its two phase pins. Same rule as
+// the button: an undeclared board simply has no /enc.
+// This board declares no rotary encoder in boards.json.
+
 static const unsigned long BAUD = 115200;   // ignored on native USB, but Web Serial still demands a value
 
 static OSCBundle bundleOUT;
@@ -280,6 +284,43 @@ void routeSystem(OSCMessage &msg, int addrOffset) {
 static int32_t  seq      = 0;
 static uint32_t reportMs = 0;            // 0 = not streaming
 
+#ifdef BOARD_ENCODER_A
+// Quadrature, polled from loop(). A hand-turned knob moves far slower than
+// this loop runs, and polling keeps the block portable -- attachInterrupt's
+// pin-to-interrupt mapping is not the same on every core this template builds
+// for. The table is the standard one: index the previous two-bit state and the
+// current one, and it yields -1, 0 or +1. Detented encoders usually produce
+// four counts per click; /enc reports raw counts and lets the client decide.
+static int32_t encPos = 0, encLast = 0;
+static uint8_t encPrev = 0;
+
+static void encPoll() {
+  const uint8_t now = (uint8_t)((digitalRead(BOARD_ENCODER_A) << 1)
+                              |  digitalRead(BOARD_ENCODER_B));
+  if (now == encPrev) return;
+  static const int8_t step[16] = { 0, -1,  1,  0,
+                                   1,  0,  0, -1,
+                                  -1,  0,  0,  1,
+                                   0,  1, -1,  0 };
+  encPos += step[(encPrev << 2) | now];
+  encPrev = now;
+}
+
+static void addEnc() {
+  bundleOUT.add("/enc").add((intOSC_t)encPos).add((intOSC_t)(encPos - encLast));
+  encLast = encPos;                 // delta is "since the last time you asked"
+}
+
+void routeEnc(OSCMessage &msg, int addrOffset) {
+  if (msg.fullMatch("/zero", addrOffset)) {
+    encPos = 0; encLast = 0;
+    addEnc();
+    return;
+  }
+  addEnc();
+}
+#endif
+
 #ifdef BOARD_BUTTON_PIN
 static void addBtn() {
   const int raw = digitalRead(BOARD_BUTTON_PIN);
@@ -372,6 +413,9 @@ static void addEnq() {
 #ifdef BOARD_BUTTON_PIN
   bundleOUT.add("/enq/btn").add((intOSC_t)1);
 #endif
+#ifdef BOARD_ENCODER_A
+  bundleOUT.add("/enq/enc");
+#endif
 }
 
 void routeEnq(OSCMessage &msg, int addrOffset) {
@@ -388,6 +432,11 @@ void setup() {
 #endif
 #ifdef BOARD_BUTTON_PIN
   pinMode(BOARD_BUTTON_PIN, BOARD_BUTTON_ACTIVE_LOW ? INPUT_PULLUP : INPUT);
+#endif
+#ifdef BOARD_ENCODER_A
+  pinMode(BOARD_ENCODER_A, INPUT_PULLUP);
+  pinMode(BOARD_ENCODER_B, INPUT_PULLUP);
+  encPrev = (uint8_t)((digitalRead(BOARD_ENCODER_A) << 1) | digitalRead(BOARD_ENCODER_B));
 #endif
 #ifdef OSC_RGB
   oscRgbBegin();
@@ -451,6 +500,9 @@ void loop() {
 #ifdef BOARD_BUTTON_PIN
       bundleIN.route("/btn", routeBtn);
 #endif
+#ifdef BOARD_ENCODER_A
+      bundleIN.route("/enc", routeEnc);
+#endif
     }
     bundleIN.empty();
   }
@@ -458,6 +510,10 @@ void loop() {
   // Only transmit when a route actually produced something. Sending an empty
   // bundle every pass would flood the port at loop speed and drown the replies
   // you care about.
+#ifdef BOARD_ENCODER_A
+  encPoll();
+#endif
+
   static uint32_t lastReport = 0;
   const uint32_t now = millis();
   if (reportMs != 0 && now - lastReport >= reportMs) {
