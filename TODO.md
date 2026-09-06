@@ -273,7 +273,7 @@ audible beep. The probe's own correctness is covered without hardware by
 `test/hardware/test_contractprobe.py`, which runs it against a conformant
 simulated board and a deliberately broken one; CI runs that.
 
-Boards are cheap to re-check and there are many; the honest close condition is a
+Boards are cheap to re-check and there are many; the close condition is a
 row per board in the table above, not a claim that the rename "should" be fine.
 
 ---
