@@ -160,6 +160,24 @@ function buttonDefine(board) {
        + `#define BOARD_BUTTON_ACTIVE_LOW ${b.activeLow === false ? 0 : 1}`;
 }
 
+// boards.json may carry `defines`: lines emitted ABOVE the includes, which is
+// the only place they can reach OSCBoards.h's capability decisions. The case
+// this exists for is a board built against a GENERIC variant: the LilyGO
+// T-Encoder-Pro has no core definition, so it builds as esp32s3, whose variant
+// declares an RGB LED the board does not physically have. Without OSC_NO_RGB
+// the sketch would announce /enq/rgb for a pixel that is not there -- a board
+// lying about its hardware, which is exactly what "absence is silence" forbids.
+function defines(board) {
+  const d = board.defines;
+  if (!d || !d.length) return "// This board adds no build defines.";
+  if (!Array.isArray(d)) throw new Error(`${board.id}: defines must be an array`);
+  return d.map(x => {
+    if (typeof x === "string") return `#define ${x}`;
+    if (!x.name) throw new Error(`${board.id}: a define needs a name`);
+    return `#define ${x.name}${x.why ? `        // ${x.why}` : ""}`;
+  }).join("\n");
+}
+
 const TONE_UNSUPPORTED = `  // This core ships no tone()/noTone(). Left as a no-op so the address space
   // stays identical across boards and a client does not have to special-case it.
   (void)msg; (void)addrOffset;`;
@@ -266,6 +284,7 @@ export function render(board) {
     PIN_CLAMP: pinClamp(board),
     TONE_BODY: board.tone === false ? TONE_UNSUPPORTED : TONE_BODY,
     BUTTON_DEFINE: buttonDefine(board),
+    DEFINES: defines(board),
     BAUD_NOTE: board.nativeUSB
       ? "ignored on native USB, but Web Serial still demands a value"
       : "must match the baud picked in the browser exactly",

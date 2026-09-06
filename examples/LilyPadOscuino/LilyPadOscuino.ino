@@ -41,6 +41,7 @@
  * stock Oscuino clients expect. Tick "bundle" in the companion page.
  */
 
+// This board adds no build defines.
 #include <OSCBundle.h>
 #include <OSCBoards.h>
 #include <SLIPEncodedSerial.h>

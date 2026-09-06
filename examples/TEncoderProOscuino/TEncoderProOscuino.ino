@@ -1,16 +1,16 @@
 /*
- * RP2040Oscuino — Oscuino over SLIP-encoded USB serial, for Raspberry Pi Pico (RP2040)
+ * TEncoderProOscuino — Oscuino over SLIP-encoded USB serial, for LilyGO T-Encoder-Pro
  * -----------------------------------------------------------------------------
  * GENERATED FILE — do not edit directly.
  * Source: extras/webserial/template.ino  +  extras/webserial/boards.json
  * Regenerate:  cd extras/webserial && make generate
  *
- * Board : Raspberry Pi Pico (RP2040) (RP2040)
- * FQBN  : rp2040:rp2040:rpipico
+ * Board : LilyGO T-Encoder-Pro (ESP32-S3-R8)
+ * FQBN  : esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,CDCOnBoot=cdc,PartitionScheme=app3M_fat9M_16MB
  *
- * Three ADC channels: A0-A2 are GP26-GP28. Every digital pin can do PWM. Built for the Earle Philhower core.
+ * No board definition exists in any installed core, so it is built as the generic esp32s3 with the four options the vendor's README specifies (https://github.com/Xinyuan-LilyGO/T-Encoder-Pro) -- omit them and the PSRAM mode and partition table are wrong. That generic variant also declares an RGB LED and an LED_BUILTIN this board does not have, which is why the entry carries OSC_NO_RGB and OSC_NO_LED: a board must not announce hardware it lacks. Documented pins for a future demo: rotary encoder A=IO1 B=IO2, encoder button=IO0, buzzer=IO17, touch SDA=IO5 SCL=IO6, screen CS=IO10, 2.04in round AMOLED. BUTTON PIN UNVERIFIED -- IO0 is the vendor's documented encoder button but no press has been observed here. Transport verified 2026-09-06: echo 22/22, widths 11/11, gate and the full burst ladder x3 all clean.
  *
- * Pair this with RP2040Oscuino.html, sitting next to this file. Serve that page
+ * Pair this with TEncoderProOscuino.html, sitting next to this file. Serve that page
  * over http://localhost or https:// (Web Serial refuses a file:// origin), click
  * Connect, pick the board. No server process and no npm install.
  *
@@ -41,7 +41,8 @@
  * stock Oscuino clients expect. Tick "bundle" in the companion page.
  */
 
-// This board adds no build defines.
+#define OSC_NO_RGB        // no colour LED; the generic esp32s3 variant claims one
+#define OSC_NO_LED        // and no plain LED either -- LED_BUILTIN is that same phantom pixel
 #include <OSCBundle.h>
 #include <OSCBoards.h>
 #include <SLIPEncodedSerial.h>
@@ -61,7 +62,8 @@ SLIPEncodedSerial SLIPSerial(Serial);
 // harmless -- the pin is an input on one board and a bus line on the next --
 // so a board that does not declare it simply has no /btn, and the generic
 // /d/<pin> read still works for anyone who knows the wiring.
-// This board declares no user button in boards.json.
+#define BOARD_BUTTON_PIN 0
+#define BOARD_BUTTON_ACTIVE_LOW 1
 
 static const unsigned long BAUD = 115200;   // ignored on native USB, but Web Serial still demands a value
 
@@ -362,7 +364,7 @@ void routeRgbOne(OSCMessage &msg, int addrOffset) {
 // XIAO ESP32-C3, whose only LED belongs to its battery charger, announces
 // nothing here and stays silent on /s/l. Absence is silence.
 static void addEnq() {
-  bundleOUT.add("/enq").add("RP2040Oscuino");
+  bundleOUT.add("/enq").add("TEncoderProOscuino");
 #ifdef BOARD_HAS_LED
   bundleOUT.add("/enq/led");
 #endif

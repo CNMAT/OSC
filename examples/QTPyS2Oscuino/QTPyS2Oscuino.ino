@@ -1,16 +1,16 @@
 /*
- * RP2040Oscuino — Oscuino over SLIP-encoded USB serial, for Raspberry Pi Pico (RP2040)
+ * QTPyS2Oscuino — Oscuino over SLIP-encoded USB serial, for Adafruit QT Py ESP32-S2
  * -----------------------------------------------------------------------------
  * GENERATED FILE — do not edit directly.
  * Source: extras/webserial/template.ino  +  extras/webserial/boards.json
  * Regenerate:  cd extras/webserial && make generate
  *
- * Board : Raspberry Pi Pico (RP2040) (RP2040)
- * FQBN  : rp2040:rp2040:rpipico
+ * Board : Adafruit QT Py ESP32-S2 (ESP32-S2)
+ * FQBN  : esp32:esp32:adafruit_qtpy_esp32s2
  *
- * Three ADC channels: A0-A2 are GP26-GP28. Every digital pin can do PWM. Built for the Earle Philhower core.
+ * Stock FQBN; the variant sets cdc_on_boot=1 itself. Its LED_BUILTIN IS the NeoPixel on GPIO39, expressed as an offset pin the esp32 core routes to rgbLedWrite() -- so /s/l and /rgb drive the same single pixel, and both are announced. Transport verified 2026-09-06: echo 22/22, widths 11/11, gate and the full burst ladder x3 all clean. It alternates between its ROM download port and its app port, so re-list ports immediately before every upload.
  *
- * Pair this with RP2040Oscuino.html, sitting next to this file. Serve that page
+ * Pair this with QTPyS2Oscuino.html, sitting next to this file. Serve that page
  * over http://localhost or https:// (Web Serial refuses a file:// origin), click
  * Connect, pick the board. No server process and no npm install.
  *
@@ -362,7 +362,7 @@ void routeRgbOne(OSCMessage &msg, int addrOffset) {
 // XIAO ESP32-C3, whose only LED belongs to its battery charger, announces
 // nothing here and stays silent on /s/l. Absence is silence.
 static void addEnq() {
-  bundleOUT.add("/enq").add("RP2040Oscuino");
+  bundleOUT.add("/enq").add("QTPyS2Oscuino");
 #ifdef BOARD_HAS_LED
   bundleOUT.add("/enq/led");
 #endif

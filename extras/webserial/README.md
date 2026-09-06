@@ -45,6 +45,9 @@ page. See `extras/python/README.md`.
 | `MicrobitOscuino` | BBC micro:bit (MicroPython) | interpreted, `extras/python/` |
 | `FruitJamOscuino` | Adafruit Fruit Jam | interpreted, `extras/python/` |
 | `CircuitPythonOscuino` | CircuitPython (Adafruit boards) | interpreted, `extras/python/` |
+| `QTPyS2Oscuino` | Adafruit QT Py ESP32-S2 | `esp32:esp32:adafruit_qtpy_esp32s2` |
+| `WaveshareP4PoEOscuino` | Waveshare ESP32-P4-POE-ETH | `esp32:esp32:waveshare_p4_poe_eth` |
+| `TEncoderProOscuino` | LilyGO T-Encoder-Pro | `esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,CDCOnBoot=cdc,PartitionScheme=app3M_fat9M_16MB` |
 | `XiaoC3Oscuino` | Seeed XIAO ESP32-C3 | `esp32:esp32:XIAO_ESP32C3` |
 | `XiaoC3WiFi` | Seeed XIAO ESP32-C3, WiFi twin | `esp32:esp32:XIAO_ESP32C3` |
 | `XiaoC3BLE` | Seeed XIAO ESP32-C3, BLE twin | `esp32:esp32:XIAO_ESP32C3` |

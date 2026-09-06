@@ -126,12 +126,13 @@ def main():
         if not quiet:
             print(*a)
 
-    # Two framings exist in this repository and they are mutually exclusive.
-    # A sketch that receives with OSCBundle + route() rejects a bare message;
-    # one that receives with OSCMessage + dispatch() rejects a bundle. Neither
-    # is wrong -- both are the library's documented API -- so the probe finds
-    # out which this board speaks instead of assuming, and says so. Without
-    # this it reports a healthy board as answering nothing at all.
+    # Two framings exist in this repository, and the asymmetry is measured, not
+    # assumed: a sketch that receives with OSCMessage + dispatch() rejects a
+    # BUNDLE (the address it sees is "#bundle"), while one that receives with
+    # OSCBundle + route() accepts a bare message quite happily -- checked on the
+    # Waveshare P4 running the generated template, which answered 3/3 to both.
+    # So bundles are tried first and message framing is the fallback, never the
+    # other way round.
     framing = {'mode': 'bundle'}
 
     def encode(elems):
@@ -162,11 +163,24 @@ def main():
 
     # ---- the greeting, which selects everything that follows ----------------
     say("Announcement")
-    reply = ask([('/enq', ())], wait=0.8)
-    if not [m for m in reply if m[0] == '/enq']:
-        framing['mode'] = 'message'          # try the other one before failing
-        reply = ask([('/enq', ())], wait=0.8)
-        if [m for m in reply if m[0] == '/enq']:
+    # Ask more than once before concluding anything about framing. A board
+    # settling after a reset can miss the first packet, and a single miss used
+    # to be enough to declare "this board takes bare messages" -- a confident
+    # claim from one sample, about a board that answered both framings 3/3 when
+    # actually asked. One unrepeated result is not a measurement, here as
+    # anywhere else in this suite.
+    def greet(tries=3):
+        for _ in range(tries):
+            r = ask([('/enq', ())], wait=0.8)
+            if [m for m in r if m[0] == '/enq']:
+                return r
+        return []
+
+    reply = greet()
+    if not reply:
+        framing['mode'] = 'message'          # try the other framing
+        reply = greet()
+        if reply:
             say("       (this board takes bare messages, not bundles)")
         else:
             framing['mode'] = 'bundle'       # neither worked; report as bundle

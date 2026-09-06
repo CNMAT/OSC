@@ -439,6 +439,123 @@
       "note": "Runs code.py under CircuitPython, not an Arduino sketch -- see extras/python/. One example covers every Adafruit CircuitPython board: pins resolve by name at runtime, so /d/13 is board.D13 and /a/0 is board.A0, and the port filter matches on Adafruit's vendor id alone. boot.py must be copied along with code.py -- it adds the second CDC port (the data channel) that SLIP runs on; pick that SECOND port in the browser chooser. Analog reads are 16-bit, 0..65535."
     },
     {
+      "id": "QTPyS2",
+      "name": "Adafruit QT Py ESP32-S2",
+      "mcu": "ESP32-S2",
+      "fqbn": "esp32:esp32:adafruit_qtpy_esp32s2",
+      "nativeUSB": true,
+      "usbFilters": [
+        {
+          "usbVendorId": "0x239A",
+          "usbProductId": "0x8111"
+        }
+      ],
+      "chips": [
+        {
+          "label": "read A0",
+          "addr": "/a/18",
+          "args": ""
+        },
+        {
+          "label": "micros",
+          "addr": "/s/m",
+          "args": ""
+        },
+        {
+          "label": "digital pins",
+          "addr": "/s/d",
+          "args": ""
+        },
+        {
+          "label": "greeting",
+          "addr": "/enq",
+          "args": ""
+        }
+      ],
+      "note": "Stock FQBN; the variant sets cdc_on_boot=1 itself. Its LED_BUILTIN IS the NeoPixel on GPIO39, expressed as an offset pin the esp32 core routes to rgbLedWrite() -- so /s/l and /rgb drive the same single pixel, and both are announced. Transport verified 2026-09-06: echo 22/22, widths 11/11, gate and the full burst ladder x3 all clean. It alternates between its ROM download port and its app port, so re-list ports immediately before every upload."
+    },
+    {
+      "id": "WaveshareP4PoE",
+      "name": "Waveshare ESP32-P4-POE-ETH",
+      "mcu": "ESP32-P4",
+      "fqbn": "esp32:esp32:waveshare_p4_poe_eth",
+      "nativeUSB": false,
+      "usbFilters": [
+        {
+          "usbVendorId": "0x1A86",
+          "usbProductId": "0x55D3"
+        }
+      ],
+      "chips": [
+        {
+          "label": "micros",
+          "addr": "/s/m",
+          "args": ""
+        },
+        {
+          "label": "digital pins",
+          "addr": "/s/d",
+          "args": ""
+        },
+        {
+          "label": "analog pins",
+          "addr": "/s/a",
+          "args": ""
+        },
+        {
+          "label": "greeting",
+          "addr": "/enq",
+          "args": ""
+        }
+      ],
+      "note": "First ESP32-P4 here. No native USB to the host: cdc_on_boot=0 and a WCH CH343 bridge (1a86:55d3) carries the console, so Serial is a UART and this sits with the UNO R4 and MG24 in the bridged-UART family. The USB filter matches the BRIDGE, not the board -- any CH343 device will offer itself in the picker. No LED_BUILTIN in the variant, so no /s/l. Transport verified 2026-09-06: echo 22/22 x3, widths 11/11, gate and the full burst ladder x3 all clean, including the lazy-reader ring the UNO R4's bridge fails."
+    },
+    {
+      "id": "TEncoderPro",
+      "name": "LilyGO T-Encoder-Pro",
+      "mcu": "ESP32-S3-R8",
+      "fqbn": "esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,CDCOnBoot=cdc,PartitionScheme=app3M_fat9M_16MB",
+      "nativeUSB": true,
+      "usbFilters": [
+        {
+          "usbVendorId": "0x303A",
+          "usbProductId": "0x1001"
+        }
+      ],
+      "button": {
+        "pin": 0,
+        "activeLow": true
+      },
+      "defines": [
+        {
+          "name": "OSC_NO_RGB",
+          "why": "no colour LED; the generic esp32s3 variant claims one"
+        },
+        {
+          "name": "OSC_NO_LED",
+          "why": "and no plain LED either -- LED_BUILTIN is that same phantom pixel"
+        }
+      ],
+      "chips": [
+        {
+          "label": "read button",
+          "addr": "/btn",
+          "args": ""
+        },
+        {
+          "label": "micros",
+          "addr": "/s/m",
+          "args": ""
+        },
+        {
+          "label": "greeting",
+          "addr": "/enq",
+          "args": ""
+        }
+      ],
+      "note": "No board definition exists in any installed core, so it is built as the generic esp32s3 with the four options the vendor's README specifies (https://github.com/Xinyuan-LilyGO/T-Encoder-Pro) -- omit them and the PSRAM mode and partition table are wrong. That generic variant also declares an RGB LED and an LED_BUILTIN this board does not have, which is why the entry carries OSC_NO_RGB and OSC_NO_LED: a board must not announce hardware it lacks. Documented pins for a future demo: rotary encoder A=IO1 B=IO2, encoder button=IO0, buzzer=IO17, touch SDA=IO5 SCL=IO6, screen CS=IO10, 2.04in round AMOLED. BUTTON PIN UNVERIFIED -- IO0 is the vendor's documented encoder button but no press has been observed here. Transport verified 2026-09-06: echo 22/22, widths 11/11, gate and the full burst ladder x3 all clean."
+    },
+    {
       "id": "XiaoC3",
       "name": "Seeed XIAO ESP32-C3",
       "mcu": "ESP32-C3",

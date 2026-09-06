@@ -1,16 +1,16 @@
 /*
- * RP2040Oscuino — Oscuino over SLIP-encoded USB serial, for Raspberry Pi Pico (RP2040)
+ * WaveshareP4PoEOscuino — Oscuino over SLIP-encoded USB serial, for Waveshare ESP32-P4-POE-ETH
  * -----------------------------------------------------------------------------
  * GENERATED FILE — do not edit directly.
  * Source: extras/webserial/template.ino  +  extras/webserial/boards.json
  * Regenerate:  cd extras/webserial && make generate
  *
- * Board : Raspberry Pi Pico (RP2040) (RP2040)
- * FQBN  : rp2040:rp2040:rpipico
+ * Board : Waveshare ESP32-P4-POE-ETH (ESP32-P4)
+ * FQBN  : esp32:esp32:waveshare_p4_poe_eth
  *
- * Three ADC channels: A0-A2 are GP26-GP28. Every digital pin can do PWM. Built for the Earle Philhower core.
+ * First ESP32-P4 here. No native USB to the host: cdc_on_boot=0 and a WCH CH343 bridge (1a86:55d3) carries the console, so Serial is a UART and this sits with the UNO R4 and MG24 in the bridged-UART family. The USB filter matches the BRIDGE, not the board -- any CH343 device will offer itself in the picker. No LED_BUILTIN in the variant, so no /s/l. Transport verified 2026-09-06: echo 22/22 x3, widths 11/11, gate and the full burst ladder x3 all clean, including the lazy-reader ring the UNO R4's bridge fails.
  *
- * Pair this with RP2040Oscuino.html, sitting next to this file. Serve that page
+ * Pair this with WaveshareP4PoEOscuino.html, sitting next to this file. Serve that page
  * over http://localhost or https:// (Web Serial refuses a file:// origin), click
  * Connect, pick the board. No server process and no npm install.
  *
@@ -63,7 +63,7 @@ SLIPEncodedSerial SLIPSerial(Serial);
 // /d/<pin> read still works for anyone who knows the wiring.
 // This board declares no user button in boards.json.
 
-static const unsigned long BAUD = 115200;   // ignored on native USB, but Web Serial still demands a value
+static const unsigned long BAUD = 115200;   // must match the baud picked in the browser exactly
 
 static OSCBundle bundleOUT;
 
@@ -362,7 +362,7 @@ void routeRgbOne(OSCMessage &msg, int addrOffset) {
 // XIAO ESP32-C3, whose only LED belongs to its battery charger, announces
 // nothing here and stays silent on /s/l. Absence is silence.
 static void addEnq() {
-  bundleOUT.add("/enq").add("RP2040Oscuino");
+  bundleOUT.add("/enq").add("WaveshareP4PoEOscuino");
 #ifdef BOARD_HAS_LED
   bundleOUT.add("/enq/led");
 #endif
