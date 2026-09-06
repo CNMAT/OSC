@@ -88,6 +88,19 @@
 // M5StampS3 and the LilyGO T-Display-S3 — which is what BOARD_HAS_LED is for.
 // Guessing a pin there is not harmless: GPIO 13, the obvious guess, is SDA on
 // the M5Dial and MISO on the T-Display-S3.
+//
+// One exception, narrow and named. esp32:esp32:esp32 is a generic FQBN standing
+// for a family of dev modules whose variant names no LED, but which by
+// convention wire one to GPIO 2 (DOIT DevKit and its clones). Several examples
+// used to carry this as a blanket `#ifndef LED_BUILTIN -> 2`, which also fired
+// on boards that genuinely have none; scoped to ARDUINO_ESP32_DEV it does not,
+// since the M5Dial, M5StampS3 and T-Display-S3 each carry their own board
+// define. Inherited from those examples as a convention and NOT measured here —
+// no plain ESP32 devkit appears in BOARDS.md. OSC_NO_LED forces it off.
+#if !defined(LED_BUILTIN) && defined(ARDUINO_ESP32_DEV) && !defined(OSC_NO_LED)
+#define LED_BUILTIN 2
+#endif
+
 #if defined(LED_BUILTIN) && !defined(OSC_NO_LED)
 #define BOARD_HAS_LED
 #endif

@@ -7,9 +7,12 @@
 
 #include <SLIPEncodedSerial.h>
 
-#ifndef LED_BUILTIN
-#define LED_BUILTIN 2   // generic ESP32 dev modules leave it undefined; GPIO2 drives the usual on-board LED
-#endif
+// No fallback pin here on purpose. OSCBoards.h defines BOARD_HAS_LED only when
+// the core actually names an on-board LED, and guessing one is not harmless:
+// pin 13 is SDA on the M5Dial and MISO on the T-Display-S3, and GPIO 2 is a
+// strapping pin on several ESP32 parts. Where no LED is named this sketch
+// drives nothing; -DLED_BUILTIN=<pin> points it at one and, because
+// BOARD_HAS_LED is derived from defined(LED_BUILTIN), switches this back on.
 
 
 #ifdef BOARD_HAS_USB_SERIAL
@@ -68,7 +71,9 @@ void loop()
         bundleIN.dispatch("/s/l", LEDcontrol);
     
     if (millis() >= blinkNow) {
+#ifdef BOARD_HAS_LED
         pinMode(LED_BUILTIN, OUTPUT);
+#endif
 
         Serial.print("Blinking at ");
         Serial.print(blinkRateOn);
@@ -77,9 +82,13 @@ void loop()
         Serial.println();
 
         for (auto i = 0; i <= 5; i ++) {
+#ifdef BOARD_HAS_LED
             digitalWrite(LED_BUILTIN, HIGH);
+#endif
             delay(blinkRateOn);
+#ifdef BOARD_HAS_LED
             digitalWrite(LED_BUILTIN, LOW);
+#endif
             delay(blinkRateOff);
         }
         // blinkNow = millis() + blinkInterval;

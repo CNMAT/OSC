@@ -31,20 +31,49 @@ page. See `extras/python/README.md`.
 
 ## Boards
 
-| Example | Board | FQBN | Build |
-|---------|-------|------|-------|
-| `GemmaOscuino` | Adafruit Gemma M0 | `adafruit:samd:adafruit_gemma_m0` | 22212 B |
-| `PlaygroundOscuino` | Circuit Playground Express | `adafruit:samd:adafruit_circuitplayground_m0` | 23224 B |
-| `LilyPadOscuino` | LilyPad Arduino USB | `arduino:avr:LilyPadUSB` | 19468 B |
-| `TeensyOscuino` | Teensy 4.0 / 4.1 | `teensy:avr:teensy40` | builds |
-| `RP2040Oscuino` | Raspberry Pi Pico | `rp2040:rp2040:rpipico` | 66236 B |
-| `ESP32S3Oscuino` | ESP32-S3 | `esp32:esp32:esp32s3` | 329121 B |
-| `MicrobitOscuino` | BBC micro:bit (MicroPython) | interpreted, `extras/python/` | n/a |
-| `CircuitPythonOscuino` | CircuitPython (Adafruit boards) | interpreted, `extras/python/` | n/a |
-| `FruitJamOscuino` | Adafruit Fruit Jam | both: CircuitPython in `extras/python/`, hand-written sketch in `examples/` | 97788 B |
+<!-- BEGIN generated board table — `make generate` writes this, `make check` guards it -->
 
-The six Arduino rows verified with `arduino-cli compile` against their listed
-FQBN. The python rows have no build: the interpreter is the build, and
+| Example | Board | FQBN |
+|---------|-------|------|
+| `GemmaOscuino` | Adafruit Gemma M0 | `adafruit:samd:adafruit_gemma_m0` |
+| `PlaygroundOscuino` | Adafruit Circuit Playground Express | `adafruit:samd:adafruit_circuitplayground_m0` |
+| `LilyPadOscuino` | LilyPad Arduino USB | `arduino:avr:LilyPadUSB` |
+| `TeensyOscuino` | Teensy 4.0 / 4.1 | `teensy:avr:teensy40` |
+| `RP2040Oscuino` | Raspberry Pi Pico (RP2040) | `rp2040:rp2040:rpipico` |
+| `ESP32S3Oscuino` | ESP32-S3 | `esp32:esp32:esp32s3` |
+| `M5NanoC6Oscuino` | M5Stack NanoC6 | `esp32:esp32:m5stack_nanoc6` |
+| `MicrobitOscuino` | BBC micro:bit (MicroPython) | interpreted, `extras/python/` |
+| `FruitJamOscuino` | Adafruit Fruit Jam | interpreted, `extras/python/` |
+| `CircuitPythonOscuino` | CircuitPython (Adafruit boards) | interpreted, `extras/python/` |
+| `XiaoC3Oscuino` | Seeed XIAO ESP32-C3 | `esp32:esp32:XIAO_ESP32C3` |
+| `XiaoC3WiFi` | Seeed XIAO ESP32-C3, WiFi twin | `esp32:esp32:XIAO_ESP32C3` |
+| `XiaoC3BLE` | Seeed XIAO ESP32-C3, BLE twin | `esp32:esp32:XIAO_ESP32C3` |
+| `EggC3Oscuino` | ESP32-C3 SuperMini with 0.42" OLED (sold as EGG) | `esp32:esp32:esp32c3:CDCOnBoot=cdc` |
+| `EggC3WiFi` | ESP32-C3 SuperMini with 0.42" OLED (sold as EGG), WiFi twin | `esp32:esp32:esp32c3:CDCOnBoot=cdc` |
+| `XiaoRoundOscuino` | XIAO + Round Display | `Seeeduino:samd:seeed_XIAO_m0` |
+| `XiaoNrf52Oscuino` | Seeed XIAO nRF52840 Sense | `Seeeduino:nrf52:xiaonRF52840Sense` |
+| `XiaoC6ExpOscuino` | Seeed XIAO ESP32-C6 + Expansion Board | `esp32:esp32:XIAO_ESP32C6` |
+| `XiaoC6ExpWiFi` | Seeed XIAO ESP32-C6 + Expansion Board, WiFi twin | `esp32:esp32:XIAO_ESP32C6` |
+| `XiaoC6ExpBLE` | Seeed XIAO ESP32-C6 + Expansion Board, BLE twin | `esp32:esp32:XIAO_ESP32C6` |
+| `XiaoMG24BLE` | Seeed XIAO MG24 (Sense) | `SiliconLabs:silabs:xiao_mg24:protocol_stack=ble_silabs` |
+| `FruitJamOscuino` | Adafruit Fruit Jam (Arduino) | `rp2040:rp2040:adafruit_fruitjam` |
+| `ElecrowPico2Oscuino` | Elecrow All-in-one Starter Kit for Pico 2 | `rp2040:rp2040:rpipico2` |
+
+<!-- END generated board table -->
+
+Generated from `boards.json`, so it cannot fall behind the board list the way a
+hand-kept copy did — that one listed 9 of the 23 boards here.
+
+There is deliberately no build-size column. A byte count is a property of the
+core version and its compiler rather than of this repository: update a core and
+every figure changes with no commit here to notice, and nothing in the suite
+ever compared one to a real build, so they rotted silently — the numbers removed
+here were stale by up to 256 bytes. Whether a sketch fits is enforced where it
+matters, by `arduino-cli` failing the build when it does not and by CI compiling
+a subset on every push. Measured sizes for the parts where fit is actually tight,
+carrying their date and their denominator, live in [BOARDS.md](../../BOARDS.md).
+
+The python rows have no build at all: the interpreter is the build, and
 `extras/python/test_host.py` is what proves their codecs before hardware does.
 
 ## Address space

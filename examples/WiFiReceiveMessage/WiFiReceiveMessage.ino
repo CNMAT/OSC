@@ -74,6 +74,7 @@
 #endif
 #include <WiFiUdp.h>
 #include <OSCMessage.h>
+#include <OSCBoards.h>
 
 char ssid[] = "your-network-name";
 char pass[] = "your-network-password";
@@ -85,9 +86,12 @@ const unsigned int inPort = 8888;
 
 OSCErrorCode error;
 
-#ifndef LED_BUILTIN
-#define LED_BUILTIN 13
-#endif
+// No fallback pin here on purpose. OSCBoards.h defines BOARD_HAS_LED only when
+// the core actually names an on-board LED, and guessing one is not harmless:
+// pin 13 is SDA on the M5Dial and MISO on the T-Display-S3, and GPIO 2 is a
+// strapping pin on several ESP32 parts. Where no LED is named this sketch
+// drives nothing; -DLED_BUILTIN=<pin> points it at one and, because
+// BOARD_HAS_LED is derived from defined(LED_BUILTIN), switches this back on.
 
 void connectWiFi() {
 #ifdef OSC_WIFI_HAS_MODULE_STATUS
@@ -123,13 +127,17 @@ void connectWiFi() {
 
 void led(OSCMessage &msg) {
   int state = msg.getInt(0);
+#ifdef BOARD_HAS_LED
   digitalWrite(LED_BUILTIN, state ? HIGH : LOW);
+#endif
   Serial.print("/s/l: ");
   Serial.println(state);
 }
 
 void setup() {
+#ifdef BOARD_HAS_LED
   pinMode(LED_BUILTIN, OUTPUT);
+#endif
   Serial.begin(115200);
   connectWiFi();
   Udp.begin(inPort);

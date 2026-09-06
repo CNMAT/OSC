@@ -4,9 +4,12 @@
 
 #include <SLIPEncodedSerial.h>
 
-#ifndef LED_BUILTIN
-#define LED_BUILTIN 2   // generic ESP32 dev modules leave it undefined; GPIO2 drives the usual on-board LED
-#endif
+// No fallback pin here on purpose. OSCBoards.h defines BOARD_HAS_LED only when
+// the core actually names an on-board LED, and guessing one is not harmless:
+// pin 13 is SDA on the M5Dial and MISO on the T-Display-S3, and GPIO 2 is a
+// strapping pin on several ESP32 parts. Where no LED is named this sketch
+// drives nothing; -DLED_BUILTIN=<pin> points it at one and, because
+// BOARD_HAS_LED is derived from defined(LED_BUILTIN), switches this back on.
 
 
 #ifdef BOARD_HAS_USB_SERIAL
@@ -267,13 +270,14 @@ void routeSystem(OSCMessage &msg, int addrOffset ){
     bundleOUT.add("/s/a").add(NUM_ANALOG_INPUTS);
   }
   if (msg.fullMatch("/l", addrOffset)){
+#ifdef BOARD_HAS_LED
     if (msg.isInt(0)){
-             pinMode(LED_BUILTIN, OUTPUT);
       int i = msg.getInt(0);
         pinMode(LED_BUILTIN, OUTPUT);
         digitalWrite(LED_BUILTIN, (i > 0)? HIGH: LOW);
         bundleOUT.add("/s/l").add(i);
       }
+#endif
   }
 }
 

@@ -317,11 +317,59 @@ export function universalOutput() {
   };
 }
 
-// Everything the generator writes: every board's files, then the universal page.
+// The board table in README.md. Generated for the same reason everything else
+// here is: a hand-kept copy of boards.json drifts, and this one had — it listed
+// 9 of 23 boards, and carried build sizes stale by up to 256 bytes.
+//
+// No size column. A byte count is a property of the core version and its
+// compiler rather than of this repository: update a core and every figure
+// changes with no commit here to notice, and nothing in the suite compares one
+// to a real build, so it rots silently. Whether a sketch fits is enforced where
+// it matters — arduino-cli fails the build when it does not, and CI compiles a
+// subset on every push. Measured sizes for the constrained parts, carrying the
+// date and the denominator, live in BOARDS.md.
+export function boardTableMd() {
+  const rows = BOARDS.map(board => {
+    const where = board.fqbn
+      ? "`" + board.fqbn + "`"
+      : "interpreted, `extras/python/`";
+    return `| \`${sketchName(board)}\` | ${board.name} | ${where} |`;
+  });
+  return [
+    "| Example | Board | FQBN |",
+    "|---------|-------|------|",
+    ...rows,
+  ].join("\n");
+}
+
+const README_BEGIN = "<!-- BEGIN generated board table — `make generate` writes this, `make check` guards it -->";
+const README_END = "<!-- END generated board table -->";
+
+// Spliced rather than rendered whole: README.md is mostly prose that no
+// template owns, so only the marked region is generated. The comparison in
+// check.mjs still works — body is the file with a freshly rendered region, so a
+// stale table differs from it exactly as a stale .ino does.
+function readmeOutput() {
+  const url = new URL("README.md", HERE);
+  const current = readFileSync(url, "utf8");
+  const a = current.indexOf(README_BEGIN);
+  const b = current.indexOf(README_END);
+  if (a < 0 || b < 0 || b < a)
+    throw new Error("extras/webserial/README.md: board-table markers missing or out of order");
+  const body =
+    current.slice(0, a + README_BEGIN.length) +
+    "\n\n" + boardTableMd() + "\n\n" +
+    current.slice(b);
+  return { url, rel: "extras/webserial/README.md", dir: HERE, body };
+}
+
+// Everything the generator writes: every board's files, the universal page,
+// then the board table spliced into this README.
 export function allOutputs() {
   const list = [];
   for (const board of BOARDS) list.push(...outputs(board));
   list.push(universalOutput());
+  list.push(readmeOutput());
   return list;
 }
 
