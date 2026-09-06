@@ -296,6 +296,27 @@ missing and whose write path turned out to be dropping bytes on the host.
 codec round-trips, and `write_all()` against an fd that guarantees short
 writes, with a negative control proving the old broken pattern fails it.
 
+**`census.py [--probe] [--chip]`** answers "what is actually plugged in",
+which BRINGUP.md Phase 0 requires and which no port name can. It lists every
+serial device with what `arduino-cli` believes, and with `--probe` asks each
+one for its OSC `/enq` greeting — a board running an Oscuino sketch names
+itself, which is the cheapest identification available and needs no reset.
+`--chip` additionally runs `esptool chip-id` for the MAC that distinguishes two
+identical-looking ESP32s, and says so, because that leaves the part in download
+mode. It exists because ports renumber on every flash and boards displace each
+other on a hub: in one session a XIAO's port moved three times, an upload to
+the stale name failed, and two boards left the bus entirely.
+
+**`humanprobe.py PORT ADDR "what to do" [--dir] [--secs=N]`** runs a window for
+the things only a person can cause — a press, a turn, a covered sensor. It
+prints the instruction, flushes it and counts down *before* opening the window,
+which is the whole point: the instruction used to be printed inside the
+sampling loop, and tool output does not reach the bench until the turn ends, so
+it was read after the window shut. Two such windows returned "185 samples,
+nothing moved" and looked exactly like a dead encoder. With `--dir` it reports
+which way the first motion counted, which is what settles whether clockwise
+counts up.
+
 **`contractprobe.py <port> [Name] [/old/addr ...]`** probes the core of the
 address-space contract (ADDRESSES.md) on any board: `/enq` answers with the
 name and its `/enq/...` capability lines, `/state` carries a sequence and
