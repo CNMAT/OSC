@@ -31,6 +31,11 @@
  *   /s/l <int>          set LED_BUILTIN        -> /s/l <int>
  *                       (only on boards with one — see BOARD_HAS_LED
  *                        in OSCBoards.h; absent, not faked, without)
+ *   /rgb <r> <g> <b>    every pixel            -> /rgb <r> <g> <b>
+ *   /rgb/<n> <r> <g> <b>  one pixel            -> /rgb/<n> <r> <g> <b>
+ *   /rgb/bright <int>   0..255                 -> /rgb/bright <int>
+ *                       (announced as /enq/rgb <count>; see the RGB block
+ *                        below for when this exists at all)
  *
  * Everything travels as an OSCBundle in both directions, which is what the
  * stock Oscuino clients expect. Tick "bundle" in the companion page.
@@ -83,6 +88,100 @@ static void pinAddress(char *out, const char *prefix, int pin, const char *suffi
   strcat(out, numToOSCAddress(pin));
   if (suffix) strcat(out, suffix);
 }
+
+// -----------------------------------------------------------------------------
+// The onboard colour LED, where there is one AND something here can drive it.
+//
+// OSCBoards.h answers the first half: BOARD_HAS_RGB, plus which of the four
+// spellings the core used. This asks the second half, because a pixel with no
+// reachable driver is still absence as far as ADDRESSES.md is concerned:
+//
+//   BOARD_RGB_CORE_DRIVEN  the esp32 core drives it itself through
+//                          rgbLedWrite() — no library, no dependency, on by
+//                          default because it costs a reader nothing
+//   BOARD_RGB_NEOPIXEL     needs Adafruit_NeoPixel, so it is OFF unless you
+//                          build with -DOSC_RGB_USE_NEOPIXEL
+//
+// The NeoPixel half is opt-in to keep this README's own rule: "an example that
+// will not compile without a second install is a poor front door". Turning it
+// on is one flag; leaving it off costs only that those boards announce no rgb
+// capability, which the contract already calls absence.
+//
+// It cannot instead be made automatic on whether the library happens to be
+// installed. __has_include(<Adafruit_NeoPixel.h>) was tried and is always false
+// here, measured: arduino-cli discovers libraries by scanning a sketch's
+// includes, so an include hidden behind the test is never seen, the library
+// never joins the include path, and the test answers no however the machine is
+// set up. A build flag is honest about the choice; __has_include only looked
+// like it was.
+//
+// DotStar and discrete LEDR/LEDG/LEDB boards announce nothing: the first wants
+// another library again, and the second's polarity is per-board and untested
+// here — several of those parts are wired active-LOW, which would invert every
+// colour. Announcing a capability we cannot honour is worse than silence.
+// -----------------------------------------------------------------------------
+#if defined(BOARD_RGB_CORE_DRIVEN)
+#define OSC_RGB 1
+#define OSC_RGB_COUNT 1
+#elif defined(BOARD_RGB_NEOPIXEL) && defined(OSC_RGB_USE_NEOPIXEL)
+#include <Adafruit_NeoPixel.h>
+#define OSC_RGB 1
+#ifdef NEOPIXEL_NUM
+#define OSC_RGB_COUNT NEOPIXEL_NUM
+#else
+#define OSC_RGB_COUNT 1
+#endif
+static Adafruit_NeoPixel oscPixels(OSC_RGB_COUNT, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
+#endif
+
+#ifdef OSC_RGB
+// Zero-initialised, so the board starts dark and known rather than showing
+// whatever the bootloader left in the pixel.
+static uint8_t oscRgb[OSC_RGB_COUNT][3];
+static uint8_t oscRgbBright = 255;
+
+static void oscRgbShow() {
+#if defined(BOARD_RGB_CORE_DRIVEN)
+  // rgbLedWrite() has no brightness of its own, so scale on the way out.
+  rgbLedWrite(RGB_BUILTIN, (uint8_t)((int)oscRgb[0][0] * oscRgbBright / 255),
+                           (uint8_t)((int)oscRgb[0][1] * oscRgbBright / 255),
+                           (uint8_t)((int)oscRgb[0][2] * oscRgbBright / 255));
+#else
+  oscPixels.setBrightness(oscRgbBright);
+  for (int i = 0; i < OSC_RGB_COUNT; i++)
+    oscPixels.setPixelColor(i, oscPixels.Color(oscRgb[i][0], oscRgb[i][1], oscRgb[i][2]));
+  oscPixels.show();
+#endif
+}
+
+static void oscRgbBegin() {
+#ifdef NEOPIXEL_POWER
+  // Several boards gate the pixel's supply; NEOPIXEL_POWER_ON names the active
+  // level where the variant bothers to say, since it is not always HIGH.
+  pinMode(NEOPIXEL_POWER, OUTPUT);
+#ifdef NEOPIXEL_POWER_ON
+  digitalWrite(NEOPIXEL_POWER, NEOPIXEL_POWER_ON);
+#else
+  digitalWrite(NEOPIXEL_POWER, HIGH);
+#endif
+#endif
+#ifndef BOARD_RGB_CORE_DRIVEN
+  oscPixels.begin();
+#endif
+  oscRgbShow();
+}
+
+// Three ints, clamped. Anything else is a malformed message and answers
+// nothing, per ADDRESSES.md — no sentinels.
+static bool oscRgbArgs(OSCMessage &msg, uint8_t *out) {
+  if (msg.size() < 3 || !msg.isInt(0) || !msg.isInt(1) || !msg.isInt(2)) return false;
+  for (int i = 0; i < 3; i++) {
+    int32_t v = msg.getInt(i);
+    out[i] = (uint8_t)(v < 0 ? 0 : (v > 255 ? 255 : v));
+  }
+  return true;
+}
+#endif
 
 // -----------------------------------------------------------------------------
 // routes
@@ -216,6 +315,45 @@ void routeRate(OSCMessage &msg, int addrOffset) {
   bundleOUT.add("/rate").add((intOSC_t)reportMs);
 }
 
+#ifdef OSC_RGB
+// "/rgb <r> <g> <b>" — every pixel at once.
+void routeRgbAll(OSCMessage &msg) {
+  uint8_t c[3];
+  if (!oscRgbArgs(msg, c)) return;
+  for (int i = 0; i < OSC_RGB_COUNT; i++) {
+    oscRgb[i][0] = c[0]; oscRgb[i][1] = c[1]; oscRgb[i][2] = c[2];
+  }
+  oscRgbShow();
+  bundleOUT.add("/rgb").add((intOSC_t)c[0]).add((intOSC_t)c[1]).add((intOSC_t)c[2]);
+}
+
+// "/rgb/bright <int>" — 0..255, applied to whatever is already showing.
+void routeRgbBright(OSCMessage &msg) {
+  if (msg.size() < 1 || !msg.isInt(0)) return;
+  int32_t b = msg.getInt(0);
+  oscRgbBright = (uint8_t)(b < 0 ? 0 : (b > 255 ? 255 : b));
+  oscRgbShow();
+  bundleOUT.add("/rgb/bright").add((intOSC_t)oscRgbBright);
+}
+
+// "/rgb/<n> <r> <g> <b>" — one pixel, numbered like /d/<pin> above. Reached by
+// route() rather than dispatch(), which is why "/rgb" and "/rgb/bright" also
+// arrive here: neither matches a numeral, so both fall through harmlessly.
+void routeRgbOne(OSCMessage &msg, int addrOffset) {
+  for (int i = 0; i < OSC_RGB_COUNT; i++) {
+    if (!msg.match(numToOSCAddress(i), addrOffset)) continue;
+    uint8_t c[3];
+    if (!oscRgbArgs(msg, c)) return;
+    oscRgb[i][0] = c[0]; oscRgb[i][1] = c[1]; oscRgb[i][2] = c[2];
+    oscRgbShow();
+    char addr[16];
+    pinAddress(addr, "/rgb", i, NULL);
+    bundleOUT.add(addr).add((intOSC_t)c[0]).add((intOSC_t)c[1]).add((intOSC_t)c[2]);
+    return;
+  }
+}
+#endif
+
 // The greeting of ADDRESSES.md: the sketch name, then one /enq line per
 // capability actually present. This template drives pins, so the only thing
 // it can claim is the plain LED -- and only where the variant has one.
@@ -226,6 +364,9 @@ static void addEnq() {
   bundleOUT.add("/enq").add("ESP32S3Oscuino");
 #ifdef BOARD_HAS_LED
   bundleOUT.add("/enq/led");
+#endif
+#ifdef OSC_RGB
+  bundleOUT.add("/enq/rgb").add((intOSC_t)OSC_RGB_COUNT);
 #endif
 #ifdef BOARD_BUTTON_PIN
   bundleOUT.add("/enq/btn").add((intOSC_t)1);
@@ -246,6 +387,9 @@ void setup() {
 #endif
 #ifdef BOARD_BUTTON_PIN
   pinMode(BOARD_BUTTON_PIN, BOARD_BUTTON_ACTIVE_LOW ? INPUT_PULLUP : INPUT);
+#endif
+#ifdef OSC_RGB
+  oscRgbBegin();
 #endif
 
   // Native-USB boards enumerate after begin(); give the host a moment, then
@@ -298,6 +442,11 @@ void loop() {
       bundleIN.route("/enq", routeEnq);
       bundleIN.route("/state", routeState);
       bundleIN.route("/rate", routeRate);
+#ifdef OSC_RGB
+      bundleIN.dispatch("/rgb", routeRgbAll);
+      bundleIN.dispatch("/rgb/bright", routeRgbBright);
+      bundleIN.route("/rgb", routeRgbOne);
+#endif
 #ifdef BOARD_BUTTON_PIN
       bundleIN.route("/btn", routeBtn);
 #endif

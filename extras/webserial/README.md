@@ -92,7 +92,10 @@ patches and any existing `Serial*` example's client. All traffic is an
 | `/a/<pin> <int>` \| `<float>` | write on the matching digital pin |
 | `/tone/<pin> <freq> [<ms>]` | square wave; no argument stops it |
 | `/s/m` `/s/d` `/s/a` | micros, digital pin count, analog pin count |
-| `/s/l <int>` | set `LED_BUILTIN` |
+| `/s/l <int>` | set `LED_BUILTIN` (only where the board has one) |
+| `/rgb <r> <g> <b>` | every pixel → echoed |
+| `/rgb/<n> <r> <g> <b>` | one pixel → echoed |
+| `/rgb/bright <int>` | 0…255 → echoed |
 
 Boards with hardware beyond pins answer in the capability vocabulary of
 [`ADDRESSES.md`](../../ADDRESSES.md) — `/rgb`, `/display/text`, `/buzz`, `/btn`,
@@ -129,6 +132,17 @@ Cap-touch and NeoPixel variants are deliberately absent — they need external
 libraries, and an example that will not compile without a second install is a
 poor front door. The existing `SerialOscuinoGemmaM0` and
 `SerialOscuinoAdaFruitPlayGroundExpresswithBundles` examples still cover those.
+
+`/rgb` is shaped around that rule rather than against it. Where the core drives
+the pixel itself — any board whose variant sets `RGB_BUILTIN`, which is most of
+the ESP32 family — the sketch answers `/rgb`, `/rgb/<n>` and `/rgb/bright` and
+announces `/enq/rgb`, costing no library at all. Where the pixel instead needs
+Adafruit_NeoPixel the capability stays off and the sketch says nothing about it,
+until you build with `-DOSC_RGB_USE_NEOPIXEL`, whereupon the same three
+addresses appear. The default install is unchanged either way. Boards whose
+colour LED is a DotStar or three discrete pins announce nothing in both modes:
+the first wants another library again, and the second's polarity is per-board
+and untested here.
 
 ## Using it
 
