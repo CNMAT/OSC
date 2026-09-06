@@ -120,6 +120,36 @@
 // LED_RED/LED_GREEN/LED_BLUE are deliberately not consulted: on every UNO R4,
 // the RGB-less Minima included, they leak in from the Renesas FSP's generated
 // bsp_pin_cfg.h in FSP port-pin encoding, which is not an Arduino pin number.
+
+// Two boards whose cores under-describe a pixel that is certainly there, named
+// the same narrow way as the ESP32_DEV rule above. Both must precede the test
+// below, since that is what they exist to correct.
+//
+// Circuit Playground Express: both cores that build it use the same
+// `circuitplay` variant and the same board define, but only adafruit:samd names
+// the ring — its variant.h says PIN_NEOPIXEL D8 / NEOPIXEL_NUM 10, expanding to
+// (8u), while arduino:samd's copy omits both. Measured: without this,
+// BOARD_HAS_RGB is false on arduino:samd for a board carrying ten pixels, and
+// anything guarded on it would compile away.
+#if defined(ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS) && !defined(PIN_NEOPIXEL)
+#define PIN_NEOPIXEL 8
+#ifndef NEOPIXEL_NUM
+#define NEOPIXEL_NUM 10
+#endif
+#endif
+
+// M5Stack NanoC6: its variant names the WS2812 and the power gate that feeds
+// it, but under names no convention looks for, so all four spellings below miss
+// it. Pointed at the variant's own constants rather than literals, so the pins
+// stay the variant's to state. From that naming, not from hardware — BOARDS.md
+// records this board as having stopped responding before any suite ran.
+#if defined(ARDUINO_M5STACK_NANOC6) && !defined(PIN_NEOPIXEL)
+#define PIN_NEOPIXEL RGB_LED_DATA_PIN
+#ifndef NEOPIXEL_POWER
+#define NEOPIXEL_POWER RGB_LED_PWR_PIN
+#endif
+#endif
+
 #if !defined(OSC_NO_RGB)
 #if defined(RGB_BUILTIN)
 #define BOARD_HAS_RGB
