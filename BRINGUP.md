@@ -49,6 +49,29 @@ which I2C pins have parts on them, which FQBN options the variant already
 sets — belongs to the board, not the chip. Establish the carrier before
 flashing anything that drives a pin.
 
+#### Read the factory flash first — it is both the best identification and the backup
+
+Before overwriting a board you have not identified, read its flash out and
+look at the strings. Factory firmware almost always names its own board, and
+often names the vendor's build machine, the libraries it links, and the
+peripherals it talks to. This is stronger evidence than any USB descriptor,
+because every native-USB ESP32 enumerates as the same `303a:1001` "USB
+JTAG/serial debug unit" and the MAC OUI belongs to Espressif, not the carrier.
+
+    esptool --port PORT read-flash 0 0x1000000 ~/Documents/Arduino/firmware-backups/<chip>-<mac>-factory.bin
+    strings -n 5 <that file> | grep -iE "<vendor>|fpga|board|hello"
+
+On the LilyGO T-FPGA — a board whose bus signature is indistinguishable from
+any other ESP32-S3 — this printed `Hello T-FPGA-CORE`, a PlatformIO path under
+`/Users/lewis/`, and `XPowersAXP2101`, which together named the product, the
+vendor and the PMU in one step. The ESP-IDF app descriptor at `0x10020` adds
+the project name, IDF version and build date.
+
+Do it even when you are confident, because the same command is the backup. On
+boards where the MCU configures something else — an FPGA's rails, a display
+controller, a radio — the factory image may be the only copy of a loader you
+cannot rebuild, and overwriting it is otherwise irreversible.
+
 This is not hypothetical. On 2026-09-04 a board was identified as
 "ESP32-C3, 4 MB XMC flash, VID/PID 303a:1001" and flashed with the EGG
 SuperMini demo on that basis. It was a **Seeed XIAO ESP32-C3**: a different

@@ -51,7 +51,21 @@ the operating summary. Record results per
    sweeping a bus: a part held in reset looks exactly like a part that is
    not there, which made one touch controller appear on one boot and vanish
    on the next. See BRINGUP.md Phase 4.
-6. **Two boards can ship under one name.** When a vendor's config is a
+6. **Read the factory flash before overwriting it.**
+   `esptool --port PORT read-flash 0 0x1000000 <backup>.bin`, then `strings`
+   it. Factory firmware names its own board, and this is stronger evidence
+   than USB descriptors — every native-USB ESP32 is `303a:1001` and the MAC
+   OUI is Espressif's. It identified the LilyGO T-FPGA outright (`Hello
+   T-FPGA-CORE`, a `/Users/lewis/` PlatformIO path, `XPowersAXP2101`). The
+   same command is the backup, which matters when the MCU is the only thing
+   that configures an FPGA, a display or a radio. See BRINGUP.md Phase 0.
+7. **Some peripherals have no power until firmware grants it.** A PMU-managed
+   board (AXP2101 and friends) leaves rails off at reset, so a peripheral that
+   "does not respond" may simply be unpowered — the T-FPGA's FPGA core and all
+   four I/O bank voltages come from the AXP2101, and the M5Capsule latches its
+   own power through GPIO46. Set the rails the vendor documents and do not
+   improvise the voltages.
+8. **Two boards can ship under one name.** When a vendor's config is a
    build-time switch between hardware revisions, do not pick a branch —
    detect at run time by something the parts themselves disagree about (two
    touch controllers at different I2C addresses settled the T-Encoder-Pro),
