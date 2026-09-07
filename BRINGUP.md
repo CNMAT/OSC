@@ -291,6 +291,41 @@ from the ones that exist (PyBadge, XiaoS3Sense, Esplora):
 * Anything unverified ships with a STATUS comment saying exactly what has
   and has not run. The XiaoS3Sense mic block is the template.
 
+### Latch anything a person has to do with their hands
+
+A press, a touch, a tap on a screen: these last a fraction of a second, and
+nothing on the host side can be relied on to be looking when one happens.
+Polling an address over OSC runs at a couple of hertz once a round trip and a
+drain are paid for, which is slower than the event. Three separate windows on
+the T-Encoder-Pro — 185, 891 and 1308 samples — reported "never changed" and
+none of them was evidence about the switch.
+
+So a sketch whose board has a button, a touch panel, or anything else a human
+actuates should **count edges since boot** and expose the count, alongside
+whatever instantaneous level the contract asks for. `/btn` still reports the
+level, because that is the contract; a counter in `/diag` reports that an edge
+*ever happened*. With one in place the question stops being a window at all:
+the person at the bench acts whenever they like, and a single read minutes
+later still answers it.
+
+The same fault appears on the host side, so check both:
+`test/hardware/pinhunt.py` once sampled at 2 Hz *and* re-read to "confirm" a
+change, which threw away exactly the momentary presses it existed to catch.
+
+And say the instruction where the person is actually reading — a background
+task's stdout is a log file nobody is watching. `test/hardware/humanprobe.py`
+waits for motion rather than timing a window, and takes several addresses at
+once so one gesture can settle more than one question.
+
+### A part held in reset does not answer
+
+Sweep an I2C bus before releasing a controller's reset line and the answer is
+meaningless — but it is not obviously meaningless, because it looks exactly
+like an absent part. On the T-Encoder-Pro this made the touch controller appear
+at 0x2E on one boot and vanish on the next, purely because RST happened to be
+left high by the previous firmware. Drive every reset line the board documents,
+with the driver's own hold and release times, *before* asking the bus anything.
+
 ## Credentials never enter the repository
 
 A WiFi example needs an SSID and a password, and the safe place for them is

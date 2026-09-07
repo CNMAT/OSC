@@ -41,6 +41,22 @@ the operating summary. Record results per
    surprises you, suspect the instrument first — five "board bugs" in this
    repo's history were the apparatus.
 4. **Report failures faithfully**, including your own instrument errors.
+5. **Latch what a human does; never poll for it.** A press or a touch is
+   shorter than an OSC round trip, so count edges in the sketch and expose
+   the count on `/diag`, beside whatever instantaneous level the contract
+   asks for. Three windows on the T-Encoder-Pro (185, 891 and 1308 samples)
+   each reported "never changed" and none of them was evidence about the
+   switch. Say the instruction in chat — a background task's stdout is a log
+   file nobody is watching. And release every documented reset line *before*
+   sweeping a bus: a part held in reset looks exactly like a part that is
+   not there, which made one touch controller appear on one boot and vanish
+   on the next. See BRINGUP.md Phase 4.
+6. **Two boards can ship under one name.** When a vendor's config is a
+   build-time switch between hardware revisions, do not pick a branch —
+   detect at run time by something the parts themselves disagree about (two
+   touch controllers at different I2C addresses settled the T-Encoder-Pro),
+   and report what was found. A vendor's default and a vendor's flagship
+   example have been observed selecting *different* revisions.
 
 ## Transport flow (every board)
 
