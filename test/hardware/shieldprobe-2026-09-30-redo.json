@@ -1,0 +1,194 @@
+{
+ "page": "shieldprobe.html",
+ "started": "2026-10-01T02:49:57.055Z",
+ "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+ "gamepad": {
+  "id": "NVIDIA Controller v01.03 (STANDARD GAMEPAD Vendor: 0955 Product: 7210)",
+  "mapping": "standard",
+  "buttons": 18,
+  "axes": 4,
+  "vibrationActuator": null,
+  "effects": null,
+  "others": []
+ },
+ "hid": {
+  "productName": "NVIDIA Controller v01.03",
+  "vendorId": 2389,
+  "productId": 29200,
+  "collections": [
+   {
+    "usagePage": 1,
+    "usage": 5,
+    "type": 1,
+    "input": [
+     1
+    ],
+    "output": [
+     1
+    ],
+    "feature": []
+   },
+   {
+    "usagePage": 1,
+    "usage": 2,
+    "type": 1,
+    "input": [],
+    "output": [],
+    "feature": []
+   },
+   {
+    "usagePage": 65502,
+    "usage": 1,
+    "type": 1,
+    "input": [
+     253
+    ],
+    "output": [],
+    "feature": []
+   },
+   {
+    "usagePage": 65502,
+    "usage": 3,
+    "type": 1,
+    "input": [],
+    "output": [],
+    "feature": [
+     252
+    ]
+   }
+  ],
+  "reportsSeen": {
+   "1": {
+    "count": 8,
+    "length": 15,
+    "first": "10 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00",
+    "last": "00 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00"
+   }
+  }
+ },
+ "steps": [
+  {
+   "idx": 0,
+   "label": "Left bumper (LB)",
+   "t0": 26,
+   "ended": "auto",
+   "hid": {
+    "bits": {
+     "btn7": 1
+    },
+    "hats": {},
+    "axes": {},
+    "otherReports": {}
+   },
+   "gp": {
+    "buttons": {
+     "4": 1
+    },
+    "axes": {}
+   },
+   "ms": 6981
+  },
+  {
+   "idx": 1,
+   "label": "Right bumper (RB)",
+   "t0": 7008.699999999255,
+   "ended": "auto",
+   "hid": {
+    "bits": {
+     "btn8": 1
+    },
+    "hats": {},
+    "axes": {},
+    "otherReports": {}
+   },
+   "gp": {
+    "buttons": {
+     "5": 1
+    },
+    "axes": {}
+   },
+   "ms": 1708
+  },
+  {
+   "idx": 2,
+   "label": "D-pad up",
+   "t0": 8717.5,
+   "ended": "auto",
+   "hid": {
+    "bits": {},
+    "hats": {
+     "0": 2,
+     "7": 1
+    },
+    "axes": {},
+    "otherReports": {}
+   },
+   "gp": {
+    "buttons": {
+     "12": 1,
+     "14": 1
+    },
+    "axes": {}
+   },
+   "ms": 2732
+  }
+ ],
+ "rumble": [
+  {
+   "via": "hid",
+   "ok": true
+  },
+  {
+   "via": "gamepad",
+   "ok": false,
+   "err": "no vibrationActuator"
+  },
+  {
+   "via": "hid",
+   "ok": true
+  },
+  {
+   "via": "gamepad",
+   "ok": false,
+   "err": "no vibrationActuator"
+  },
+  {
+   "via": "gamepad",
+   "ok": false,
+   "err": "no vibrationActuator"
+  },
+  {
+   "via": "gamepad",
+   "ok": false,
+   "err": "no vibrationActuator"
+  },
+  {
+   "via": "hid",
+   "ok": true
+  }
+ ],
+ "felt": [
+  "hid-yes",
+  "gp-no"
+ ],
+ "log": [
+  "0.08 hid open [{\"usagePage\":1,\"usage\":5,\"type\":1,\"input\":[1],\"output\":[1],\"feature\":[]},{\"usagePage\":1,\"usage\":2,\"type\":1,\"input\":[],\"output\":[],\"feature\":[]},{\"usagePage\":65502,\"usage\":1,\"type\":1,\"input\":[253],\"output\":[],\"feature\":[]},{\"usagePage\":65502,\"usage\":3,\"type\":1,\"input\":[],\"output\":[],\"feature\":[252]}]",
+  "5.82 gamepadconnected index 0 id NVIDIA Controller v01.03 (STANDARD GAMEPAD Vendor: 0955 Product: 7210)",
+  "5.83 gamepad {\"id\":\"NVIDIA Controller v01.03 (STANDARD GAMEPAD Vendor: 0955 Product: 7210)\",\"mapping\":\"standard\",\"buttons\":18,\"axes\":4,\"vibrationActuator\":null,\"effects\":null,\"others\":[]}",
+  "7.01 step 1 [Left bumper (LB)] auto: hid {\"bits\":{\"btn7\":1},\"hats\":{},\"axes\":{},\"otherReports\":{}} gp {\"buttons\":{\"4\":1},\"axes\":{}}",
+  "8.72 step 2 [Right bumper (RB)] auto: hid {\"bits\":{\"btn8\":1},\"hats\":{},\"axes\":{},\"otherReports\":{}} gp {\"buttons\":{\"5\":1},\"axes\":{}}",
+  "11.45 step 3 [D-pad up] auto: hid {\"bits\":{},\"hats\":{\"0\":2,\"7\":1},\"axes\":{},\"otherReports\":{}} gp {\"buttons\":{\"12\":1,\"14\":1},\"axes\":{}}",
+  "15.48 rumble hid: on sent",
+  "16.09 rumble hid: off sent",
+  "20.40 rumble gp: no vibrationActuator",
+  "22.39 rumble hid: on sent",
+  "22.99 rumble hid: off sent",
+  "24.85 rumble gp: no vibrationActuator",
+  "25.52 rumble gp: no vibrationActuator",
+  "25.84 rumble gp: no vibrationActuator",
+  "26.82 rumble hid: on sent",
+  "27.42 rumble hid: off sent",
+  "29.31 felt: hid-yes",
+  "30.42 felt: gp-no"
+ ]
+}

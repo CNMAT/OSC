@@ -1,0 +1,30 @@
+device 0955:7210 "NVIDIA Controller v01.03" maxInput 65, manager open 0x00000000, device open 0x00000000
+listening 120.0 s
+  59.048 id   1 len 16: 01 01 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  59.381 id   1 len 16: 01 00 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  60.035 id   1 len 16: 01 00 02 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  60.169 id   1 len 16: 01 00 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  60.187 id   1 len 16: 01 00 20 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  60.307 id   1 len 16: 01 00 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  60.529 id   1 len 16: 01 00 80 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  60.643 id   1 len 16: 01 00 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  60.727 id   1 len 16: 01 00 02 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  60.891 id   1 len 16: 01 00 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  60.911 id   1 len 16: 01 00 20 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  61.041 id   1 len 16: 01 00 40 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  61.117 id   1 len 16: 01 00 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  61.355 id   1 len 16: 01 00 02 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  61.509 id   1 len 16: 01 00 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  61.555 id   1 len 16: 01 00 20 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  61.775 id   1 len 16: 01 00 80 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  61.953 id   1 len 16: 01 00 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  61.971 id   1 len 16: 01 00 02 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  62.117 id   1 len 16: 01 00 20 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  62.237 id   1 len 16: 01 00 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  62.325 id   1 len 16: 01 00 80 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  62.379 id   1 len 16: 01 00 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  63.645 id   2 len  6: 02 08 90 00 30 00
+  63.799 id   2 len  6: 02 00 90 00 30 00
+  64.987 id   1 len 16: 01 02 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+  65.385 id   1 len 16: 01 00 00 0f ff 7f ff 7f ff 7f ff 7f 00 00 00 00
+counts by report ID: 1: 25, 2: 2
