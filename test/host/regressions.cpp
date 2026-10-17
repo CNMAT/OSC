@@ -347,6 +347,46 @@ static void blobNegativeLength() {
             memcmp(got, bl, 4) == 0); }
 }
 
+// ---------------------------------------------------------------------------
+// The blob length was converted to int unchecked, so a wider one wrapped before
+// the negative-length check could see it. (long long)4294967300, -4294967292
+// and (unsigned long long)0x8000000000000004 all became 4-byte blobs, through
+// add(), set() and a one-call list alike, and -(2^32) + 2000000 read 2000000
+// bytes from the caller's buffer. A fractional length was truncated the same
+// way. The value is now checked before it becomes an int.
+// ---------------------------------------------------------------------------
+static void blobWideLength() {
+    printf("blob with a length wider than int\n");
+    uint8_t bl[4] = {1, 2, 3, 4};
+    { OSCMessage a("/w"), b("/w"), c("/w"), d("/w");
+      a.add(bl, (long long)4294967300LL);
+      b.add(bl, (long long)-4294967292LL);
+      c.add(bl, (unsigned long long)0x8000000000000004ULL);
+      d.add(bl, (long long)(-4294967296LL + 2000000));
+      check("64-bit lengths that wrapped to a small int are refused",
+            a.getError() == INVALID_OSC && b.getError() == INVALID_OSC &&
+            c.getError() == INVALID_OSC && d.getError() == INVALID_OSC &&
+            a.size() + b.size() + c.size() + d.size() == 0); }
+    { OSCMessage m("/w"); m.add(bl, 4); m.set(0, bl, (long long)-4294967292LL);
+      uint8_t got[4] = {0};
+      check("and through set(), which keeps the old blob",
+            m.getError() == INVALID_OSC && m.size() == 1 &&
+            m.getOSCData(0)->getBlob(got, sizeof got) == 4 &&
+            memcmp(got, bl, 4) == 0); }
+    { OSCMessage m("/w", (int32_t)1, bl, (long long)-4294967292LL, (int32_t)2);
+      check("and in a one-call list",
+            m.getError() == INVALID_OSC && m.size() == 2); }
+    { OSCMessage m("/w"); m.add(bl, 2.5);
+      check("a fractional length is refused, not truncated",
+            m.getError() == INVALID_OSC && m.size() == 0); }
+    { OSCMessage m("/w");
+      m.add(bl, (long long)4).add(bl, (unsigned long long)3);
+      m.set(0, bl, (uint16_t)2);
+      check("wider and narrower lengths that fit still work",
+            !m.hasError() && m.size() == 2 &&
+            m.getBlobLength(0) == 2 && m.getBlobLength(1) == 3); }
+}
+
 int main() {
     zeroByteTypesDecode();
     paddingAfterZeroByteType();
@@ -359,6 +399,7 @@ int main() {
     blobSetNegativePosition();
     blobSetKeepsTheRest();
     blobNegativeLength();
+    blobWideLength();
     printf("\n%s\n", failures ? "FAILURES" : "all regression tests passed");
     return failures ? 1 : 0;
 }

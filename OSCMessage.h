@@ -107,6 +107,16 @@ private:
 	//appends one blob: the body of every blob add()
 	OSCMessage& addBlob(uint8_t * blob, int length);
 
+	//A blob length as an int, or -1, which OSCData refuses, when converting it
+	//would change it. The conversion used to be unchecked, so a 64-bit
+	//-4294967292 arrived as 4 and got past the negative-length check. For an
+	//int length this compiles to nothing.
+	template <typename N>
+	static int intBlobLength(N length){
+		int n = length;
+		return (N)n == length ? n : -1;
+	}
+
 	//compares the OSCData's type char to a test char
 	bool testType(int position, char type);
 
@@ -186,14 +196,15 @@ public:
     //a blob is a uint8_t * followed by its length, alone or anywhere in a
     //list. The length is a template so these win over the list above whatever
     //integer type it is: a plain int parameter loses to the list for a size_t
-    //or uint16_t length, and the pointer would go out as T.
+    //or uint16_t length, and the pointer would go out as T. It also lets
+    //intBlobLength() see the value before it becomes an int.
     template <typename N>
     OSCMessage& add(uint8_t * blob, N length){
-		return addBlob(blob, length);
+		return addBlob(blob, intBlobLength(length));
 	}
     template <typename N, typename V, typename... Rest>
     OSCMessage& add(uint8_t * blob, N length, V next, Rest... rest){
-		addBlob(blob, length);
+		addBlob(blob, intBlobLength(length));
 		return add(next, rest...);
 	}
 
@@ -229,9 +240,11 @@ public:
     //blob specific setter, the same shape as set() above.  It was missed when
     //that one was hardened: with no lower bound set(-1, ...) stored the new
     //datum at data[-1], and it destroyed the old datum before building the new.
-    OSCMessage& set(int position, uint8_t * blob, int length){
+    //The length is a template, as in add(), so intBlobLength() sees its value.
+    template <typename N>
+    OSCMessage& set(int position, uint8_t * blob, N length){
 		if (position >= 0 && position < dataCount){
-			OSCData * newDatum = new OSCData(blob, length);
+			OSCData * newDatum = new OSCData(blob, intBlobLength(length));
 			if (newDatum == NULL){
 				error = ALLOCFAILED;
 			} else if (newDatum->error != OSC_OK){

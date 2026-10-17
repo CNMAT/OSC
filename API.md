@@ -91,7 +91,7 @@ msg.add("hello");
 
 Append a [blob](https://en.wikipedia.org/wiki/Binary_large_object) to the OSCMessage. Pass in the length of the blob as the second argument; any integer type will do, so `sizeof` works directly. The pair can also sit inside a longer [`add()`](#oscmessage-adda-b-) list or a one-call constructor. 
 
-A negative length is refused, and so is one too large for an `int` once the four-byte size is added: nothing is added, `getError()` returns `INVALID_OSC`, and the message will not send. A length of any other integer type is converted to `int` before that check.
+A negative length is refused, and so is one too large for an `int` once the four-byte size is added: nothing is added, `getError()` returns `INVALID_OSC`, and the message will not send. A length of any other type is checked before it becomes an `int`, so one the conversion would change, such as a 64-bit length outside that range or 2.5, is refused rather than wrapped or truncated.
 
 
 
@@ -105,9 +105,9 @@ msg.set(0, "string");
 ```
 
 
-### `OSCMessage& set(int position, uint8_t * data, int length)`
+### `OSCMessage& set(int position, uint8_t * data, length)`
 
-Set the data at the given position to be a blob of the given length. A length `add()` would refuse leaves the existing data in place and sets `INVALID_OSC`.
+Set the data at the given position to be a blob of the given length; any integer type will do. A length `add()` would refuse leaves the existing data in place and sets `INVALID_OSC`.
 
 
 ### `OSCMessage& add(double d)`
