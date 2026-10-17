@@ -244,6 +244,63 @@ static void defaultBundleTimetag() {
           c.n >= 16 && memcmp(c.b + 8, want, 8) == 0);
 }
 
+// ---------------------------------------------------------------------------
+// The blob set() had no lower bound. 00ae88c gave the template set() one and
+// missed this overload, so set(-1, blob, n) stored its new datum at data[-1],
+// in front of the array. With arguments present that write is invisible except
+// under `make asan` (heap-buffer-overflow, WRITE of size 8); with none yet the
+// array is NULL and it faults in any build.
+// ---------------------------------------------------------------------------
+static void blobSetNegativePosition() {
+    printf("blob set() out of bounds\n");
+    uint8_t bl[4] = {1, 2, 3, 4};
+    { OSCMessage m("/s"); m.add((int32_t)1).add((int32_t)2);
+      m.set(-1, bl, 4);
+      check("set(-1, blob) is INDEX_OUT_OF_BOUNDS",
+            m.getError() == INDEX_OUT_OF_BOUNDS);
+      check("and writes nothing", m.size() == 2 &&
+            m.getOSCData(0)->getInt() == 1 && m.getOSCData(1)->getInt() == 2); }
+    { OSCMessage m("/s");
+      m.set(-1, bl, 4);
+      check("set(-1, blob) on a message with no arguments",
+            m.getError() == INDEX_OUT_OF_BOUNDS && m.size() == 0); }
+    { OSCMessage m("/s"); m.add((int32_t)1);
+      m.set(2, bl, 4);
+      check("set(size() + 1, blob) is INDEX_OUT_OF_BOUNDS too",
+            m.getError() == INDEX_OUT_OF_BOUNDS && m.size() == 1); }
+}
+
+// i 7, b <want>, s "tail", and nothing else
+static bool intBlobString(OSCMessage &m, const uint8_t *want, int n) {
+    uint8_t got[16] = {0}; char s[8] = {0};
+    return !m.hasError() && m.size() == 3 && m.getInt(0) == 7 &&
+           m.getBlob(1, got, sizeof got) == n && memcmp(got, want, n) == 0 &&
+           m.getString(2, s, sizeof s) == 5 && strcmp(s, "tail") == 0;
+}
+
+// ---------------------------------------------------------------------------
+// The same set() destroyed the old datum before building its replacement, so
+// a failed allocation left data[position] pointing at freed memory. It now
+// builds first, as the template set() does. Allocation failure itself needs a
+// failing malloc (alloc/setfail.cpp); this pins what the reordering must keep:
+// a replacement of a different padded length, with a sizeof length, touches
+// only its own position and still encodes.
+// ---------------------------------------------------------------------------
+static void blobSetKeepsTheRest() {
+    printf("blob set() replaces only its own position\n");
+    uint8_t a[3] = {1, 2, 3}, b[6] = {9, 8, 7, 6, 5, 4};
+    OSCMessage m("/s");
+    m.add((int32_t)7).add(a, 3).add("tail");
+    m.set(1, b, sizeof b);
+    check("replacing a blob keeps the other data", intBlobString(m, b, 6));
+    Cap c; m.send(c);
+    OSCMessage in; in.fill(c.b, c.n);
+    check("and the message still encodes and decodes", intBlobString(in, b, 6));
+    m.set(3, a, 3);
+    check("set(size(), blob) still appends",
+          !m.hasError() && m.size() == 4 && m.getType(3) == 'b');
+}
+
 int main() {
     zeroByteTypesDecode();
     paddingAfterZeroByteType();
@@ -253,6 +310,8 @@ int main() {
     bundleReuseAndTimetag();
     rgbaAndMidiWireOrder();
     defaultBundleTimetag();
+    blobSetNegativePosition();
+    blobSetKeepsTheRest();
     printf("\n%s\n", failures ? "FAILURES" : "all regression tests passed");
     return failures ? 1 : 0;
 }

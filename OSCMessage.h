@@ -226,20 +226,19 @@ public:
 		return *this;
 	}
 
-    //blob specific setter
+    //blob specific setter, the same shape as set() above.  It was missed when
+    //that one was hardened: with no lower bound set(-1, ...) stored the new
+    //datum at data[-1], and it destroyed the old datum before building the new.
     OSCMessage& set(int position, uint8_t * blob, int length){
-        if (position < dataCount){
-			//replace the OSCData with a new one
-			OSCData * oldDatum = getOSCData(position);
-			//destroy the old one
-			delete oldDatum;
-			//make a new one
+		if (position >= 0 && position < dataCount){
 			OSCData * newDatum = new OSCData(blob, length);
-			//test if there was an error
-			if (newDatum->error == ALLOCFAILED){
+			if (newDatum == NULL){
 				error = ALLOCFAILED;
+			} else if (newDatum->error == ALLOCFAILED){
+				error = ALLOCFAILED;
+				delete newDatum;
 			} else {
-				//otherwise, put it in the data array
+				delete data[position];
 				data[position] = newDatum;
 			}
 		} else if (position == (dataCount)){

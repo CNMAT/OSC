@@ -97,7 +97,8 @@ than adding 16, which is what the large-blob case needed.
 | 16 ints (the Esplora message) | 24 | 4 |
 | 1 blob, 200 B | 18 | 5 |
 
-`alloc/` holds the counter used to measure that; see its README.
+`alloc/` holds the counter used to measure that, and `setfail`, which makes
+allocations fail on purpose to check what `set()` leaves behind; see its README.
 
 ## Adding a test
 

@@ -30,3 +30,25 @@ shrinking on every argument and made growth geometric:
 
 Peak bytes were unchanged except the 200-byte blob, where doubling overshoots:
 459 -> 495 B.
+
+## Allocation failure
+
+`setfail.cpp` makes one of `OSCData`'s payload mallocs return NULL and checks
+what `set()` leaves behind: `ALLOCFAILED` reported and the old datum still in
+place, with nothing read after it was freed and nothing freed twice or freed
+uninitialized. It includes `OSCData.cpp` with `malloc` redirected, so it builds
+in one line and leaves no object file for `bench`'s `*.o` to pick up:
+
+```sh
+cd test/host/alloc
+c++ -std=c++11 -I ../shim -I ../../.. -w -fsanitize=address,undefined -fno-omit-frame-pointer \
+    setfail.cpp ../../../OSCMessage.cpp ../../../OSCBundle.cpp ../../../OSCMatch.c -o setfail && ./setfail
+```
+
+Build it with the sanitizers. At c72084d all four cases failed under ASan: two
+use-after-frees, one of them inside `fill()` on a received blob, and two SEGVs
+in `free()`. Without ASan three of the four passed, because the freed or
+uninitialized memory happened to hold something harmless.
+
+Not part of `make asan`, because it compiles `OSCData.cpp` differently from
+every other suite and so needs its own rule in `../Makefile`.

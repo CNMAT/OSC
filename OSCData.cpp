@@ -27,6 +27,7 @@ OSCData::OSCData(const char * s){
 	char * mem = (char *) malloc(bytes);
 	if (mem == NULL){
 		error = ALLOCFAILED;
+		data.s = NULL;  //see ~OSCData()
 	} else {
 		strcpy(mem, s);
 		data.s = mem;
@@ -145,6 +146,7 @@ OSCData::OSCData(uint8_t * b, int len){
         uint8_t * mem = (uint8_t * ) malloc(bytes);
         if (mem == NULL){
             error = ALLOCFAILED;
+            data.b = NULL;  //see ~OSCData()
         } else {
             //copy over the blob length
             memcpy(mem, lenPtr, 4);
@@ -171,6 +173,7 @@ OSCData::OSCData (OSCData * datum){
         uint8_t * mem = (uint8_t * ) malloc(bytes);
         if (mem == NULL){
             error = ALLOCFAILED;
+            data.b = NULL;  //see ~OSCData()
         } else {
             //copy over the blob length
             memcpy(mem, datum->data.b, bytes);
@@ -180,6 +183,11 @@ OSCData::OSCData (OSCData * datum){
 }
 
 //DESTRUCTOR
+//Frees data.s or data.b whenever bytes > 0, and the constructors set bytes
+//before they malloc, so one whose malloc fails must store NULL there. They
+//used to leave it uninitialized. That was harmless while a failed datum was
+//only ever leaked, but set() deletes one, and free() got whatever the heap
+//block happened to hold.
 OSCData::~OSCData(){
     //if there are no bytes, there is nothing to free
     if (bytes>0){
