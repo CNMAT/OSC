@@ -52,5 +52,10 @@ int main(){
   // --- mixed, and a bundle
   { OSCMessage m("/mix"); m.add((int32_t)7).add("hi").add(2.5f).add((int64_t)-2); m.send(cap); emit("mixed"); }
   { OSCBundle b; b.add("/x").add((int32_t)1); b.add("/y").add((int64_t)2); b.send(cap); emit("bundle"); }
+  // --- the one-call forms: constructor, blobs inside a list, bundle
+  { OSCMessage m("/oc", (int32_t)60, 2.5f, "sine", true); m.send(cap); emit("onecall_ctor"); }
+  { uint8_t bl[5] = {0xA0,0xA1,0xA2,0xA3,0xA4};
+    OSCMessage m("/ob", (int32_t)7, bl, sizeof bl, "t", bl, (uint16_t)2); m.send(cap); emit("onecall_blobs"); }
+  { OSCBundle b; b.add("/x", (int32_t)1, (int64_t)2); b.add("/y", "z"); b.send(cap); emit("onecall_bundle"); }
   return 0;
 }

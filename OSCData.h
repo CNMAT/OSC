@@ -144,6 +144,10 @@ private:
     void initInt32(int32_t v);
     void initInt64(int64_t v);
 
+    //always false, but only once instantiated, so the pointer guard below
+    //fails at the offending call rather than wherever this header is read
+    template <typename P> struct NotAnArgument { enum { value = 0 }; };
+
 public:
 
 	//an error flag
@@ -171,6 +175,9 @@ public:
 
 	//overload the constructor to account for all the types and sizes
 	OSCData(const char * s);
+	//a char * is a string too. Without this the pointer guard below would
+	//claim it: P * matches char * exactly, const char * only by conversion.
+	OSCData(char * s) : OSCData((const char *) s) {}
 
 	// Integers.  C++ guarantees that these ten are distinct types on every
 	// implementation, and that every fixed-width typedef (int32_t, uint32_t,
@@ -199,6 +206,16 @@ public:
 	OSCData (uint8_t *, int);
     //accepts another OSCData objects and clones it
 	OSCData (OSCData *);
+	//Any other pointer used to convert silently to bool and go out as T, so a
+	//blob handed over without its length, add(buf), sent T and nothing else.
+	//Now it does not compile, and the message says why. A const blob is
+	//refused on purpose: on AVR a PROGMEM table is a const uint8_t *, and
+	//copying from it would send whatever RAM is at that address.
+	template <typename P>
+	OSCData (P *){
+		static_assert(NotAnArgument<P>::value,
+			"an OSC pointer argument must be a string (char *) or a blob (non-const uint8_t *, length)");
+	}
     OSCData  (boolean);
     OSCData  (oscrgba_t);
     OSCData  (oscmidi_t);

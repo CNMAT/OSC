@@ -14,12 +14,48 @@ Set the address of the message in the constructor
 OSCMessage msg("/address");
 ```
 
+### `OSCMessage(const char * address, ...)`
+
+The address and all of the data in one call. Each argument is typed exactly as
+[`add()`](#oscmessage-adda-b-) types it.
+
+```C++
+OSCMessage msg("/synth/note", 60, 0.8f, "sine", true);   // ,ifsT
+```
+
 ### `OSCMessage()`
 
 An OSCMessage constructed without an address is not valid until it is given an address.
 
 ## Add/Set Data
 
+
+### `OSCMessage& add(a, b, ...)`
+
+Append several data in one call. Each is typed as a single `add()` types it,
+from its C++ type, so
+
+```C++
+msg.add(512, 300, 1.5f);
+```
+
+sends the same bytes as `msg.add(512).add(300).add(1.5f)`. Any integer type up
+to 32 bits is `'i'` and a 64-bit one `'h'`; `float` is `'f'`; `double` is `'d'`,
+but `'f'` on AVR, where `double` is 4 bytes; a string literal or `char *` is
+`'s'`; `bool` is `'T'` or `'F'`. Write `2.5f`, not `2.5`, for a float that is a
+float everywhere.
+
+A `uint8_t *` followed by its length is a blob, anywhere in the list:
+
+```C++
+OSCMessage msg("/cam/jpeg", seq, frame, sizeof frame);   // ,ib
+```
+
+Any other pointer does not compile: a blob without its length, a
+`const uint8_t *` (on AVR a `PROGMEM` table is one, and copying from it would
+send whatever is in RAM at that address), an `F("...")` string, or a pointer to
+anything else. Earlier versions compiled a lone pointer like these and sent
+`'T'`.
 
 ### `OSCMessage& add(int i)`
 
@@ -51,9 +87,9 @@ msg.add("hello");
 ```
 
 
-### `OSCMessage& add(uint8_t * blob, int length)`
+### `OSCMessage& add(uint8_t * blob, length)`
 
-Append a [blob](https://en.wikipedia.org/wiki/Binary_large_object) to the OSCMessage. Pass in the length of the blob as the second argument. 
+Append a [blob](https://en.wikipedia.org/wiki/Binary_large_object) to the OSCMessage. Pass in the length of the blob as the second argument; any integer type will do, so `sizeof` works directly. The pair can also sit inside a longer [`add()`](#oscmessage-adda-b-) list or a one-call constructor. 
 
 
 
@@ -353,6 +389,17 @@ Create a new message with the given `address` in the bundle. Returns the newly c
 bundle.add("/message").add("data");
 ```
 
+### `OSCMessage & add(const char * address, ...)`
+
+Create a new message in the bundle with its data in one call, each argument
+typed as [`OSCMessage::add()`](#oscmessage-adda-b-) types it. Like
+`add(address)`, it returns the new message.
+
+```C++
+bundle.add("/mouse/xy", x, y);
+bundle.add("/btn", 1);
+```
+
 
 ## Get OSCMessage
 
@@ -469,6 +516,15 @@ This technique allows multiple lines to be condensed into one:
 ```C++
 OSCMessage msg("/address");
 msg.add("data").add(0).send(SLIPSerial).empty();
+```
+
+The one-call forms make most chains unnecessary. A temporary message can be
+built and sent in a single statement:
+
+```C++
+SLIPSerial.beginPacket();
+OSCMessage("/btn", 3, true).send(SLIPSerial);
+SLIPSerial.endPacket();
 ```
 
 Take care when chaining off `OSCBundle::add()`: it returns a reference to the

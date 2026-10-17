@@ -92,6 +92,10 @@ EXPECT = {
  # (0,1) is OSC's reserved "immediately" timetag -- a bundle built without an
  # explicit timetag must send 1, not 0 (0 is a real absolute time, 1900-01-01).
  'bundle':('bundle',(0,1),[('msg','/x',[('i',1)]),('msg','/y',[('h',2)])]),
+ # the one-call forms; a uint8_t * and its length make one blob anywhere in a list
+ 'onecall_ctor':('msg','/oc',[('i',60),('f',2.5),('s','sine'),('T',None)]),
+ 'onecall_blobs':('msg','/ob',[('i',7),('b',bytes([0xA0,0xA1,0xA2,0xA3,0xA4])),('s','t'),('b',bytes([0xA0,0xA1]))]),
+ 'onecall_bundle':('bundle',(0,1),[('msg','/x',[('i',1),('h',2)]),('msg','/y',[('s','z')])]),
 }
 
 # Guarded so the decoder is importable (extras/python/test_host.py leans on

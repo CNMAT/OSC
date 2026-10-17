@@ -45,13 +45,9 @@ OSCMessage::OSCMessage(){
     error = INVALID_OSC;
 }
 
-//variable length constructor
-//for example OSCMessage msg("/address", "isf", 1, "two", 3.0);
-/*
-OSCMessage::OSCMessage(const char * _address, char * types, ... ){
-	setupMessage(_address);
-}
- */
+//The variable-length constructor sketched here since 2013 as
+//OSCMessage(const char * _address, char * types, ...) is now a template in
+//OSCMessage.h that infers the type string: OSCMessage msg("/address", 1, "two", 3.0f);
 
 //sets up a new message
 void OSCMessage::setupMessage(){
@@ -164,6 +160,26 @@ bool OSCMessage::reserveOneMore(){
 	data = mem;
 	dataCapacity = want;
 	return true;
+}
+
+//the body the blob add() overloads in OSCMessage.h share
+OSCMessage& OSCMessage::addBlob(uint8_t * blob, int length){
+	//make a piece of data
+	OSCData * d = new OSCData(blob, length);
+	//check if it has any errors
+	if (d->error == ALLOCFAILED){
+		error = ALLOCFAILED;
+	} else {
+		//room for one more, doubling rather than growing by one pointer
+		if (!reserveOneMore()){
+			error = ALLOCFAILED;
+			delete d;
+		} else {
+			data[dataCount] = d;
+			dataCount++;
+		}
+	}
+	return *this;
 }
 
 /*=============================================================================

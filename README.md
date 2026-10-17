@@ -185,6 +185,12 @@ msg.add("three");
 msg.add(1).add(2.0f).add("three");
 ```
 
+or build the whole message in one call, each argument typed as `add` types it:
+
+```C++
+OSCMessage msg("/address", 1, 2.0f, "three");
+```
+
 Then send it over any transport layer that extends Arduino's [Print class](http://playground.arduino.cc/Code/Printclass) like the `Serial` out. 
 
 ```C++
@@ -285,6 +291,8 @@ OSCMessage& msgA = bundle.add("/a");
 msgA.add("some data");
 //append another OSCMessage, this time chaining 'add' calls
 bundle.add("/b").add("some more data").add("even more data");
+//or with its data in one call
+bundle.add("/c", 1, 2.0f, "three");
 ```
 
 Now send the OSCBundle over SLIPSerial
@@ -413,7 +421,8 @@ boards on a bench and runs before releases, not in CI:
   Arduino toolchain needed. `make` to run it, `make asan` for AddressSanitizer
   and UBSan. It checks the bytes on the wire against an OSC 1.0 decoder written
   from the spec that shares no code with the library, then fuzzes both decoders
-  with 150000 rounds of malformed input.
+  with 150000 rounds of malformed input. It also fails if the library stops
+  being standard C++11, the floor set by the Arduino Due's GCC 4.8.3.
 * `test/hardware` — probes that talk to a board over USB and check that a real
   one answers: byte-exact echo, integer widths, and SLIP burst framing.
 
@@ -467,6 +476,13 @@ We welcome and appreciate your contributions and feedback.
 
 # New in this release
 ESPxx, M0, PIC32
+
+Messages in one call: `OSCMessage msg("/xy", x, y)`, `msg.add(a, b, c)` and
+`bundle.add("/xy", x, y)`, each argument typed as a single `add()` types it; a
+`uint8_t *` and its length make a blob anywhere in the list. **Source-breaking
+on purpose:** a pointer that is neither a string nor a blob with its length no
+longer compiles. Passed on its own, such a pointer used to compile and send `T`.
+See [API.md](./API.md).
 
 First firmware for non-Arduino runtimes: MicroPython (BBC micro:bit) and
 CircuitPython (Adafruit boards) speak the library's SLIP/OSC serial contract

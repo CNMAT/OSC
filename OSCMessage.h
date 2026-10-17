@@ -104,6 +104,9 @@ private:
 	//makes room for one more entry in the data array, doubling when full
 	bool reserveOneMore();
 
+	//appends one blob: the body of every blob add()
+	OSCMessage& addBlob(uint8_t * blob, int length);
+
 	//compares the OSCData's type char to a test char
 	bool testType(int position, char type);
 
@@ -125,8 +128,12 @@ public:
     //placeholder since it's invalid OSC
 	OSCMessage();
 
-	//can optionally accept all of the data after the address
-	//OSCMessage(const char * _address, char * types, ... );
+	//can accept all of the data after the address, each argument typed as
+	//add() types it: OSCMessage msg("/xy", x, y);
+	template <typename T, typename... Rest>
+	OSCMessage (const char * _address, T first, Rest... rest) : OSCMessage(_address){
+		add(first, rest...);
+	}
     //created from another OSCMessage
     OSCMessage (OSCMessage *);
 
@@ -168,24 +175,26 @@ public:
 		return *this;
 	}
 
-    //blob specific add
-    OSCMessage& add(uint8_t * blob, int length){
-		//make a piece of data
-		OSCData * d = new OSCData(blob, length);
-		//check if it has any errors
-		if (d->error == ALLOCFAILED){
-			error = ALLOCFAILED;
-		} else {
-			//room for one more, doubling rather than growing by one pointer
-			if (!reserveOneMore()){
-				error = ALLOCFAILED;
-				delete d;
-			} else {
-				data[dataCount] = d;
-				dataCount++;
-			}
-		}
-		return *this;
+	//several at once, each typed as add(x) types it:
+	//msg.add(1, 2.5f, "three") is msg.add(1).add(2.5f).add("three")
+	template <typename T, typename U, typename... Rest>
+	OSCMessage& add(T first, U second, Rest... rest){
+		add(first);
+		return add(second, rest...);
+	}
+
+    //a blob is a uint8_t * followed by its length, alone or anywhere in a
+    //list. The length is a template so these win over the list above whatever
+    //integer type it is: a plain int parameter loses to the list for a size_t
+    //or uint16_t length, and the pointer would go out as T.
+    template <typename N>
+    OSCMessage& add(uint8_t * blob, N length){
+		return addBlob(blob, length);
+	}
+    template <typename N, typename V, typename... Rest>
+    OSCMessage& add(uint8_t * blob, N length, V next, Rest... rest){
+		addBlob(blob, length);
+		return add(next, rest...);
 	}
 
 	//sets the data at a position

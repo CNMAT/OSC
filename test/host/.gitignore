@@ -10,3 +10,6 @@ fuzzbad
 sliptcp
 buffered
 *.dSYM/
+onecall
+mustfail.log
+.cxxflags

@@ -113,6 +113,12 @@ public:
     //add with nothing in it produces an invalid osc message
 	//copies an existing message into the bundle
 	OSCMessage & add(OSCMessage & msg);
+    //a new message and its data in one call; like add(address), it returns
+    //the message: bundle.add("/xy", x, y)
+    template <typename T, typename... Rest>
+    OSCMessage & add(const char * address, T first, Rest... rest){
+        return add(address).add(first, rest...);
+    }
     
     template <typename T>
     OSCBundle& setTimetag(T t){
