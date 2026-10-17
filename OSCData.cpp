@@ -133,6 +133,17 @@ OSCData::OSCData(double d){
 OSCData::OSCData(uint8_t * b, int len){
 	error = OSC_OK;
 	type = 'b';
+	//Refuse a length no OSC blob can have. For -1..-3 this allocated len + 4
+	//bytes, wrote the 4-byte size into them and then copied a negative count;
+	//from -4 down it allocated nothing yet reported OSC_OK, so send() emitted
+	//a 'b' with no size, or crashed. Above INT_MAX - 4, len + 4 overflowed.
+	//A refused datum owns nothing, and add() and set() drop it.
+	if (len < 0 || len > INT_MAX - 4){
+		error = INVALID_OSC;
+		bytes = 0;
+		data.b = NULL;
+		return;
+	}
 	bytes = len + 4;
 	//add the size to the front of the blob
 	uint32_t len32 = (uint32_t) len;

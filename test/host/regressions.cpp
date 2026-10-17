@@ -5,6 +5,7 @@
 // Build and run with `make` in this directory.
 
 #include "OSCBundle.h"
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -301,6 +302,51 @@ static void blobSetKeepsTheRest() {
           !m.hasError() && m.size() == 4 && m.getType(3) == 'b');
 }
 
+// ---------------------------------------------------------------------------
+// The blob constructor took any length. For -1..-3 it allocated len + 4 bytes,
+// wrote the 4-byte size into them (ASan: heap-buffer-overflow) and then copied
+// a negative count, which crashes any build. From -4 down it allocated nothing
+// yet reported OSC_OK: -4 sent a 'b' with no size and -5 crashed send().
+// INT_MAX overflowed len + 4. Every integer type reaches it through
+// add(blob, N). It is now refused like an allocation failure: INVALID_OSC,
+// nothing stored, nothing sent, and set() keeps the blob it would replace.
+// ---------------------------------------------------------------------------
+static void blobNegativeLength() {
+    printf("blob with a negative length\n");
+    uint8_t bl[4] = {1, 2, 3, 4};
+    { OSCMessage m("/n"); m.add((int32_t)7).add(bl, -1);
+      Cap c; m.send(c);
+      check("add(blob, -1) is INVALID_OSC, stores and sends nothing",
+            m.getError() == INVALID_OSC && m.size() == 1 && c.n == 0);
+      OSCMessage copy(m); Cap c2; copy.send(c2);
+      check("and neither does a copy", copy.hasError() && c2.n == 0); }
+    { OSCMessage m("/n"); m.add(bl, -4); Cap c; m.send(c);
+      check("add(blob, -4) does not send a 'b' with no size",
+            m.getError() == INVALID_OSC && m.size() == 0 && c.n == 0); }
+    { OSCMessage m("/n"); m.add(bl, -5); Cap c; m.send(c);
+      check("add(blob, -5) does not crash send()",
+            m.getError() == INVALID_OSC && c.n == 0); }
+    { OSCMessage m("/n"); m.add(bl, INT_MAX);
+      check("add(blob, INT_MAX) is refused, not overflowed",
+            m.getError() == INVALID_OSC && m.size() == 0); }
+    { OSCMessage a("/n"), b("/n"), c("/n"), d("/n");
+      a.add(bl, (int8_t)-1); b.add(bl, (long)-1); c.add(bl, (int64_t)-1);
+      d.add(bl, (uint32_t)0xFFFFFFFFu);
+      check("int8_t, long, int64_t and uint32_t lengths too",
+            a.getError() == INVALID_OSC && b.getError() == INVALID_OSC &&
+            c.getError() == INVALID_OSC && d.getError() == INVALID_OSC &&
+            a.size() + b.size() + c.size() + d.size() == 0); }
+    { OSCMessage m("/n", (int32_t)1, bl, -1, (int32_t)2);
+      check("in a one-call list the others are still added",
+            m.getError() == INVALID_OSC && m.size() == 2); }
+    { OSCMessage m("/n"); m.add(bl, 4); m.set(0, bl, -1);
+      uint8_t got[4] = {0};
+      check("set(0, blob, -1) keeps the old blob",
+            m.getError() == INVALID_OSC && m.size() == 1 &&
+            m.getOSCData(0)->getBlob(got, sizeof got) == 4 &&
+            memcmp(got, bl, 4) == 0); }
+}
+
 int main() {
     zeroByteTypesDecode();
     paddingAfterZeroByteType();
@@ -312,6 +358,7 @@ int main() {
     defaultBundleTimetag();
     blobSetNegativePosition();
     blobSetKeepsTheRest();
+    blobNegativeLength();
     printf("\n%s\n", failures ? "FAILURES" : "all regression tests passed");
     return failures ? 1 : 0;
 }

@@ -166,9 +166,13 @@ bool OSCMessage::reserveOneMore(){
 OSCMessage& OSCMessage::addBlob(uint8_t * blob, int length){
 	//make a piece of data
 	OSCData * d = new OSCData(blob, length);
-	//check if it has any errors
-	if (d->error == ALLOCFAILED){
-		error = ALLOCFAILED;
+	//any error, not only ALLOCFAILED: a negative length comes back INVALID_OSC.
+	//Stored, it went out malformed from any copy of this message, because
+	//copying resets a datum's error. A failed datum owns nothing, so it is
+	//deleted rather than leaked.
+	if (d->error != OSC_OK){
+		error = d->error;
+		delete d;
 	} else {
 		//room for one more, doubling rather than growing by one pointer
 		if (!reserveOneMore()){

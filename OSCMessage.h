@@ -234,8 +234,9 @@ public:
 			OSCData * newDatum = new OSCData(blob, length);
 			if (newDatum == NULL){
 				error = ALLOCFAILED;
-			} else if (newDatum->error == ALLOCFAILED){
-				error = ALLOCFAILED;
+			} else if (newDatum->error != OSC_OK){
+				//ALLOCFAILED, or INVALID_OSC for a bad length: see addBlob()
+				error = newDatum->error;
 				delete newDatum;
 			} else {
 				delete data[position];
