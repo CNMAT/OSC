@@ -37,7 +37,11 @@ Peak bytes were unchanged except the 200-byte blob, where doubling overshoots:
 what `set()` leaves behind: `ALLOCFAILED` reported and the old datum still in
 place, with nothing read after it was freed and nothing freed twice or freed
 uninitialized. It includes `OSCData.cpp` with `malloc` redirected, so it builds
-in one line and leaves no object file for `bench`'s `*.o` to pick up:
+in one line and leaves no object file for `bench`'s `*.o` to pick up.
+
+`make asan` in `test/host` builds and runs it as the `setfail` suite, through a
+rule of its own in `../Makefile`, since it links every library source but
+`OSCData.cpp`. Built by hand:
 
 ```sh
 cd test/host/alloc
@@ -49,6 +53,3 @@ Build it with the sanitizers. At c72084d all four cases failed under ASan: two
 use-after-frees, one of them inside `fill()` on a received blob, and two SEGVs
 in `free()`. Without ASan three of the four passed, because the freed or
 uninitialized memory happened to hold something harmless.
-
-Not part of `make asan`, because it compiles `OSCData.cpp` differently from
-every other suite and so needs its own rule in `../Makefile`.

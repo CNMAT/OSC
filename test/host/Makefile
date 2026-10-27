@@ -37,6 +37,10 @@
 #   onecall      msg.add(a, b, ...), OSCMessage("/x", a, b, ...) and
 #                bundle.add("/x", a, b, ...) must send exactly the bytes of the
 #                chained single add() calls, blobs included at every length type.
+#   setfail      alloc/setfail.cpp makes one of OSCData's payload mallocs return
+#                NULL and checks what set() leaves behind. Only meaningful under
+#                `make asan`: without it, three of its four cases passed against
+#                the code they were written to catch.
 #   mustfail     calls that must not compile -- a blob without its length, a
 #                const blob, any other pointer -- each refused with the guard's
 #                own message, not merely refused.
@@ -77,7 +81,12 @@ asan: run
 $(TESTS): %: %.cpp $(SRC) $(HDRS) .cxxflags
 	$(CXX) $(CXXFLAGS) -w $< $(SRC) -o $@
 
-run: $(TESTS) mustfail std11
+# setfail.cpp #includes OSCData.cpp with malloc redirected, so it links every
+# other source but that one
+alloc/setfail: alloc/setfail.cpp $(SRC) $(HDRS) .cxxflags
+	$(CXX) $(CXXFLAGS) -w $< $(filter-out $(LIB)/OSCData.cpp,$(SRC)) -o $@
+
+run: $(TESTS) alloc/setfail mustfail std11
 	@echo "== vectors (vs independent decoder)"; set -o pipefail; ./vectors | python3 oracle.py | tail -2
 	@echo "== roundtrip";   set -o pipefail; ./roundtrip   | tail -2
 	@echo "== regressions"; set -o pipefail; ./regressions | tail -2
@@ -89,6 +98,7 @@ run: $(TESTS) mustfail std11
 	@echo "== sliptcp";    set -o pipefail; ./sliptcp    | tail -1
 	@echo "== buffered";   set -o pipefail; ./buffered   | tail -1
 	@echo "== onecall";    set -o pipefail; ./onecall    | tail -1
+	@echo "== setfail";    set -o pipefail; ./alloc/setfail | tail -1
 	@echo "== fuzzbad";    set -o pipefail; ASAN_OPTIONS=allocator_may_return_null=1 ./fuzzbad | tail -1
 
 # no case selected must compile; each case must fail, and with the guard's message
@@ -111,4 +121,4 @@ std11: $(SRC) onecall.cpp $(HDRS)
 	  | grep -E "error" ; test $${PIPESTATUS[0]} -eq 0 && echo "  library and one-call templates are standard C++11"
 
 clean:
-	rm -rf $(TESTS) *.dSYM mustfail.log .cxxflags
+	rm -rf $(TESTS) alloc/setfail *.dSYM mustfail.log .cxxflags

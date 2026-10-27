@@ -98,7 +98,8 @@ than adding 16, which is what the large-blob case needed.
 | 1 blob, 200 B | 18 | 5 |
 
 `alloc/` holds the counter used to measure that, and `setfail`, which makes
-allocations fail on purpose to check what `set()` leaves behind; see its README.
+allocations fail on purpose to check what `set()` leaves behind; `make asan`
+runs it, and its README says how it works.
 
 ## Adding a test
 
