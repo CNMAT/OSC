@@ -80,6 +80,17 @@
   .warn { color: var(--err); }
   .note { color: var(--dim); font-size: 12px; }
   a { color: var(--accent); }
+  .params h2 { font-size: 15px; margin: 0 0 4px; font-weight: 600; }
+  .params .param { border-top: 1px solid var(--line); padding: 10px 0 8px; }
+  .params .param h3 { font-size: 14px; margin: 0 0 4px; font-weight: 600; }
+  .params .param h3 code { color: var(--accent); }
+  .params .param h3 span { color: var(--dim); font-weight: 400; font-size: 12.5px; margin-left: 8px; }
+  .params p { margin: 4px 0; max-width: 78ch; }
+  .params .measured { color: var(--ok); font-size: 13px; }
+  .params .measured b { font-weight: 600; }
+  .params q { font-style: italic; }
+  .params ul.src { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+  .params ul.src li { margin: 3px 0; }
 </style>
 </head>
 <body>
@@ -222,24 +233,24 @@
       </select>
     </div>
     <div class="cfg">
-      <div><label>oversample (samples)</label>
+      <div title="Samples summed into one reading; /cap is the sum divided by this, so the scale stays put and a scan takes longer"><label>oversample (samples)</label>
         <select id="p-oversample">
           <option>1</option><option>2</option><option>4</option><option>8</option>
           <option>16</option><option>32</option><option>64</option>
         </select></div>
-      <div><label>series resistor (kΩ)</label>
+      <div title="Internal resistor in series with the pad; Microchip's sources disagree about what it does in self-capacitance mode (see below)"><label>series resistor (kΩ)</label>
         <select id="p-resistor"><option>0</option><option>20</option><option>50</option><option>100</option></select></div>
       <div><label>frequency mode</label>
         <select id="p-freq" title="FreeTouch 1.1.3 writes the same registers for 1, 2 and 3">
           <option value="0">0 none</option><option value="1">1 hop</option>
           <option value="2">2 spread</option><option value="3">3 spread-median</option>
         </select></div>
-      <div><label>hop (1..16)</label>
+      <div title="Delay in PTC clock cycles between measurements, which sets the acquisition frequency; written only when frequency mode is not 0"><label>hop (1..16)</label>
         <input type="number" id="p-hop" min="1" max="16" value="1"></div>
-      <div><label>compcap (0..16383)</label>
+      <div title="Compensation capacitor code; on this board a lower value gave a higher count on every pad"><label>compcap (0..16383)</label>
         <div class="pair"><input type="range" id="r-compcap" min="0" max="16383" value="8192">
           <input type="number" id="p-compcap" min="0" max="16383" value="8192"></div></div>
-      <div><label>intcap (0..63)</label>
+      <div title="FreeTouch's integration-capacitor register; 10 or 20 drove a pad's reading to 0 on this board"><label>intcap (0..63)</label>
         <div class="pair"><input type="range" id="r-intcap" min="0" max="63" value="63">
           <input type="number" id="p-intcap" min="0" max="63" value="63"></div></div>
     </div>
@@ -248,6 +259,124 @@
       <table class="vals" id="cfgTable"><thead></thead><tbody></tbody></table>
     </div>
     <div class="note" style="margin-top:6px">Values in orange differ from the sketch's defaults.</div>
+  </div>
+
+  <!-- What each set-up parameter does. Three kinds of statement, kept apart:
+       quoted from a source listed at the end (in quotation marks), read in the
+       FreeTouch 1.1.3 source (said so), and measured on one XIAO SAMD21 on
+       2026-10-28 with test/hardware/capsetupprobe.py (green, "Measured here",
+       means of 5 readings). Nothing here was measured against a noise source. -->
+  <div class="panel params" id="paramHelp">
+    <h2>What the set-up parameters do</h2>
+    <p class="note">FreeTouch measures self-capacitance: each pad is one PTC Y line, measured on its own.
+      The register names are FreeTouch's. The Microchip names beside them are matched by name and value
+      range from Microchip's own touch libraries, listed at the end.</p>
+
+    <div class="param">
+      <h3><code>oversample</code><span>1 2 4 8 16 32 64 samples · default 4</span></h3>
+      <p>How many conversions the PTC sums into one reading: FreeTouch's <code>oversample</code>, written to
+        CONVCTRL.ADCACCUM. QTouch 5.0.1 calls it the filter level (<code>FILTER_LEVEL_1</code> to
+        <code>FILTER_LEVEL_64</code>); the QTouch Modular Library calls it the <q>Accumulator setting</q>.
+        The sketch divides the sum by the count, as FreeTouch's <code>measure()</code> does, so
+        <code>/cap</code> stays on the same scale at every setting.</p>
+      <p class="measured"><b>Measured here:</b> one scan of all seven pads took 249 µs at 1, 413 µs at 4,
+        1038 µs at 16 and 3556 µs at 64. Resting readings stayed within 3 counts across the four settings.
+        Its effect on noise was not established by these runs.</p>
+    </div>
+
+    <div class="param">
+      <h3><code>resistor</code><span>0 20 50 100 kΩ · default 50</span></h3>
+      <p>An internal resistor in series with the pad: FreeTouch's <code>seriesres</code>, written to
+        SERRES.RESISTOR; QTouch's <code>RSEL_VAL_0</code> to <code>RSEL_VAL_100</code>. Microchip's
+        sources disagree about self-capacitance mode, which is the mode FreeTouch uses. QTouch 5.0.1:
+        <q>For Self cap mode, thes series resistor is switched internally on the Sensor pin.</q> The
+        QTouch Modular SAMD21 header: <q>PTC series resistor setting, only works in mutual capacitance
+        mode</q>. The Modular Library guide's known issues: <q>When PTC is used in Self-Capacitance mode,
+        the internal series resistor is not effective in reducing noise.</q></p>
+      <p class="measured"><b>Measured here:</b> against 50 kΩ, 100 kΩ lowered D0 by 28 counts and D1 by 5,
+        and raised the other five pads by 2 to 4. At 0, 20 and 50 kΩ every pad read within 4 counts of
+        itself. So it is in the circuit on this board; whether it reduces noise was not measured.</p>
+    </div>
+
+    <div class="param">
+      <h3><code>freq</code><span>0 none · 1 hop · 2 spread · 3 spread-median · default 0</span></h3>
+      <p>Noise countermeasures, named after QTouch 5.0.1's frequency modes: <q>No Frequency hopping</q>,
+        <q>Frequency hopping is enabled</q>, spread spectrum <q>with median filter disabled</q> and
+        <q>with median filter enabled</q>. The Modular Library describes spread as one that
+        <q>automatically sweeps through all 15 delay values during the series of measurements</q>.
+        FreeTouch 1.1.3 does not implement four modes. Read in its source: for any value other than 0 it
+        sets FREQCTRL.FREQSPREADEN to 1 and SAMPLEDELAY to <code>hop</code> − 1, so 1, 2 and 3 behave
+        the same here. Which of QTouch's behaviours that produces was not measured.</p>
+      <p class="measured"><b>Measured here:</b> at rest, 1 against 0 changed no pad by more than 2 counts.
+        It was not tried against a noise source, which is what it is for.</p>
+    </div>
+
+    <div class="param">
+      <h3><code>hop</code><span>1..16 · default 1</span></h3>
+      <p>The acquisition frequency delay: FreeTouch's <code>hops</code>, written to FREQCTRL.SAMPLEDELAY
+        as <code>hop</code> − 1, and only when <code>freq</code> is not 0. QTouch 5.0.1: the setting
+        <q>inserts "n" PTC clock cycles between consecutive measurements on a given sensor, thereby
+        changing the PTC acquisition frequency</q>, so a <q>higher delay setting will increase the total
+        time taken for capacitance measurement</q>. And: <q>A desired setting can be used to avoid noise
+        around the same frequency as the acquisition frequency.</q></p>
+      <p class="measured"><b>Measured here:</b> only that it is echoed. Its effect on readings and on scan
+        time was not measured.</p>
+    </div>
+
+    <div class="param">
+      <h3><code>compcap</code><span>0..16383 · default 8192 (0x2000)</span></h3>
+      <p>The compensation capacitor code: FreeTouch's <code>compcap</code>, 14 bits written to
+        COMPCAPH:COMPCAPL. Microchip's libraries set this for each sensor by calibration. The Modular
+        Library keeps a per-node <code>node_comp_caps</code>, found in a <q>CC Calibration</q> state that
+        flags <q>CAL ERROR - Max comp cap</q> when it runs out of range. FreeTouch instead starts every pad
+        at the same 0x2000. No source opened here gives its value in picofarads.</p>
+      <p class="measured"><b>Measured here:</b> 4000 in place of 8192 raised every pad by 82 to 87 counts.
+        A lower value gave a higher count on every pad.</p>
+    </div>
+
+    <div class="param">
+      <h3><code>intcap</code><span>0..63 · default 63</span></h3>
+      <p>FreeTouch's name for a 6-bit register (INTCAP, its "Int Cap reg"), which FreeTouch sets to 63
+        and never changes. None of the Microchip sources opened here names it. Their APIs expose an
+        analog gain per sensor instead (QTouch 5.0.1 <code>GAIN_1</code> to <code>GAIN_32</code>; the
+        Modular Library <code>GAIN_1</code> to <code>GAIN_16</code>, packed with a digital gain), and
+        neither says which register implements it. Treat "integration capacitor" as FreeTouch's
+        label, unconfirmed.</p>
+      <p class="measured"><b>Measured here:</b> 10 and 20 on one pad each drove its reading to 0, and the
+        other pads did not move. The default 63 gives the resting counts on the panel above.</p>
+    </div>
+
+    <div class="param">
+      <h3>Not settable here</h3>
+      <p>The PTC clock prescaler (QTouch <code>PRSC_DIV_SEL_1</code> to <code>PRSC_DIV_SEL_8</code>,
+        which <q>sets PTC Clock to 4MHz</q> down to 500 kHz from a 4 MHz input). Read in FreeTouch's
+        source: <code>begin()</code> clears bits in the register its debug printer labels
+        "Prescaler" (0x42004C04) and nothing writes it again.</p>
+    </div>
+
+    <div class="param">
+      <h3>Sources, opened 2026-10-28</h3>
+      <ul class="src">
+        <li><a href="https://github.com/adafruit/Adafruit_FreeTouch">Adafruit FreeTouch</a>: the library
+          source (version 1.1.3 was read), for what each parameter writes.</li>
+        <li><a href="https://github.com/avrxml/asf/blob/master/thirdparty/qtouch/devspecific/sam0/samd/include/touch_api_SAMD.h">Atmel QTouch Library 5.0.1, <code>touch_api_SAMD.h</code></a>,
+          in a third-party mirror of Atmel's ASF: the documented enums for filter level, gain, series
+          resistor, frequency mode, frequency delay and prescaler.</li>
+        <li><a href="https://github.com/Microchip-MPLAB-Harmony/touch/blob/master/src/qtm_acq_samd21_0x0024_api.h">Microchip QTouch Modular Library, SAMD21 acquisition API</a>:
+          the accumulator, analog and digital gain, series resistor and spread settings.</li>
+        <li><a href="https://github.com/Microchip-MPLAB-Harmony/touch/blob/master/src/qtm_common_components_api.h">The same library's common components</a>:
+          compensation-capacitor calibration (<code>node_comp_caps</code>).</li>
+        <li><a href="https://onlinedocs.microchip.com/oxy/GUID-7EC2A1B7-D9CD-4812-9F14-AE4A958E4C2F-en-US-8/GUID-61CAD905-603D-441B-BC6C-46C385F17C56.html">QTouch Modular Library PTC User's Guide, §19 Known Issues</a>:
+          the series resistor in self-capacitance mode.</li>
+        <li><a href="https://github.com/Seeed-Studio/OSHW-XIAO-Series/blob/deb2f88e735a01dbd195b6e2659c157431a5fc20/pinout/XIAO_SAMD21_front_pinout.png">Seeed's XIAO SAMD21 front pinout</a>:
+          which pin carries which PTC Y line.</li>
+      </ul>
+      <p class="note">Not opened: Microchip's Developer Help PTC pages
+        (<a href="https://developerhelp.microchip.com/xwiki/bin/view/applications/touch/ptc/">developerhelp.microchip.com/…/touch/ptc</a>)
+        and the Atmel-42195 QTouch Library PTC User Guide. Both were unreachable from the machine this page
+        was written on (2026-10-28: timeouts, and "Access Denied" for the PDF), so nothing above is taken
+        from them.</p>
+    </div>
   </div>
 
   <div class="panel">
