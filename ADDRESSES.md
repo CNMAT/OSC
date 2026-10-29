@@ -84,7 +84,7 @@ after the name tell the page the shape.
 | **bat** — battery | `<i>` count (default 1) | `/bat` | `/bat <i>…` millivolts, one per pack |
 | **chg** — charger | — | `/chg [<i>]` set mA | `/chg <i> <i>` charging?, mA (-1 = untouched default) |
 | **touch** — touchscreen | `<i> <i>` width height | `/touch/map <i> <i> <i>` swapXY mirrorX mirrorY | `/touch <i> <i> [<i>]` x y [gesture], streamed while down |
-| **cap** — capacitive touch pads | `<i>` count | `/cap` | `/cap <i>…` one reading per pad |
+| **cap** — capacitive touch pads | `<i>` count | `/cap`; on a board with acquisition set-up (below): `/cap/<p> [<i> \| <i>…]` one value for every pad, one per pad, or none to ask; `/cap/<n>/<p> <i>` pad n only; `/cap/pins`; `/cap/config`; `/cap/defaults` | `/cap <i>…` one reading per pad; `/cap/<p> <i>…` every pad's setting, echoed after any set-up request; `/cap/pins <i>…` each pad's Arduino pin; `/cap/config` and `/cap/defaults` answer every `/cap/<p>` then `/cap/pins` |
 | **joy** — joystick(s) | `<i>` axes | `/joy` | `/joy <i>…` axes |
 | **pot** — potentiometer / slider | `<i>` count | `/pot` | `/pot <i>…` |
 | **enc** — rotary encoder | — | `/enc`; `/enc/zero` | `/enc <i> <i>` position, delta |
@@ -97,6 +97,27 @@ after the name tell the page the shape.
 | **ir** — an infrared remote receiver | — | `/ir` the last code | `/ir <i>` the raw 32-bit code, sent once when a code arrives |
 | **net** — a network transport | `<s> <i> <i> [<s> <s>]` ip, rssi, port, then name and mac on a board that has a name (the WiFi twins send the first three). Sent in the enq bundle, so `/enq` to the network's broadcast address finds every board | `/display/net` show the network panel on the display; `/net/dest <s> [<i>]` where the stream goes, ip and port, `"0.0.0.0"` = whoever last spoke; `/net/name <s>`; `/net/save` write the settings; `/net/join <s> [<s>]` ssid, password: save and restart onto that network; `/net/setup` restart onto the board's own setup network; `/net/forget` factory settings | `/net/dest <s> <i>` and `/net/name <s>` echoed |
 | **diag** — a board's own diagnostics | — | — | `/diag <s>…` free text, never parsed. Announced by `/enq/diag` like anything else |
+
+### cap set-up
+
+Where a board's pads have acquisition settings a client may change, they sit
+under `/cap/<p>`, in the order below, as `/mic/gain` and `/touch/map` sit under
+their capabilities. The parameters are those of a SAMD21's PTC as Adafruit
+FreeTouch drives it (`XiaoSamd21Oscuino`); a board whose pads have no set-up,
+the Circuit Playground's among them, answers none of these. A value outside
+its set changes nothing, and the echo then shows what is still in force.
+
+| `<p>` | values | the PTC setting |
+|---|---|---|
+| `oversample` | 1 2 4 8 16 32 64 | samples accumulated per reading; `/cap` stays on one scale, the sum divided by this |
+| `resistor` | 0 20 50 100 | series resistor, kΩ |
+| `freq` | 0 none, 1 hop, 2 spread, 3 spread-median | frequency mode |
+| `hop` | 1..16 | sample delay, written as hop − 1 when `freq` is not 0 |
+| `compcap` | 0..16383 | compensation capacitor code |
+| `intcap` | 0..63 | integration capacitor code |
+
+`<n>` is the pad's index in `/cap`, so `/cap/3/intcap 10` sets the fourth
+reading's pad. Incoming OSC patterns apply: `/cap/[0-1]/hop 5` sets two pads.
 
 ## What moved
 

@@ -92,7 +92,10 @@ below, which started it):
 Both are hand-written rather than generated from `extras/webserial`, so `make
 check` does not see them. The Circuit Playground pair has its own test instead,
 pinning the sketch and the page to the same capability messages; `make test` in
-`extras/webserial` runs it.
+`extras/webserial` runs it. So does `XiaoSamd21Oscuino`, the XIAO SAMD21's seven
+FreeTouch pads with their acquisition set-up under `/cap/<param>`
+([ADDRESSES.md](ADDRESSES.md), "cap set-up"), drawn on a skeuomorphic panel
+over a photograph of the board.
 
 ## One address space
 
