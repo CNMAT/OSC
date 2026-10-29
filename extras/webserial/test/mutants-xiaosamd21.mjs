@@ -15,22 +15,51 @@ const FILES = ["ADDRESSES.md",
                "examples/XiaoSamd21Oscuino/XiaoSamd21Oscuino.ino",
                "examples/XiaoSamd21Oscuino/XiaoSamd21Oscuino.html",
                "extras/webserial/test/test-xiaosamd21-contract.mjs",
-               "extras/webserial/test/xiaosamd21-2026-10-28.slip"];
+               "extras/webserial/test/xiaosamd21-2026-10-29.slip"];
 const INO = FILES[1], HTML = FILES[2], SLIP = FILES[4];
 
 const MUTANTS = [
+  // 1. the libraries
+  ["page LIBS renames a library", HTML,
+   'const LIBS = ["FreeTouch", "FastTouch", "CapacitiveSensor"];',
+   'const LIBS = ["FreeTouch", "Fasttouch", "CapacitiveSensor"];'],
+  ["ADDRESSES.md stops naming FastTouch", "ADDRESSES.md", "`FastTouch` (the pin's", "FastTouch (the pin's"],
+  // 2. the parameters
   ["page PARAMS loses hop", HTML, '"freq", "hop", "compcap"', '"freq", "compcap"'],
   ["sketch renames intcap", INO, '"/cap/intcap"', '"/cap/intcapx"'],
+  ["sketch gives timeout to FreeTouch", INO,
+   "  LIB_CAPSENSE, LIB_CAPSENSE\n};", "  LIB_CAPSENSE, LIB_FREETOUCH\n};"],
   ["ADDRESSES.md reorders compcap and intcap", "ADDRESSES.md",
-   "| `compcap` | 0..16383 | compensation capacitor code |\n| `intcap` | 0..63 | integration capacitor code |",
-   "| `intcap` | 0..63 | integration capacitor code |\n| `compcap` | 0..16383 | compensation capacitor code |"],
-  ["sketch header drops the hop row", INO, " *   hop         1..16", " *   (hop)       1..16"],
-  ["page DEFAULTS compcap drifts", HTML, "compcap: 8192, intcap: 63 }", "compcap: 8000, intcap: 63 }"],
+   "| `compcap` | FreeTouch | 0..16383 | compensation capacitor code |\n| `intcap` | FreeTouch | 0..63 | integration capacitor code |",
+   "| `intcap` | FreeTouch | 0..63 | integration capacitor code |\n| `compcap` | FreeTouch | 0..16383 | compensation capacitor code |"],
+  ["sketch header drops the hop row", INO, " *   hop         FreeTouch", " *   (hop)       FreeTouch"],
   ["sketch dispatches /cap by exact match", INO,
    'bundleIN.route("/cap",          routeCap);', 'bundleIN.dispatch("/cap",       askOnly);'],
-  ["page loses D9's fader", HTML, '["D9",    9, "R", 332.5, 385.0, 3]', '["D9",    9, "R", 332.5, 385.0, null]'],
-  ["page encodes ints as floats", HTML, 'ostr("," + "i".repeat(ints.length))', 'ostr("," + "f".repeat(ints.length))'],
+  // 3. the capture
   ["capture truncated", SLIP, null, null],
+  // 4. the defaults
+  ["page DEFAULTS compcap drifts", HTML, "compcap: 8192, intcap: 63 }", "compcap: 8000, intcap: 63 }"],
+  ["page DEFAULTS samples drifts", HTML, "{ samples: 30, timeout: 2000 }", "{ samples: 20, timeout: 2000 }"],
+  // 5. the drawing
+  ["page loses D9's fader", HTML, '["D9",    9, "R", 332.5, 385.0, 3]', '["D9",    9, "R", 332.5, 385.0, null]'],
+  // 6. outbound bytes
+  ["page encodes ints as floats", HTML, '"s" : "i").join("")', '"s" : "f").join("")'],
+  ["page tags strings as ints", HTML, 'typeof v === "string" ? "s" : "i"', 'typeof v === "string" ? "i" : "i"'],
+  // 7. what the page asks
+  ["page asks /cap/pins after a hello", HTML,
+   '  // come back together in one bundle, the library first.\n  if (writer) send("/cap/config", []);',
+   '  // come back together in one bundle, the library first.\n  if (writer) send("/cap/pins", []);'],
+  ["page asks again on every /cap/lib", HTML,
+   "  foreignLib = null;\n  setLib(name);\n}", '  foreignLib = null;\n  setLib(name);\n  if (writer) send("/cap/config", []);\n}'],
+  ["page takes an unknown library for the one showing", HTML,
+   "  if (!LIBS.includes(name)) {\n    if (name !== foreignLib)", "  if (false) {\n    if (name !== foreignLib)"],
+  ["page draws a /cap of any length", HTML,
+   "  if (!pins || pins.length !== values.length) {", "  if (!pins) {"],
+  ["page holds a port that would not open", HTML,
+   "  const chosen = await navigator.serial.requestPort(opts);",
+   "  const chosen = port = await navigator.serial.requestPort(opts);"],
+  ["page lets go on any port's disconnect", HTML,
+   "if (port && e.target === port) disconnect();", "if (port) disconnect();"],
 ];
 
 function copyTree(dir) {
@@ -55,11 +84,11 @@ for (const [name, file, from, to] of MUTANTS) {
   const p = join(dir, file);
   if (from === null) {
     const b = readFileSync(p);
-    writeFileSync(p, b.subarray(0, b.length - 300));
+    writeFileSync(p, b.subarray(0, Math.floor(b.length / 2)));
   } else {
     const s = readFileSync(p, "utf8");
     const n = s.split(from).length - 1;
-    if (n !== 1) { console.log(`FAIL  ${name}: mutation site found ${n} times, not once`); bad++; continue; }
+    if (n !== 1) { console.log(`FAIL  ${name}: mutation site found ${n} times, not once`); bad++; rmSync(dir, { recursive: true }); continue; }
     writeFileSync(p, s.replace(from, to));
   }
   const r = run(dir);

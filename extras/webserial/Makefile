@@ -15,8 +15,9 @@
 # they cover hand-written sketch-and-page pairs, which `make check` cannot see
 # at all because they are not generated from boards.json. The first checks that
 # CircuitPlaygroundSensors and its page agree about the shape of the stream; the
-# second that XiaoSamd21Oscuino, its page and ADDRESSES.md name the same /cap
-# set-up parameters, and that the page decodes bytes captured from the board.
+# second that XiaoSamd21Oscuino, its page and ADDRESSES.md name the same touch
+# libraries and /cap set-up parameters, and that the page decodes bytes
+# captured from the board through all three libraries.
 # test/mutants-xiaosamd21.mjs grades the second by mutation; run it by hand.
 
 NODE = node

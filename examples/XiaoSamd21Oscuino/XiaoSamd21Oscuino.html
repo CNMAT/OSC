@@ -13,10 +13,13 @@
   its bootloader 0x2886/0x002F (the core's boards.txt, and both seen on this
   machine 2026-10-28); tick "show all ports" for anything else.
 
-  The panel draws each PTC pad where it is on the board: a fader per pad that
-  sits at the pad's /cap count, a readout of the number, and a lamp that lights
-  with the pad's rise above its own resting level. The pins without a Y line
-  are drawn and labelled, with nothing to show.
+  One tab per touch library the sketch can measure with. A tab sends
+  /cap/lib <name>, and the board's echo, not the click, decides which tab is
+  showing. For the library measuring, the panel draws a fader per pad, where
+  the pad is on the board, sitting at its /cap count, with a readout of the
+  number and a lamp that lights with the pad's rise above its own resting
+  level. Pins the library does not measure are drawn and labelled, with
+  nothing to show. ?demo animates synthetic counts, with no board.
 
   The photograph is Seeed Studio's, from github.com/Seeed-Studio/OSHW-XIAO-Series
   at commit deb2f88e, MIT licence; assets/LICENSE-Seeed-Studio-XIAO-SAMD21-photo.txt
@@ -28,9 +31,10 @@
 
   The codec, the SLIP framing, the Web Serial transport and PadBaseline are the
   ones in examples/CircuitPlaygroundSensors's page, kept as close to it as the
-  board allows. extras/webserial/test/test-xiaosamd21-contract.mjs holds PARAMS
-  and DEFAULTS below to the sketch and to ADDRESSES.md, and decodes bytes
-  captured from the board with this page's own codec.
+  board allows; the encoder here also writes strings, for /cap/lib.
+  extras/webserial/test/test-xiaosamd21-contract.mjs holds LIBS, PARAMS and
+  DEFAULTS below to the sketch and to ADDRESSES.md, and decodes bytes captured
+  from the board with this page's own codec.
 -->
 <html lang="en">
 <head>
@@ -62,6 +66,24 @@
   button.primary { background: var(--accent); color: #2a1300; border-color: var(--accent); font-weight: 600; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #555e6e; display: inline-block; }
   .dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+
+  /* The library tabs: brushed keys on the top edge of the panel. The lit lamp
+     marks the library the board says is measuring. */
+  .tabs { display: flex; gap: 6px; padding: 0 14px; position: relative; z-index: 1;
+          margin-bottom: -4px; flex-wrap: wrap; }
+  .tabs button { display: flex; align-items: center; gap: 9px; padding: 9px 16px 11px;
+          border: 1px solid #7d838b; border-bottom: none; border-radius: 10px 10px 0 0;
+          background: linear-gradient(#cfd4da, #aab0b8); color: #2b2f35; font-weight: 600;
+          box-shadow: inset 0 1px 0 #fff8; text-align: left; }
+  .tabs button span { display: block; font-size: 11px; font-weight: 500; color: #4c5159; }
+  .tabs button i { width: 10px; height: 10px; border-radius: 50%; flex: none;
+          background: radial-gradient(circle at 40% 35%, #6b3a2a, #2a120b); box-shadow: inset 0 1px 1px #000a; }
+  .tabs button[aria-selected="true"] { background: linear-gradient(#eef0f2, #c9ced4); color: #15171c;
+          padding-bottom: 14px; }
+  .tabs button[aria-selected="true"] i { background: radial-gradient(circle at 40% 35%, #fff2c8, #ffab3d 45%, #d1500d);
+          box-shadow: 0 0 8px #ff9a2a; }
+  .tabs button:hover:not(:disabled) { border-color: var(--accent); border-bottom: none; }
+
   #rig { width: 100%; height: auto; display: block; border-radius: 14px;
          box-shadow: 0 10px 30px rgba(0,0,0,.55); }
   #rig.stale .live { opacity: .35; }
@@ -70,6 +92,8 @@
   .cfg .pair { display: flex; gap: 8px; align-items: center; }
   .cfg input[type=range] { flex: 1; padding: 0; accent-color: var(--accent); }
   .cfg input[type=number] { width: 86px; }
+  .pinpick { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+  .pinpick label { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--text); }
   table.vals { border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; width: 100%; }
   table.vals th, table.vals td { padding: 3px 8px; border-bottom: 1px solid #2b303a; text-align: right; }
   table.vals th:first-child, table.vals td:first-child { text-align: left; color: var(--dim); }
@@ -91,14 +115,16 @@
   .params q { font-style: italic; }
   .params ul.src { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
   .params ul.src li { margin: 3px 0; }
+  .wiring { max-width: 520px; width: 100%; height: auto; display: block; margin: 8px 0; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>XIAO SAMD21 Touch</h1>
   <div class="sub">
-    Seven PTC self-capacitance pads (Adafruit FreeTouch) streamed as <code>/cap</code>,
-    with the acquisition set-up under <code>/cap/&lt;param&gt;</code>. Chrome or Edge, over Web Serial.
+    Three touch libraries on one XIAO SAMD21, one at a time, chosen live:
+    Adafruit FreeTouch, FastTouch and CapacitiveSensor. Each streams <code>/cap</code>, with
+    its set-up under <code>/cap/&lt;param&gt;</code>. Chrome or Edge, over Web Serial.
   </div>
 
   <div class="panel">
@@ -114,22 +140,47 @@
     </div>
   </div>
 
-  <!-- The instrument. Coordinates are the photograph's own pixels (768 x 629);
-       the panel extends past the photo on both sides to hold the faders. -->
-  <svg id="rig" class="stale" viewBox="-250 160 965 362" role="img"
-       aria-label="XIAO SAMD21 with one fader per touch pad">
+  <div class="tabs" id="tabs" role="tablist" aria-label="Touch library">
+    <button role="tab" data-lib="FreeTouch" aria-selected="true"><i></i><div>FreeTouch<span>the PTC · 7 pins</span></div></button>
+    <button role="tab" data-lib="FastTouch" aria-selected="false"><i></i><div>FastTouch<span>pull-up timing · 11 pins</span></div></button>
+    <button role="tab" data-lib="CapacitiveSensor" aria-selected="false"><i></i><div>CapacitiveSensor<span>send and receive · pins you wire</span></div></button>
+  </div>
+
+  <!-- The instrument. Coordinates are the photograph's own pixels (768 x 629):
+       the XIAO sits on a mini breadboard drawn to the photo's pin pitch, on a
+       bench that extends past it on both sides to hold the faders. -->
+  <svg id="rig" class="stale" viewBox="-330 55 1160 765" role="img"
+       aria-label="XIAO SAMD21 on a mini breadboard, with one fader per touch pad">
     <defs>
-      <linearGradient id="alu" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#e9ecef"/>
-        <stop offset=".45" stop-color="#c9ced4"/>
-        <stop offset="1" stop-color="#b3b9c0"/>
-      </linearGradient>
-      <!-- brushing: stretched noise, mostly horizontal -->
-      <filter id="brush" x="0" y="0" width="100%" height="100%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.003 0.75" numOctaves="2" seed="7"/>
-        <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .22 0"/>
+      <!-- the bench: a dark mat with a faint grain -->
+      <filter id="grain" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .05 0"/>
         <feComposite in2="SourceGraphic" operator="in"/>
       </filter>
+      <linearGradient id="board" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#f7f4ec"/>
+        <stop offset="1" stop-color="#e3ddcf"/>
+      </linearGradient>
+      <linearGradient id="trench" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#cfc8b8"/>
+        <stop offset=".5" stop-color="#e2dccd"/>
+        <stop offset="1" stop-color="#cfc8b8"/>
+      </linearGradient>
+      <linearGradient id="hole" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#1b1b1b"/>
+        <stop offset="1" stop-color="#4a4740"/>
+      </linearGradient>
+      <!-- the USB-C plug's overmould and strain relief: dark, lit from the left -->
+      <linearGradient id="plugGrad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#3a3e45"/>
+        <stop offset=".35" stop-color="#2a2d33"/>
+        <stop offset="1" stop-color="#16181b"/>
+      </linearGradient>
+      <linearGradient id="bootGrad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#33363c"/>
+        <stop offset="1" stop-color="#15171a"/>
+      </linearGradient>
       <filter id="drop" x="-20%" y="-20%" width="140%" height="150%">
         <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity=".45"/>
       </filter>
@@ -180,32 +231,44 @@
       </clipPath>
     </defs>
 
-    <!-- the aluminium panel -->
-    <rect x="-246" y="164" width="957" height="354" rx="14" fill="#5d636b"/>
-    <rect x="-244" y="165" width="953" height="351" rx="13" fill="url(#alu)"/>
-    <rect x="-244" y="165" width="953" height="351" rx="13" fill="#fff" filter="url(#brush)"/>
-    <rect x="-243" y="166" width="951" height="349" rx="12" fill="none" stroke="#fff" stroke-opacity=".6"/>
+    <!-- the bench -->
+    <rect x="-330" y="55" width="1160" height="765" fill="#22262d"/>
+    <rect x="-330" y="55" width="1160" height="765" fill="#fff" filter="url(#grain)"/>
 
-    <g id="screws"></g>
+    <!-- the mini breadboard, filled by script -->
+    <g id="breadboard"></g>
 
-    <!-- engraved legends -->
+    <!-- legends; the title names the library measuring -->
     <g font-family="system-ui,-apple-system,sans-serif" font-weight="600" letter-spacing=".08em">
-      <text x="-212" y="185" font-size="12" fill="#fff" fill-opacity=".7">XIAO SAMD21 · FREETOUCH PTC</text>
-      <text x="-212" y="184" font-size="12" fill="#3d4148">XIAO SAMD21 · FREETOUCH PTC</text>
-      <text x="680" y="185" font-size="11" fill="#fff" fill-opacity=".7" text-anchor="end">/cap · COUNTS</text>
-      <text x="680" y="184" font-size="11" fill="#3d4148" text-anchor="end">/cap · COUNTS</text>
+      <text x="-310" y="91" font-size="12" fill="#000" fill-opacity=".6">XIAO SAMD21</text>
+      <text x="-310" y="90" font-size="12" fill="#cfd4da">XIAO SAMD21</text>
+      <text id="titleHi" x="-310" y="109" font-size="10.5" fill="#000" fill-opacity=".6"></text>
+      <text id="titleLo" x="-310" y="108" font-size="10.5" fill="#9aa3af"></text>
+      <text x="810" y="91" font-size="11" fill="#000" fill-opacity=".6" text-anchor="end">/cap · COUNTS</text>
+      <text x="810" y="90" font-size="11" fill="#cfd4da" text-anchor="end">/cap · COUNTS</text>
     </g>
 
-    <!-- the board, mounted on the panel -->
+    <!-- the board, seated in the breadboard -->
     <g filter="url(#drop)">
       <image href="assets/Seeed-Studio-XIAO-SAMD21-768x629.jpg" x="0" y="0"
              width="768" height="629" clip-path="url(#boardClip)"/>
     </g>
 
+    <!-- a USB-C cable in the board's socket (x 175..293, top edge y 201),
+         leaving over the top of the bench -->
+    <g filter="url(#drop)">
+      <path d="M234 112 C 234 86, 246 68, 262 50" fill="none" stroke="#17191c" stroke-width="44" stroke-linecap="round"/>
+      <path d="M226 108 C 226 84, 238 66, 254 48" fill="none" stroke="#3b3f46" stroke-width="5" stroke-linecap="round" stroke-opacity=".7"/>
+      <rect x="205" y="96" width="58" height="34" rx="9" fill="url(#bootGrad)"/>
+      <rect x="168" y="122" width="132" height="80" rx="14" fill="url(#plugGrad)" stroke="#0e0f11" stroke-width="1"/>
+      <rect x="176" y="128" width="116" height="6" rx="3" fill="#fff" fill-opacity=".10"/>
+      <rect x="181" y="196" width="106" height="8" rx="3" fill="#9ea4ac" stroke="#5b6168" stroke-width=".8"/>
+    </g>
+
     <g id="rows"></g>
     <g id="scales"></g>
 
-    <text x="680" y="505" font-size="8.5" fill="#4a4f57" text-anchor="end"
+    <text x="810" y="810" font-size="8.5" fill="#7d8592" text-anchor="end"
           font-family="system-ui,sans-serif">board photo: Seeed Studio, OSHW-XIAO-Series, MIT</text>
   </svg>
 
@@ -215,7 +278,7 @@
       <select id="target"><option value="all">every pad</option></select>
       <span style="width:6px"></span>
       <button id="readCfg" title="/cap/config">read set-up</button>
-      <button id="defaults" title="/cap/defaults">defaults</button>
+      <button id="defaults" title="/cap/defaults: the measuring library back to its defaults">defaults</button>
       <span style="flex:1"></span>
       <label>rate</label>
       <select id="rate" title="/rate: stream period in ms; 0 stops the stream">
@@ -232,42 +295,70 @@
         <option value="2000" selected>2 s</option><option value="5000">5 s</option>
       </select>
     </div>
-    <div class="cfg">
-      <div title="Samples summed into one reading; /cap is the sum divided by this, so the scale stays put and a scan takes longer"><label>oversample (samples)</label>
-        <select id="p-oversample">
-          <option>1</option><option>2</option><option>4</option><option>8</option>
-          <option>16</option><option>32</option><option>64</option>
-        </select></div>
-      <div title="Internal resistor in series with the pad; Microchip's sources disagree about what it does in self-capacitance mode (see below)"><label>series resistor (kΩ)</label>
-        <select id="p-resistor"><option>0</option><option>20</option><option>50</option><option>100</option></select></div>
-      <div><label>frequency mode</label>
-        <select id="p-freq" title="FreeTouch 1.1.3 writes the same registers for 1, 2 and 3">
-          <option value="0">0 none</option><option value="1">1 hop</option>
-          <option value="2">2 spread</option><option value="3">3 spread-median</option>
-        </select></div>
-      <div title="Delay in PTC clock cycles between measurements, which sets the acquisition frequency; written only when frequency mode is not 0"><label>hop (1..16)</label>
-        <input type="number" id="p-hop" min="1" max="16" value="1"></div>
-      <div title="Compensation capacitor code; on this board a lower value gave a higher count on every pad"><label>compcap (0..16383)</label>
-        <div class="pair"><input type="range" id="r-compcap" min="0" max="16383" value="8192">
-          <input type="number" id="p-compcap" min="0" max="16383" value="8192"></div></div>
-      <div title="FreeTouch's integration-capacitor register; 10 or 20 drove a pad's reading to 0 on this board"><label>intcap (0..63)</label>
-        <div class="pair"><input type="range" id="r-intcap" min="0" max="63" value="63">
-          <input type="number" id="p-intcap" min="0" max="63" value="63"></div></div>
+
+    <div class="libpane" data-lib="FreeTouch">
+      <div class="cfg">
+        <div title="Samples summed into one reading; /cap is the sum divided by this, so the scale stays put and a scan takes longer"><label>oversample (samples)</label>
+          <select id="p-oversample">
+            <option>1</option><option>2</option><option>4</option><option>8</option>
+            <option>16</option><option>32</option><option>64</option>
+          </select></div>
+        <div title="Internal resistor in series with the pad; Microchip's sources disagree about what it does in self-capacitance mode (see below)"><label>series resistor (kΩ)</label>
+          <select id="p-resistor"><option>0</option><option>20</option><option>50</option><option>100</option></select></div>
+        <div><label>frequency mode</label>
+          <select id="p-freq" title="FreeTouch 1.1.3 writes the same registers for 1, 2 and 3">
+            <option value="0">0 none</option><option value="1">1 hop</option>
+            <option value="2">2 spread</option><option value="3">3 spread-median</option>
+          </select></div>
+        <div title="Delay in PTC clock cycles between measurements, which sets the acquisition frequency; written only when frequency mode is not 0"><label>hop (1..16)</label>
+          <input type="number" id="p-hop" min="1" max="16" value="1"></div>
+        <div title="Compensation capacitor code; on this board a lower value gave a higher count on every pad"><label>compcap (0..16383)</label>
+          <div class="pair"><input type="range" id="r-compcap" min="0" max="16383" value="8192">
+            <input type="number" id="p-compcap" min="0" max="16383" value="8192"></div></div>
+        <div title="FreeTouch's integration-capacitor register; 10 or 20 drove a pad's reading to 0 on this board"><label>intcap (0..63)</label>
+          <div class="pair"><input type="range" id="r-intcap" min="0" max="63" value="63">
+            <input type="number" id="p-intcap" min="0" max="63" value="63"></div></div>
+      </div>
     </div>
+
+    <div class="libpane" data-lib="FastTouch" hidden>
+      <p class="note">FastTouch has no settings. Each read drives the pin LOW for 1 ms, releases it to its
+        internal pull-up and counts how many of 23 back-to-back reads still see it LOW, so a scan of all
+        eleven pins takes at least 11 ms.</p>
+    </div>
+
+    <div class="libpane" data-lib="CapacitiveSensor" hidden>
+      <div class="cfg">
+        <div title="/cap/send: the pin that drives every pad through its resistor"><label>send pin</label>
+          <select id="csSendPick"></select></div>
+        <div style="grid-column: span 2" title="/cap/recv: one pad per receive pin, each wired to the send pin through a resistor"><label>receive pins (one pad each)</label>
+          <div class="pinpick" id="csRecvPick"></div></div>
+        <div><label>&nbsp;</label><button id="csApply" title="/cap/send, then /cap/recv">set pins</button></div>
+        <div title="Charge cycles summed into one reading; more takes longer"><label>samples (1..255)</label>
+          <input type="number" id="p-samples" min="1" max="255" value="30"></div>
+        <div title="The library's timeout, nominally ms; on this board 2000 held a timed-out read for about 0.70 s"><label>timeout (1..60000)</label>
+          <input type="number" id="p-timeout" min="1" max="60000" value="2000"></div>
+      </div>
+      <p class="note" id="csHint">No pins until you choose them: each receive pin needs a resistor to the
+        send pin (see below). Without one every read times out and reads −2.</p>
+    </div>
+
     <div class="scroll" style="margin-top:12px">
       <!-- the set-up each pad reports holding, from the board's own echoes -->
       <table class="vals" id="cfgTable"><thead></thead><tbody></tbody></table>
     </div>
-    <div class="note" style="margin-top:6px">Values in orange differ from the sketch's defaults.</div>
+    <div class="note" style="margin-top:6px" id="cfgNote">Values in orange differ from the sketch's defaults.</div>
   </div>
 
-  <!-- What each set-up parameter does. Three kinds of statement, kept apart:
-       quoted from a source listed at the end (in quotation marks), read in the
-       FreeTouch 1.1.3 source (said so), and measured on one XIAO SAMD21 on
-       2026-10-28 with test/hardware/capsetupprobe.py (green, "Measured here",
-       means of 5 readings). Nothing here was measured against a noise source. -->
+  <!-- What each library and each of its parameters does. Three kinds of
+       statement, kept apart: quoted from a source listed in that tab (in
+       quotation marks), read in the library's source (said so), and measured
+       on one XIAO SAMD21 on 2026-10-28 (green, "Measured here"). Nothing here
+       was measured against a noise source. -->
   <div class="panel params" id="paramHelp">
-    <h2>What the set-up parameters do</h2>
+
+  <div class="libpane" data-lib="FreeTouch">
+    <h2>FreeTouch: what the set-up parameters do</h2>
     <p class="note">FreeTouch measures self-capacitance: each pad is one PTC Y line, measured on its own.
       The register names are FreeTouch's. The Microchip names beside them are matched by name and value
       range from Microchip's own touch libraries, listed at the end.</p>
@@ -379,6 +470,139 @@
     </div>
   </div>
 
+  <div class="libpane" data-lib="FastTouch" hidden>
+    <h2>FastTouch: how it measures</h2>
+    <p class="note">Adrian Freed's library, version 0.91, MIT licence. It needs nothing but the pin, so it
+      measures all eleven header pins, D2 to D5 included.</p>
+
+    <div class="param">
+      <h3>What a reading is<span>0..23 on SAMD21 · no settings</span></h3>
+      <p>Its README: it <q>returns a measure of how long it takes for a pin to rise to a HIGH level after
+        the pull up is enabled. This will be slowed by any capacitive load added.</q> And: <q>0 = no touch,
+        higher = more capacitance (touch detected)</q>. The 2018 article that introduced it: <q>The sensed
+        value is reported as a function of the time it takes for the pull-up to bring the pin to a high
+        value.</q> and <q>each call to the fast touch library implements a cycle of a relaxation
+        oscillator.</q></p>
+      <p>Read in the 0.91 source, SAMD21 branch: <code>fastTouchRead(pin)</code> is a macro that sets the
+        pin to OUTPUT LOW, waits <code>delay(1)</code>, switches it to <code>INPUT_PULLUP</code>, reads the
+        port's IN register 23 times back to back, and counts the reads that still see the pin LOW. So it
+        reads 0 to 23, which is what <code>fastTouchMax()</code> returns on SAMD21. Two things to know.
+        The article gives the discharge as <q>set the pin to output a LOW value for 1uS or so.</q>, but
+        this branch waits 1 ms, which sets the scan time here (at least 11 ms for eleven pins). And the
+        macro's <code>/* disable interrupts */</code> and <code>/* enable interrupts */</code> comments mark
+        places where nothing is called, so an interrupt during the 23 reads would stretch them; whether
+        that happens here was not measured.</p>
+      <p class="measured" id="ftMeasured"><b>Measured here:</b> untouched, all eleven pins read 0. With the
+        PTC still enabled from FreeTouch, as the sketch first left it, one recorded touch (2026-10-28) raised
+        D2..D5, the four pins with no Y line, by 4 to 7 counts, and the seven Y-line pins stayed at 0. The
+        sketch now turns the PTC and its Y lines off before FastTouch takes the pins, and <code>/diag</code>
+        reads them back (<code>PTC off, Y 0x0000</code>). After that change, touched by hand through this
+        page, every one of the eleven pins rose; that was observed, not recorded.</p>
+    </div>
+
+    <div class="param">
+      <h3>Sources, opened 2026-10-28</h3>
+      <ul class="src">
+        <li><a href="https://github.com/adrianfreed/FastTouch">FastTouch</a>: the README and
+          <code>src/FastTouch.h</code> and <code>.cpp</code>, read at commit fef329c.</li>
+        <li><a href="http://www.adrianfreed.com/fasttouch-open-source-arduino-library-fast-portable-low-fidelity-capacitive-sensing.html">FastTouch Open Source Arduino Library for Fast, Portable, Low Fidelity Capacitive Sensing</a>,
+          adrianfreed.com, 2018-04-22: the algorithm in prose.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="libpane" data-lib="CapacitiveSensor" hidden>
+    <h2>CapacitiveSensor: how it measures, and how to wire it</h2>
+    <p class="note">Paul Badger's library, maintained by Paul Stoffregen, version 0.5.1; its source carries
+      an MIT-style permission notice. Its <code>library.properties</code>: it <q>turns two or more Arduino
+      pins into a capacitive sensor, which can sense the electrical capacitance of the human body. All the
+      sensor setup requires is a medium to high value resistor and a piece of wire and a small (to large)
+      piece of aluminum foil on the end.</q></p>
+
+    <div class="param">
+      <h3>Wiring<span>a send pin, and a resistor to each receive pin</span></h3>
+      <!-- one send pin shared by every pad; each receive pin is a pad -->
+      <svg class="wiring" viewBox="0 0 520 160" role="img" aria-label="Wiring: one send pin feeds a resistor to each pad; each pad's node is wired to its own receive pin">
+        <g font-family="system-ui,sans-serif" font-size="12" fill="#c9ced4" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="10" y="22" width="96" height="116" rx="8" fill="#23272f" stroke="#4a505a"/>
+          <text x="98" y="16" text-anchor="end" fill="#8e96a6" font-size="11">XIAO</text>
+          <text x="18" y="46">send</text>
+          <text x="18" y="96">receive 1</text>
+          <text x="18" y="122">receive 2</text>
+          <g stroke="#c9ced4" stroke-width="1.6" fill="none">
+            <!-- the send bus, shared by every pad -->
+            <path d="M106 42 H400"/>
+            <!-- a resistor from the bus down to each pad's node -->
+            <path d="M230 42 V54 l-7 4 l14 6 l-14 6 l14 6 l-14 6 l7 4 V92"/>
+            <path d="M400 42 V80 l-7 4 l14 6 l-14 6 l14 6 l-14 6 l7 4 V118"/>
+          </g>
+          <!-- each receive pin wired to its pad's node -->
+          <g stroke="#ff8a2a" stroke-width="1.6" fill="none">
+            <path d="M106 92 H260"/>
+            <path d="M106 118 H420"/>
+          </g>
+          <circle cx="230" cy="92" r="3" fill="#ff8a2a"/>
+          <circle cx="400" cy="118" r="3" fill="#ff8a2a"/>
+          <rect x="260" y="82" width="56" height="20" rx="4" fill="#9aa1aa"/>
+          <rect x="420" y="108" width="56" height="20" rx="4" fill="#9aa1aa"/>
+          <text x="322" y="96">pad 1</text>
+          <text x="482" y="122">pad 2</text>
+          <text x="244" y="72" fill="#8e96a6">100K to 50M</text>
+          <text x="140" y="156" fill="#8e96a6">one send pin for every pad; a resistor and a receive pin for each</text>
+        </g>
+      </svg>
+      <p>PJRC's page: <q>Each sensor connects to 2 pins, send and receive.</q> <q>The send pin must connect
+        with a large-value resistor, between 100K to 50M.</q> <q>The receive pin may be connected with a
+        wire, but a 1K or higher resistor will help protect the Teensy's pin</q>. <q>Multiple sensors can
+        share a single send pin, but each must have its own receive pin.</q> On the resistor: <q>Larger
+        values allow more sensitivity, but with slower response.</q> The library's own example gives a
+        wider range, <q>Resistor effects sensitivity, experiment with values, 50K - 50M. Larger resistor
+        values yield larger sensor values.</q>, and uses <q>a high value resistor e.g. 10M between send
+        pin and receive pin</q>.</p>
+    </div>
+
+    <div class="param">
+      <h3>What a reading is<span>a count, or −2 for a timeout</span></h3>
+      <p>PJRC: <q>The elapsed time, in arbitrary units, is returned.</q> and <q>A negative number is
+        returned if any error occurs.</q> Read in the source: each charge cycle drives the send pin HIGH and
+        counts loop passes until the receive pin reads HIGH, then charges it and drives the send pin LOW
+        and counts until it reads LOW; <code>capacitiveSensorRaw(samples)</code>, which this sketch calls,
+        returns the total over <code>samples</code> cycles with no baseline subtracted, or −2 once the total
+        passes the timeout. The sketch passes −2 through unchanged.</p>
+    </div>
+
+    <div class="param">
+      <h3><code>samples</code><span>1..255 · default 30</span></h3>
+      <p>PJRC: <q>The measurement is repeated numSamples times. More measurements increases sensitivity,
+        but takes longer.</q> 30 is what the library's example passes.</p>
+    </div>
+
+    <div class="param">
+      <h3><code>timeout</code><span>1..60000 · default 2000</span></h3>
+      <p>Passed to <code>set_CS_Timeout_Millis()</code>. Read in the source: the library turns it into a
+        loop count, <code>timeout × loopTimingFactor × F_CPU / 16000000</code>, with a
+        <code>loopTimingFactor = 310</code> its comment calls <q>determined empirically -  a hack</q>, so
+        it is milliseconds only nominally. 2000 is its constructor's value.</p>
+      <p class="measured"><b>Measured here,</b> with no resistors fitted, so every read timed out (−2): at
+        2000 a scan of two pads took 1.40 s, about 0.70 s per pad; at 20 the same scan took 14.1 ms. The
+        board reads one pad per pass and answers OSC between pads, so a message waits for at most the pad
+        being read: with four pads timing out (scans of 2.65 s), echoes came back in 0.16 to 0.59 s
+        (2026-10-29). The sensor itself has not been measured: this board has no resistors fitted.</p>
+    </div>
+
+    <div class="param">
+      <h3>Sources, opened 2026-10-28</h3>
+      <ul class="src">
+        <li><a href="https://github.com/PaulStoffregen/CapacitiveSensor">CapacitiveSensor</a>:
+          <code>library.properties</code>, <code>CapacitiveSensor.cpp</code> and <code>.h</code>, and
+          <code>examples/CapacitiveSensorSketch</code>, read at commit aa01848.</li>
+        <li><a href="https://www.pjrc.com/teensy/td_libs_CapacitiveSensor.html">CapacitiveSensor Arduino Library with Teensy</a>,
+          PJRC: the wiring, the resistor range and the samples trade-off.</li>
+      </ul>
+    </div>
+  </div>
+  </div>
+
   <div class="panel">
     <div class="row" style="margin-bottom:8px">
       <label>log</label><span style="flex:1"></span>
@@ -398,8 +622,8 @@
 "use strict";
 
 /* ============================================================
-   1. OSC: decode messages and bundles, encode int messages
-      (the CircuitPlaygroundSensors page's codec)
+   1. OSC: decode messages and bundles, encode int and string messages
+      (the CircuitPlaygroundSensors page's codec, plus strings)
    ============================================================ */
 const dec = new TextDecoder(), enc = new TextEncoder();
 
@@ -459,13 +683,14 @@ function decodePacket(bytes) {
 
 function messagesOf(pkt) { return pkt.bundle ? pkt.packets.flatMap(messagesOf) : [pkt]; }
 
-// Everything this page sends is integers, or nothing at all for an ask.
-function encodeMessage(address, ints) {
+// Integers for every setting, a string for /cap/lib, nothing for an ask.
+function encodeMessage(address, args) {
   const parts = [];
   const ostr = s => { const b = enc.encode(s + "\0"); const p = (4 - b.length % 4) % 4;
                       return new Uint8Array([...b, ...new Uint8Array(p)]); };
-  parts.push(ostr(address), ostr("," + "i".repeat(ints.length)));
-  for (const v of ints) {
+  parts.push(ostr(address), ostr("," + args.map(v => typeof v === "string" ? "s" : "i").join("")));
+  for (const v of args) {
+    if (typeof v === "string") { parts.push(ostr(v)); continue; }
     const b = new Uint8Array(4); new DataView(b.buffer).setInt32(0, v | 0); parts.push(b);
   }
   const n = parts.reduce((a, p) => a + p.length, 0);
@@ -509,22 +734,25 @@ class SlipDecoder {
    ============================================================ */
 const XIAO_FILTERS = [{ usbVendorId: 0x2886, usbProductId: 0x802F },   // the sketch
                       { usbVendorId: 0x2886, usbProductId: 0x002F }];  // the bootloader
-let port = null, writer = null, reader = null, pipeDone = null;
+let port = null, writer = null, reader = null, pipeDone = null, pipeClosed = null, closing = false;
 
 async function connect() {
   const opts = $("allPorts").checked ? {} : { filters: XIAO_FILTERS };
-  port = await navigator.serial.requestPort(opts);
-  await port.open({ baudRate: 115200, bufferSize: 8192 });
+  const chosen = await navigator.serial.requestPort(opts);
+  await chosen.open({ baudRate: 115200, bufferSize: 8192 });   // a port that will not open is never ours
+  port = chosen;
   writer = port.writable.getWriter();
-  const stream = port.readable.pipeThrough(new TransformStream(new SlipDecoder()));
-  reader = stream.getReader();
+  // pipeTo rather than pipeThrough, so disconnect() can wait for the pipe to
+  // let go of port.readable: port.close() refuses while it is still locked.
+  const slip = new TransformStream(new SlipDecoder());
+  pipeClosed = port.readable.pipeTo(slip.writable).catch(() => {});
+  reader = slip.readable.getReader();
   pipeDone = readLoop();
   setConnected(true);
   logLine("", "connected");
-  // The boot hello went out long before Connect was clicked: ask again, and
-  // ask for the set-up, whose /cap/pins says which pad is which pin.
+  // The boot hello went out long before Connect was clicked: ask again. The
+  // hello's answer asks for the set-up, which names the library and its pins.
   send("/enq", []);
-  send("/cap/config", []);
   send("/rate", [+$("rate").value]);
 }
 
@@ -541,12 +769,19 @@ async function readLoop() {
   if (port) disconnect();
 }
 
+// The order Web Serial needs: cancel the reader, wait for the pipe to release
+// port.readable, release the writer, then close. A close that still fails is
+// logged: a port left open blocks the next upload with "Resource busy".
 async function disconnect() {
-  try { if (reader) { await reader.cancel(); reader.releaseLock(); } } catch {}
+  if (closing) return;                    // readLoop() ends by calling this too
+  closing = true;
+  try { if (reader) await reader.cancel(); } catch {}
+  try { if (pipeClosed) await pipeClosed; } catch {}
   try { if (pipeDone) await pipeDone; } catch {}
   try { if (writer) writer.releaseLock(); } catch {}
-  try { if (port) await port.close(); } catch {}
-  port = writer = reader = null;
+  try { if (port) await port.close(); } catch (e) { logLine("warn", "port close failed: " + e.message); }
+  port = writer = reader = pipeDone = pipeClosed = null;
+  closing = false;
   padBase.reset();
   setConnected(false);
   markStale();
@@ -564,10 +799,10 @@ function padAwayZLP(frame) {
   return out;
 }
 
-async function send(address, ints) {
+async function send(address, args) {
   if (!writer) return;
   try {
-    await writer.write(padAwayZLP(slipEncode(encodeMessage(address, ints))));
+    await writer.write(padAwayZLP(slipEncode(encodeMessage(address, args))));
   } catch (e) {
     if (port) disconnect();
   }
@@ -580,10 +815,11 @@ async function send(address, ints) {
    each one is learned: a median of three rejects single-sample dips, the
    baseline falls quickly and rises slowly, so a finger registers as an
    excursion instead of being absorbed. fall = 0.25 and rise = 0.002 were set
-   on the Circuit Playground Express; on this XIAO, 2026-10-28, resting pads
-   read 166..461 counts and touched ones rose by 161 (D0, x0.35) to 540
-   (D6, x2.8). The lamp is the excursion clamped to 0..1, so D0 never lights
-   fully while D6 saturates. */
+   on the Circuit Playground Express; on this XIAO with FreeTouch, 2026-10-28,
+   resting pads read 166..461 counts and touched ones rose by 161 (D0, x0.35)
+   to 540 (D6, x2.8). The lamp is the excursion clamped to 0..1. A pad resting
+   at 0, as FastTouch's do, has no ratio to rise by, so its lamp follows the
+   count over the fader's full scale instead. */
 class PadBaseline {
   constructor(n, fall = 0.25, rise = 0.002) {
     this.base = new Array(n).fill(null);
@@ -636,23 +872,90 @@ const PINS = [
   ["D7",    7, "R", 331.5, 448.5, 15],
 ];
 
-// The fader column on each side. Values rise to the right on both, as on any
-// mixing desk; the left side is otherwise the mirror image of the right.
-const MID = 234.75;                       // the PCB's centre line
+/* The breadboard. Seeed's footprint (Seeed Studio XIAO Series Library/
+   XIAO-SAMD21-DIP.kicad_mod, same repository and commit) puts the two pin rows
+   15.24 mm apart, 0.6", six hole pitches. A breadboard's trench makes e to f
+   three pitches, so a 0.6" module straddles it with one row in column c and
+   the other in g: two free holes outboard on the left (a, b), three on the
+   right (h, i, j). It is a 170-point mini board, 17 strips of a..e and f..j,
+   drawn at the photograph's pitch: the pads step 31.7 px down an edge, and the
+   two pad columns sit at x 136.5 and 332.3, which is where c and g go. The
+   board sits at the top, D0 and VBUS on strip 1, so its USB socket and the
+   cable in it hang over the breadboard's edge. */
+const P = 31.7;
+const HOLE_X = { a: 136.5 - 2 * P, b: 136.5 - P, c: 136.5, d: 136.5 + P, e: 136.5 + 2 * P,
+                 f: 332.3 - P, g: 332.3, h: 332.3 + P, i: 332.3 + 2 * P, j: 332.3 + 3 * P };
+const STRIPS = 17;
+const STRIP_Y0 = 257;                     // strip 1 is the D0 / VBUS row
+const BB = { x0: HOLE_X.a - 0.9 * P, x1: HOLE_X.j + 0.9 * P,
+             y0: STRIP_Y0 - 0.9 * P, y1: STRIP_Y0 + (STRIPS - 1) * P + 0.9 * P };
+const stripY = k => STRIP_Y0 + k * P;     // k = 0..16
+
+// The fader column on each side, off the breadboard on the bench. Values rise
+// to the right on both, as on any mixing desk; the left side is otherwise the
+// mirror image of the right, about the breadboard's centre.
+const MID = (BB.x0 + BB.x1) / 2;
 const mirror = x => 2 * MID - x;
-const R = { plate: 360, plateW: 44, track: 414, trackLen: 196, lcd: 620, lcdW: 58, lamp: 692 };
+const R = { plate: 478, plateW: 44, track: 532, trackLen: 196, lcd: 738, lcdW: 58, lamp: 810 };
 const L = { plate: mirror(R.plate + R.plateW), track: mirror(R.track + R.trackLen),
             lcd: mirror(R.lcd + R.lcdW), lamp: mirror(R.lamp) };
 L.plateW = R.plateW; L.trackLen = R.trackLen; L.lcdW = R.lcdW;
 
-// Full scale of a fader. The readout always shows the true number; a count
-// above this pins the cap at the end. 1023 is the largest count named in the
-// CPX sketch's measured range (686..1014 touched); the PTC's own ceiling is
-// not documented anywhere this page could cite.
-const FULL = 1023;
+/* ============================================================
+   6. The libraries
+   ============================================================ */
+const LIBS = ["FreeTouch", "FastTouch", "CapacitiveSensor"];
+
+const PARAMS = {
+  FreeTouch: ["oversample", "resistor", "freq", "hop", "compcap", "intcap"],
+  FastTouch: [],
+  CapacitiveSensor: ["samples", "timeout"],
+};
+
+const DEFAULTS = {
+  FreeTouch: { oversample: 4, resistor: 50, freq: 0, hop: 1, compcap: 8192, intcap: 63 },
+  FastTouch: {},
+  CapacitiveSensor: { samples: 30, timeout: 2000 },
+};
+
+// A fader's full scale. The readout always shows the true number; a count
+// above full scale pins the cap at the end. FreeTouch: 1023, the largest count
+// named in the CPX sketch's measured range (686..1014 touched); the PTC's own
+// ceiling is not documented anywhere this page could cite. FastTouch: 23,
+// fastTouchMax() on SAMD21. CapacitiveSensor: its counts depend on the
+// resistor, so the scale follows the largest count seen, in powers of two
+// from 64.
+const FULL_OF = { FreeTouch: 1023, FastTouch: 23, CapacitiveSensor: null };
+
+const TITLE_OF = {
+  FreeTouch: "FREETOUCH · PTC",
+  FastTouch: "FASTTOUCH · PULL-UP TIMING",
+  CapacitiveSensor: "CAPACITIVESENSOR · SEND / RECEIVE",
+};
+
+let lib = "FreeTouch";      // the board's /cap/lib once it has said; the tab before
+let pins = null;            // /cap/pins for lib, as the board reported them
+let csSend = null;          // /cap/send, or null when none is chosen
+let csRecv = [];            // /cap/recv
+// CapacitiveSensor's fader scale. Its counts depend on the resistor and the
+// samples, and none has been measured here with a resistor fitted, so 64 is
+// only a starting scale (a power of two, so the doubling keeps round marks);
+// renderCap() doubles it whenever a reading goes past it.
+let csFull = 64;
+const config = {};          // parameter -> [value per pad], as echoed
+
+// Before the board has said, each library's pads are what its sketch documents.
+function defaultPins(l) {
+  const byPin = (a, b) => a - b;          // the sketch numbers pads in pin order
+  if (l === "FreeTouch") return PINS.filter(r => r[5] !== null).map(r => r[1]).sort(byPin);
+  if (l === "FastTouch") return PINS.filter(r => r[1] !== null).map(r => r[1]).sort(byPin);
+  return csSend === null ? [] : csRecv.slice();
+}
+const faderPins = () => pins || defaultPins(lib);
+const fullScale = () => FULL_OF[lib] || csFull;
 
 /* ============================================================
-   6. Drawing
+   7. Drawing
    ============================================================ */
 const $ = id => document.getElementById(id);
 const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
@@ -663,60 +966,112 @@ const el = (name, attrs, parent) => {
   if (parent) parent.appendChild(n);
   return n;
 };
-// Engraved text: a light copy a pixel low, the dark glyphs over it.
-function engrave(parent, x, y, s, size, anchor, weight = 600) {
+// Engraved text on a light plate: a light copy a pixel low, dark glyphs over
+// it. On the dark bench (onDark) the same thing inverted.
+function engrave(parent, x, y, s, size, anchor, weight = 600, onDark = false) {
   const common = { x, "font-size": size, "text-anchor": anchor, "font-weight": weight,
                    "font-family": "system-ui,-apple-system,sans-serif", "letter-spacing": ".04em" };
-  el("text", { ...common, y: y + 1, fill: "#fff", "fill-opacity": ".65" }, parent).textContent = s;
-  el("text", { ...common, y, fill: "#3a3e45" }, parent).textContent = s;
+  el("text", { ...common, y: y + 1, fill: onDark ? "#000" : "#fff", "fill-opacity": onDark ? ".6" : ".65" }, parent).textContent = s;
+  el("text", { ...common, y, fill: onDark ? "#c3c9d1" : "#3a3e45" }, parent).textContent = s;
 }
 
-const rowsByPin = {};                     // Arduino pin -> its live elements
+let rowsByPin = {};                       // Arduino pin -> its live elements
+
+// The white mini breadboard: body, centre trench, 170 square holes, and the
+// letters and strip numbers moulded into the edges.
+function buildBreadboard() {
+  const bb = $("breadboard");
+  bb.textContent = "";
+  const w = BB.x1 - BB.x0, h = BB.y1 - BB.y0;
+  el("rect", { x: BB.x0 + 2, y: BB.y0 + 5, width: w, height: h, rx: 10, fill: "#000", "fill-opacity": ".45" }, bb);
+  el("rect", { x: BB.x0, y: BB.y0, width: w, height: h, rx: 10, fill: "url(#board)", stroke: "#bdb6a6", "stroke-width": 1.2 }, bb);
+  el("rect", { x: BB.x0 + 1.5, y: BB.y0 + 1.5, width: w - 3, height: h - 3, rx: 9, fill: "none",
+               stroke: "#fff", "stroke-opacity": ".8" }, bb);
+  const tx = (HOLE_X.e + HOLE_X.f) / 2;
+  el("rect", { x: tx - 14, y: BB.y0 + 6, width: 28, height: h - 12, rx: 4, fill: "url(#trench)",
+               stroke: "#c4bdac", "stroke-width": .8 }, bb);
+  const font = { "font-family": "system-ui,sans-serif", "font-size": 9, fill: "#9a937f", "text-anchor": "middle" };
+  for (const [col, x] of Object.entries(HOLE_X)) {
+    el("text", { ...font, x, y: BB.y0 + 13 }, bb).textContent = col;
+    el("text", { ...font, x, y: BB.y1 - 6 }, bb).textContent = col;
+    for (let k = 0; k < STRIPS; k++) {
+      const y = stripY(k);
+      el("rect", { x: x - 5.5, y: y - 5.5, width: 11, height: 11, rx: 1.5, fill: "#fbf9f3" }, bb);
+      el("rect", { x: x - 4, y: y - 4, width: 8, height: 8, rx: 1, fill: "url(#hole)" }, bb);
+    }
+  }
+  for (let k = 0; k < STRIPS; k++) {
+    el("text", { ...font, x: BB.x0 + 10, y: stripY(k) + 3, "font-size": 8 }, bb).textContent = k + 1;
+    el("text", { ...font, x: BB.x1 - 10, y: stripY(k) + 3, "font-size": 8 }, bb).textContent = k + 1;
+  }
+}
+
+// A jumper wire from the strip's outboard hole to the pin's name plate, with a
+// little sag, an insulation highlight and a dark pin where it goes in.
+function jumper(parent, x0, x1, y, colour) {
+  const mx = (x0 + x1) / 2, d = `M${x0},${y} Q${mx},${y + 12} ${x1},${y}`;
+  el("path", { d, fill: "none", stroke: "#000", "stroke-opacity": ".45", "stroke-width": 7.5, "stroke-linecap": "round" }, parent);
+  el("path", { d, fill: "none", stroke: colour, "stroke-width": 5.5, "stroke-linecap": "round" }, parent);
+  el("path", { d, fill: "none", stroke: "#fff", "stroke-opacity": ".35", "stroke-width": 1.4,
+               "stroke-linecap": "round", transform: "translate(0,-1.4)" }, parent);
+  el("rect", { x: x0 - 3, y: y - 3, width: 6, height: 6, rx: 1, fill: "#2a2a2a" }, parent);
+}
+
+const WIRE = ["#d8362b", "#ef8a17", "#e9c21c", "#36a148", "#2f6fd6", "#8a4fd0", "#e6e6e6"];
+
+// Why a pin has no fader, in the words of the library measuring.
+function idleReason(pin) {
+  if (pin === null) return "power";
+  if (lib === "FreeTouch") return "no Y line · X only";
+  if (lib === "CapacitiveSensor") return pin === csSend ? "send pin · drives every pad" : "not wired as a pad";
+  return "not a pad";
+}
 
 function buildRig() {
-  const screws = $("screws");
-  for (const [x, y] of [[-230, 180], [695, 180], [-230, 501], [695, 501]]) {
-    el("circle", { cx: x, cy: y + 1, r: 7.5, fill: "#fff", "fill-opacity": ".5" }, screws);
-    el("circle", { cx: x, cy: y, r: 7, fill: "url(#screw)", stroke: "#5a6068", "stroke-width": .8 }, screws);
-    el("line", { x1: x - 4.5, y1: y - 2, x2: x + 4.5, y2: y + 2, stroke: "#4b5058",
-                 "stroke-width": 1.6, "stroke-linecap": "round" }, screws);
-  }
-
   const rows = $("rows");
+  rows.textContent = "";
+  rowsByPin = {};
+  const fset = new Set(faderPins());
+  $("titleHi").textContent = $("titleLo").textContent = TITLE_OF[lib];
+
   for (const [name, pin, side, px, py, yline] of PINS) {
     const g = el("g", {}, rows);
     const S = side === "R" ? R : L;
-    const touch = yline !== null;
+    const fader = pin !== null && fset.has(pin);
     const plateX = S.plate, plateEnd = S.plate + S.plateW;
 
-    // leader from the pad to its name plate
-    const lx = side === "R" ? plateX : plateEnd;
-    el("line", { x1: px, y1: py + 1, x2: lx, y2: py + 1, stroke: "#fff", "stroke-opacity": ".5", "stroke-width": 1.2 }, g);
-    el("line", { x1: px, y1: py, x2: lx, y2: py, stroke: touch ? "#2f3338" : "#7d838b", "stroke-width": 1.2 }, g);
-    el("circle", { cx: px, cy: py, r: 2.6, fill: touch ? "#2f3338" : "#7d838b" }, g);
+    // A pad the library measures, or CapacitiveSensor's send pin, gets a
+    // jumper from its strip's outboard hole (a or j) to its name plate.
+    const wired = fader || (lib === "CapacitiveSensor" && pin === csSend && pin !== null);
+    if (wired)
+      jumper(g, side === "R" ? HOLE_X.j : HOLE_X.a, side === "R" ? plateX : plateEnd, py,
+             pin === csSend && lib === "CapacitiveSensor" ? "#d8362b" : WIRE[pin % WIRE.length]);
 
     // name plate, recessed slightly
     el("rect", { x: plateX, y: py - 9.5, width: S.plateW, height: 19, rx: 3, fill: "url(#plate)",
                  stroke: "#878d95", "stroke-width": .8 }, g);
 
-    if (!touch) {
+    if (!fader) {
       engrave(g, plateX + S.plateW / 2, py + 4, name, 11.5, "middle");
-      const why = pin === null ? "power" : "no Y line · X only";
       const tx = side === "R" ? S.track : S.track + S.trackLen;
-      engrave(g, tx, py + 4, why, 9.5, side === "R" ? "start" : "end", 500);
+      engrave(g, tx, py + 4, idleReason(pin), 9.5, side === "R" ? "start" : "end", 500, true);
       continue;
     }
 
-    // the pin's name and, smaller, its PTC Y line, both on the plate
-    engrave(g, plateX + 4, py + 4, name, 11, "start");
-    engrave(g, plateX + S.plateW - 3.5, py + 3.5, "Y" + yline, 7, "end", 700);
+    // the pin's name and, for FreeTouch, its PTC Y line, both on the plate
+    if (lib === "FreeTouch" && yline !== null) {
+      engrave(g, plateX + 4, py + 4, name, 11, "start");
+      engrave(g, plateX + S.plateW - 3.5, py + 3.5, "Y" + yline, 7, "end", 700);
+    } else {
+      engrave(g, plateX + S.plateW / 2, py + 4, name, 11.5, "middle");
+    }
 
-    // fader slot with tick notches every 256 counts
+    // fader slot with tick notches at quarters of full scale
     el("rect", { x: S.track - 1, y: py - 4.5, width: S.trackLen + 2, height: 10, rx: 5,
                  fill: "#fff", "fill-opacity": ".55" }, g);
     el("rect", { x: S.track - 1, y: py - 5, width: S.trackLen + 2, height: 9, rx: 4.5, fill: "url(#slot)" }, g);
-    for (let v = 0; v <= 1024; v += 256) {
-      const tx = S.track + Math.min(v, FULL) / FULL * S.trackLen;
+    for (let q = 0; q <= 4; q++) {
+      const tx = S.track + q / 4 * S.trackLen;
       el("line", { x1: tx, y1: py + 7, x2: tx, y2: py + 10, stroke: "#5b6068", "stroke-width": .8 }, g);
     }
 
@@ -756,30 +1111,28 @@ function buildRig() {
 
     rowsByPin[pin] = { name, S, py, knob, lcd, rest, lamp, halo, padGlow };
   }
-
-  // one engraved scale under each fader column
-  const sc = $("scales");
-  for (const S of [L, R]) {
-    for (const v of [0, 256, 512, 768, 1023]) {
-      const tx = S.track + v / FULL * S.trackLen;
-      engrave(sc, tx, 476, String(v), 7.5, "middle", 500);
-    }
-  }
+  buildScales();
 }
 
-const xOf = (S, v) => S.track + clamp(v / FULL, 0, 1) * S.trackLen;
+// One engraved scale under each fader column, in the library's own counts.
+function buildScales() {
+  const sc = $("scales");
+  sc.textContent = "";
+  const full = fullScale();
+  for (const S of [L, R])
+    for (let q = 0; q <= 4; q++)
+      engrave(sc, S.track + q / 4 * S.trackLen, 476, String(Math.round(full * q / 4)), 7.5, "middle", 500, true);
+}
+
+const xOf = (S, v) => S.track + clamp(v / fullScale(), 0, 1) * S.trackLen;
 
 /* ============================================================
-   7. What the board says
+   8. What the board says
    ============================================================ */
-let pins = null;                          // /cap/pins: pad index -> Arduino pin
 const padBase = new PadBaseline(16);
 let lastSeq = null, dropped = 0, frames = 0, lastRateAt = performance.now();
-let askedPins = 0;
-
-const PARAMS = ["oversample", "resistor", "freq", "hop", "compcap", "intcap"];
-const DEFAULTS = { oversample: 4, resistor: 50, freq: 0, hop: 1, compcap: 8192, intcap: 63 };
-const config = {};                        // param -> [value per pad], as echoed
+let askedConfig = -Infinity;  // when renderCap last asked for /cap/config
+let foreignLib = null;        // a /cap/lib name this page has no tab for
 
 function onFrame(bytes) {
   let pkt; try { pkt = decodePacket(bytes); } catch { return; }
@@ -789,17 +1142,21 @@ function onFrame(bytes) {
 
   let cap = null, state = null;
   for (const m of msgs) {
-    if (m.address === "/cap") cap = m.args;
-    else if (m.address === "/state") state = m.args;
-    else if (m.address === "/cap/pins") setPins(m.args);
-    else if (m.address.startsWith("/cap/") && PARAMS.includes(m.address.slice(5))) {
-      config[m.address.slice(5)] = m.args.slice();
+    const a = m.address, p = a.slice(5);
+    if (a === "/cap") cap = m.args;
+    else if (a === "/state") state = m.args;
+    else if (a === "/cap/lib") onLib(m.args[0]);
+    else if (a === "/cap/pins") setPins(m.args);
+    else if (a === "/cap/send") { csSend = m.args.length ? m.args[0] : null; syncCsPins(); }
+    else if (a === "/cap/recv") { csRecv = m.args.slice(); syncCsPins(); }
+    else if (a.startsWith("/cap/") && LIBS.some(l => PARAMS[l].includes(p))) {
+      config[p] = m.args.slice();
       renderConfig();
-    } else if (m.address === "/rate") {
+    } else if (a === "/rate") {
       $("rate").value = String(m.args[0]);
       logLine("", "/rate " + m.args[0]);
     } else {
-      logLine("", m.address + " " + m.args.map(String).join(" "));
+      logLine("", a + " " + m.args.map(String).join(" "));
     }
   }
   if (state) {
@@ -816,37 +1173,99 @@ function onHello(msgs) {
   for (const m of msgs) if (m.address.startsWith("/enq/")) enq[m.address.slice(5)] = m.args;
   const diag = msgs.filter(m => m.address === "/diag").map(m => m.args.join(" "));
   const n = (enq.cap || [])[0];
-  $("status").textContent = `${name} · ${n === undefined ? "no /enq/cap" : n + " pads"}` +
+  $("status").textContent = `${name} · ${n === undefined ? "no pads" : n + " pads"}` +
                             (diag.length ? " · " + diag.join(" ") : "");
   logLine("", `hello from ${name}: ` + Object.entries(enq)
     .map(([k, a]) => k + (a.length ? " " + a.join(" ") : "")).join(", "));
   for (const d of diag) logLine("", d);
+  // The board sends a hello whenever its pads change (a library switch,
+  // CapacitiveSensor's pins), so ask for the set-up: /cap/lib and /cap/pins
+  // come back together in one bundle, the library first.
+  if (writer) send("/cap/config", []);
+}
+
+// The board's /cap/lib, the only thing that moves the tabs while connected. It
+// asks nothing: a switch is always followed by a hello, and the hello asks. A
+// name this page has no tab for (newer firmware) blanks the faders rather than
+// drawing its counts on another library's pins.
+function onLib(name) {
+  if (!LIBS.includes(name)) {
+    if (name !== foreignLib) logLine("warn", `/cap/lib says ${name}, which this page has no tab for`);
+    foreignLib = name;
+    pins = null;
+    markStale();
+    return;
+  }
+  foreignLib = null;
+  setLib(name);
+}
+
+function setLib(name) {
+  if (!LIBS.includes(name)) { logLine("warn", `/cap/lib says ${name}, which this page has no tab for`); return; }
+  if (name !== lib) {
+    lib = name;
+    pins = null;
+    csFull = 64;
+    padBase.reset();
+  }
+  for (const b of document.querySelectorAll("#tabs button"))
+    b.setAttribute("aria-selected", b.dataset.lib === lib ? "true" : "false");
+  for (const p of document.querySelectorAll(".libpane")) p.hidden = p.dataset.lib !== lib;
+  buildRig();
+  buildTargets();
+  renderConfig();
+  if (!writer) markStale();
 }
 
 function setPins(list) {
   pins = list.slice();
-  const missing = pins.filter(p => !(p in rowsByPin));
+  const missing = pins.filter(p => !PINS.some(r => r[1] === p));
   if (missing.length) logLine("warn", `/cap/pins names ${missing.join(", ")}, which this drawing has no fader for`);
-  const t = $("target"), keep = t.value;
-  t.innerHTML = '<option value="all">every pad</option>' +
-    pins.map((p, i) => `<option value="${i}">pad ${i} · ${(rowsByPin[p] || { name: "pin " + p }).name}</option>`).join("");
-  t.value = [...t.options].some(o => o.value === keep) ? keep : "all";
-  renderConfig();
+  buildRig();
+  buildTargets();
 }
 
+const nameOf = p => (PINS.find(r => r[1] === p) || ["pin " + p])[0];
+
+// The pads a set-up request addresses: FreeTouch's are its measured pads,
+// CapacitiveSensor's are its receive pins whether or not a send pin is set.
+function setupPins() {
+  if (lib === "CapacitiveSensor") return csRecv;
+  return pins || defaultPins(lib);
+}
+
+function buildTargets() {
+  const t = $("target"), keep = t.value;
+  t.innerHTML = '<option value="all">every pad</option>' +
+    setupPins().map((p, i) => `<option value="${i}">pad ${i} · ${nameOf(p)}</option>`).join("");
+  t.value = [...t.options].some(o => o.value === keep) ? keep : "all";
+  t.disabled = PARAMS[lib].length === 0;
+}
+
+// A /cap whose length is not /cap/pins' belongs to pads this page has not been
+// told about (pins changed, or a reply lost): drawn on the old pins it would
+// light the wrong faders, so ask for the set-up, at most once a second.
 function renderCap(values) {
-  if (!pins) {                            // which fader is which is not known yet
-    if (performance.now() - askedPins > 1000) { askedPins = performance.now(); send("/cap/pins", []); }
+  if (!pins || pins.length !== values.length) {
+    if (foreignLib) return;
+    if (performance.now() - askedConfig > 1000) { askedConfig = performance.now(); send("/cap/config", []); }
     return;
   }
   $("rig").classList.remove("stale");
+  if (lib === "CapacitiveSensor") {       // the scale follows what is seen
+    const top = Math.max(...values, 0);
+    let full = csFull;
+    while (full < top) full *= 2;
+    if (full !== csFull) { csFull = full; buildScales(); }
+  }
   values.forEach((v, i) => {
     const row = rowsByPin[pins[i]];
     if (!row) return;
-    const ex = clamp(padBase.update(i, v), 0, 1);
-    row.knob.setAttribute("transform", `translate(${xOf(row.S, v).toFixed(1)},0)`);
+    const ex = clamp(lib === "FastTouch" ? v / fullScale() : padBase.update(i, v), 0, 1);
+    row.knob.setAttribute("transform", `translate(${xOf(row.S, Math.max(v, 0)).toFixed(1)},0)`);
     row.lcd.textContent = String(v);
-    const rest = padBase.level(i);
+    row.lcd.setAttribute("fill", v < 0 ? "#ffb35c" : "#7dffb0");   // a library error, shown as itself
+    const rest = lib === "FastTouch" ? null : padBase.level(i);
     if (rest !== null) {
       row.rest.setAttribute("transform", `translate(${xOf(row.S, rest).toFixed(1)},${row.py - 6})`);
       row.rest.setAttribute("opacity", 1);
@@ -859,16 +1278,18 @@ function renderCap(values) {
 }
 
 function renderConfig() {
-  const names = pins ? pins.map(p => (rowsByPin[p] || { name: "pin " + p }).name) : [];
-  const n = Math.max(names.length, ...PARAMS.map(p => (config[p] || []).length));
-  $("cfgTable").tHead.innerHTML = "<tr><th></th>" +
-    Array.from({ length: n }, (_, i) => `<th>${names[i] || "pad " + i}</th>`).join("") + "</tr>";
-  $("cfgTable").tBodies[0].innerHTML = PARAMS.map(p => "<tr><td>" + p + "</td>" +
+  const params = PARAMS[lib];
+  const names = setupPins().map(nameOf);
+  const n = Math.max(names.length, ...params.map(p => (config[p] || []).length), 0);
+  $("cfgTable").tHead.innerHTML = params.length ? "<tr><th></th>" +
+    Array.from({ length: n }, (_, i) => `<th>${names[i] || "pad " + i}</th>`).join("") + "</tr>" : "";
+  $("cfgTable").tBodies[0].innerHTML = params.map(p => "<tr><td>" + p + "</td>" +
     Array.from({ length: n }, (_, i) => {
       const v = (config[p] || [])[i];
       return v === undefined ? "<td>–</td>"
-           : `<td class="${v !== DEFAULTS[p] ? "changed" : ""}">${v}</td>`;
+           : `<td class="${v !== DEFAULTS[lib][p] ? "changed" : ""}">${v}</td>`;
     }).join("") + "</tr>").join("");
+  $("cfgNote").hidden = params.length === 0;
   syncControls();
 }
 
@@ -876,7 +1297,7 @@ function renderConfig() {
 // value when every pad agrees. Mixed values leave the control where it was.
 function syncControls() {
   const t = $("target").value;
-  for (const p of PARAMS) {
+  for (const p of PARAMS[lib]) {
     const vals = config[p];
     if (!vals || !vals.length) continue;
     const v = t === "all" ? (vals.every(x => x === vals[0]) ? vals[0] : null) : vals[+t];
@@ -893,6 +1314,32 @@ function setParam(p, v) {
   padBase.reset();                        // a new set-up moves every resting level
 }
 
+// CapacitiveSensor's pin chooser mirrors /cap/send and /cap/recv.
+function buildCsPick() {
+  const header = PINS.filter(r => r[1] !== null).sort((a, b) => a[1] - b[1]);
+  $("csSendPick").innerHTML = '<option value="">none</option>' +
+    header.map(r => `<option value="${r[1]}">${r[0]}</option>`).join("");
+  $("csRecvPick").innerHTML = header.map(r =>
+    `<label><input type="checkbox" value="${r[1]}"> ${r[0]}</label>`).join("");
+  $("csSendPick").onchange = syncCsPick;
+}
+
+function syncCsPick() {
+  const s = $("csSendPick").value;
+  for (const c of $("csRecvPick").querySelectorAll("input")) {
+    c.disabled = c.value === s;
+    if (c.disabled) c.checked = false;
+  }
+}
+
+function syncCsPins() {
+  $("csSendPick").value = csSend === null ? "" : String(csSend);
+  for (const c of $("csRecvPick").querySelectorAll("input")) c.checked = csRecv.includes(+c.value);
+  syncCsPick();
+  $("csHint").hidden = csSend !== null && csRecv.length > 0;
+  if (lib === "CapacitiveSensor") { buildTargets(); renderConfig(); if (!pins) buildRig(); }
+}
+
 function markStale() {
   $("rig").classList.add("stale");
   for (const r of Object.values(rowsByPin)) {
@@ -906,8 +1353,7 @@ function setConnected(on) {
   $("connect").disabled = on;
   $("disconnect").disabled = !on;
   $("led").classList.toggle("on", on);
-  if (!on) $("status").textContent = "not connected";
-  else $("status").textContent = "connected";
+  $("status").textContent = on ? "connected" : "not connected";
   if (!on) { pins = null; lastSeq = null; }
 }
 
@@ -928,18 +1374,26 @@ setInterval(() => {
 }, 1000);
 
 /* ============================================================
-   8. Wiring
+   9. Wiring
    ============================================================ */
-buildRig();
+buildBreadboard();
+buildCsPick();
+setLib("FreeTouch");
 markStale();
-renderConfig();
 
 if (!("serial" in navigator)) {
   logLine("warn", "This browser has no Web Serial. Use Chrome or Edge over http://localhost.");
   $("connect").disabled = true;
 } else {
-  navigator.serial.addEventListener("disconnect", () => { if (port) disconnect(); });
+  // Fired at the port that went, bubbling here (Web Serial, "ondisconnect"):
+  // another serial device unplugged is not this board.
+  navigator.serial.addEventListener("disconnect", e => { if (port && e.target === port) disconnect(); });
 }
+
+// A tab asks the board; the board's echo moves the tab. With no board, the
+// tab just shows that library's drawing and notes.
+for (const b of document.querySelectorAll("#tabs button"))
+  b.onclick = () => writer ? send("/cap/lib", [b.dataset.lib]) : setLib(b.dataset.lib);
 
 $("connect").onclick = () => connect().catch(e => logLine("warn", e.message));
 $("disconnect").onclick = () => disconnect();
@@ -951,7 +1405,7 @@ $("rate").onchange = e => send("/rate", [+e.target.value]);
 $("heartbeat").onchange = e => send("/heartbeat", [+e.target.value]);
 $("deadband").onchange = e => send("/deadband", [parseInt(e.target.value, 10) || 0]);
 
-for (const p of ["oversample", "resistor", "freq", "hop"])
+for (const p of ["oversample", "resistor", "freq", "hop", "samples", "timeout"])
   $("p-" + p).onchange = e => setParam(p, +e.target.value);
 
 // compcap and intcap have a slider and a box. A dragged slider fires
@@ -972,16 +1426,30 @@ for (const p of ["compcap", "intcap"]) {
   $("p-" + p).onchange = e => { $("r-" + p).value = e.target.value; setParam(p, +e.target.value); };
 }
 
-// For looking at the drawing with no board: ?demo animates the faders.
+$("csApply").onclick = () => {
+  const s = $("csSendPick").value;
+  const recv = [...$("csRecvPick").querySelectorAll("input:checked")].map(c => +c.value);
+  if (s === "" || !recv.length) { logLine("warn", "choose a send pin and at least one receive pin"); return; }
+  send("/cap/send", [+s]);
+  send("/cap/recv", recv);
+};
+
+// For looking at the drawing with no board: ?demo animates the faders of the
+// tab showing, with synthetic counts.
 if (new URLSearchParams(location.search).has("demo")) {
-  setPins([0, 1, 6, 7, 8, 9, 10]);
-  const rest = [461, 350, 195, 167, 172, 174, 209];
+  const want = new URLSearchParams(location.search).get("lib");
+  if (want === "CapacitiveSensor") { csSend = 10; csRecv = [9, 8]; syncCsPins(); }
+  if (LIBS.includes(want)) setLib(want);
   let t = 0;
   setInterval(() => {
+    if (!pins) setPins(defaultPins(lib));
     t += 0.05;
+    const rest = lib === "FreeTouch" ? [461, 350, 195, 167, 172, 174, 209]
+               : lib === "FastTouch" ? pins.map(() => 0) : pins.map(() => 900);
     renderCap(rest.map((r, i) => {
       const hit = Math.max(0, Math.sin(t - i * 0.9)) ** 8;
-      return Math.round(r + hit * r * 1.8 + (Math.random() - 0.5) * 3);
+      if (lib === "FastTouch") return Math.round(hit * 18);
+      return Math.round(r + hit * Math.max(r, 1) * 1.8 + (Math.random() - 0.5) * 3);
     }));
   }, 50);
   logLine("", "demo: synthetic counts, not a board");

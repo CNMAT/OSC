@@ -84,7 +84,7 @@ after the name tell the page the shape.
 | **bat** — battery | `<i>` count (default 1) | `/bat` | `/bat <i>…` millivolts, one per pack |
 | **chg** — charger | — | `/chg [<i>]` set mA | `/chg <i> <i>` charging?, mA (-1 = untouched default) |
 | **touch** — touchscreen | `<i> <i>` width height | `/touch/map <i> <i> <i>` swapXY mirrorX mirrorY | `/touch <i> <i> [<i>]` x y [gesture], streamed while down |
-| **cap** — capacitive touch pads | `<i>` count | `/cap`; on a board with acquisition set-up (below): `/cap/<p> [<i> \| <i>…]` one value for every pad, one per pad, or none to ask; `/cap/<n>/<p> <i>` pad n only; `/cap/pins`; `/cap/config`; `/cap/defaults` | `/cap <i>…` one reading per pad; `/cap/<p> <i>…` every pad's setting, echoed after any set-up request; `/cap/pins <i>…` each pad's Arduino pin; `/cap/config` and `/cap/defaults` answer every `/cap/<p>` then `/cap/pins` |
+| **cap** — capacitive touch pads | `<i>` count | `/cap`; on a board with acquisition set-up (below): `/cap/lib [<s>]` which library measures; `/cap/<p> [<i> \| <i>…]` one value for every pad, one per pad, or none to ask; `/cap/<n>/<p> <i>` pad n only; `/cap/send [<i>]` and `/cap/recv [<i>…]` a send-and-receive library's pins; `/cap/pins`; `/cap/config`; `/cap/defaults` | `/cap <i>…` one reading per pad; `/cap/lib <s>` echoed, and after a change the board sends its `/enq` bundle again; `/cap/<p> <i>…` every pad's setting, echoed after any set-up request; `/cap/send [<i>]`, `/cap/recv <i>…` echoed; `/cap/pins <i>…` each pad's Arduino pin; `/cap/config` and `/cap/defaults` answer `/cap/lib`, the measuring library's `/cap/<p>` lines, its `/cap/send` and `/cap/recv` where it has them, then `/cap/pins` |
 | **joy** — joystick(s) | `<i>` axes | `/joy` | `/joy <i>…` axes |
 | **pot** — potentiometer / slider | `<i>` count | `/pot` | `/pot <i>…` |
 | **enc** — rotary encoder | — | `/enc`; `/enc/zero` | `/enc <i> <i>` position, delta |
@@ -102,22 +102,40 @@ after the name tell the page the shape.
 
 Where a board's pads have acquisition settings a client may change, they sit
 under `/cap/<p>`, in the order below, as `/mic/gain` and `/touch/map` sit under
-their capabilities. The parameters are those of a SAMD21's PTC as Adafruit
-FreeTouch drives it (`XiaoSamd21Oscuino`); a board whose pads have no set-up,
-the Circuit Playground's among them, answers none of these. A value outside
-its set changes nothing, and the echo then shows what is still in force.
+their capabilities. A board whose pads have no set-up, the Circuit
+Playground's among them, answers none of these. A value outside its set
+changes nothing, and the echo then shows what is still in force.
 
-| `<p>` | values | the PTC setting |
-|---|---|---|
-| `oversample` | 1 2 4 8 16 32 64 | samples accumulated per reading; `/cap` stays on one scale, the sum divided by this |
-| `resistor` | 0 20 50 100 | series resistor, kΩ |
-| `freq` | 0 none, 1 hop, 2 spread, 3 spread-median | frequency mode |
-| `hop` | 1..16 | sample delay, written as hop − 1 when `freq` is not 0 |
-| `compcap` | 0..16383 | compensation capacitor code |
-| `intcap` | 0..63 | integration capacitor code |
+A board may measure its pads with more than one library, one at a time:
+`/cap/lib <s>` chooses, by the library's own name, and `/cap/lib` alone asks.
+`XiaoSamd21Oscuino` offers `FreeTouch` (Adafruit's driver for the SAMD21's
+PTC), `FastTouch` (the pin's charge time through its own pull-up) and
+`CapacitiveSensor` (a send pin driving receive pins through external
+resistors). The pad count and `/cap/pins` change with the library, which is
+why the board sends its `/enq` bundle again after a change. Each parameter
+below belongs to one library, keeps its value while another measures, and
+counts its pads in that library's own order.
 
-`<n>` is the pad's index in `/cap`, so `/cap/3/intcap 10` sets the fourth
-reading's pad. Incoming OSC patterns apply: `/cap/[0-1]/hop 5` sets two pads.
+| `<p>` | library | values | the setting |
+|---|---|---|---|
+| `oversample` | FreeTouch | 1 2 4 8 16 32 64 | samples accumulated per reading; `/cap` stays on one scale, the sum divided by this |
+| `resistor` | FreeTouch | 0 20 50 100 | series resistor, kΩ |
+| `freq` | FreeTouch | 0 none, 1 hop, 2 spread, 3 spread-median | frequency mode |
+| `hop` | FreeTouch | 1..16 | sample delay, written as hop − 1 when `freq` is not 0 |
+| `compcap` | FreeTouch | 0..16383 | compensation capacitor code |
+| `intcap` | FreeTouch | 0..63 | integration capacitor code |
+| `samples` | CapacitiveSensor | 1..255 | charge cycles summed per reading |
+| `timeout` | CapacitiveSensor | 1..60000 | the library's timeout, nominally ms; a reading that times out is the library's own −2 |
+
+FastTouch has no settings. CapacitiveSensor's pads are its receive pins:
+`/cap/send <i>` chooses the send pin and `/cap/recv <i>…` the receive pins,
+one pad each, and until both are chosen it has no pads. `/cap/defaults`
+returns the measuring library to its defaults, which for CapacitiveSensor
+means no pins.
+
+`<n>` is the pad's index among its library's pads, so `/cap/3/intcap 10` sets
+FreeTouch's fourth pad. Incoming OSC patterns apply: `/cap/[0-1]/hop 5` sets
+two pads.
 
 ## What moved
 

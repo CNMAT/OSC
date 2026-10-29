@@ -4,10 +4,25 @@ written against XiaoSamd21Oscuino.
 
     python3 test/hardware/capsetupprobe.py PORT
 
-Leave the pads untouched while it runs (about 20 s). It checks two things per
+Leave the pads untouched while it runs (about 45 s). It checks two things per
 setting: the echo (what the sketch says it holds), and the readings (what the
 PTC does with it), so a setting that is echoed but never reaches the
-conversion fails. Exit status 0 only if every check passed.
+conversion fails. Then it switches /cap/lib through FastTouch and
+CapacitiveSensor and back, and checks that each library reports its own pins,
+that CapacitiveSensor refuses bad pins, and that FreeTouch's resting counts
+come back after the other two have had the pins. With no resistors fitted,
+CapacitiveSensor can only be checked for its plumbing: every read times out.
+Exit status 0 only if every check passed.
+
+Two checks guard fixes that a reading cannot show:
+  - the PTC as /diag reads it back: on, with exactly the pads' Y lines,
+    under FreeTouch; off with none under the other two, whose pins it
+    otherwise held (FastTouch read nothing on the Y-line pins)
+  - OSC is answered between pads: with the stream on and four
+    CapacitiveSensor pads each waiting out its timeout, an echo comes back
+    within LATENCY_LIMIT s, where a scan read in one go held it for up to
+    the whole scan (/diag's "last scan" is printed and must exceed 2 s, or
+    the check proves nothing)
 
 "moved" means the mean of 5 asks lies more than MOVED_FACTOR x the baseline's
 own min..max range (at least 1 count) from the baseline mean. The factor is a
@@ -23,6 +38,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from oscprobe import Port, slip_encode, slip_frames, msg, decode  # noqa: E402
 
 MOVED_FACTOR = 5
+# One CapacitiveSensor pad's timeout at the default 2000, 0.70 s measured on
+# this board on 2026-10-28, plus 0.3 s for the USB round trip and drain()'s
+# 50 ms select: a choice, printed beside every latency.
+LATENCY_LIMIT = 1.0
+# The sketch header's pad table: FreeTouch's getYLine() on the XIAO_m0 variant.
+YLINE = {0: 0, 1: 2, 6: 14, 7: 15, 8: 5, 9: 3, 10: 4}
 FAILED = []
 PASSED = []
 
@@ -51,12 +72,26 @@ class Board:
             out.extend(flat(decode(f)))
         return out
 
-    def reply(self, addr, *args, want=None):
+    def reply(self, addr, *args, want=None, wait=0.25):
         """Args of the first reply on `want` (default: the address sent)."""
         want = want or addr
-        for a, v in self.ask(addr, *args):
+        for a, v in self.ask(addr, *args, wait=wait):
             if a == want:
                 return v
+        return None
+
+    def latency(self, addr, *args, want=None, limit=4.0):
+        """Seconds until the first message on `want` (default: addr) comes
+        back, or None after `limit`."""
+        want = want or addr
+        self.p.drain(0.05)                 # what was already in flight is not the answer
+        t0 = time.time()
+        self.p.write(slip_encode(msg(addr, list(args))))
+        buf = b''
+        while time.time() - t0 < limit:
+            buf += self.p.drain(0.01)
+            if any(a == want for f in slip_frames(buf) for a, _ in flat(decode(f))):
+                return time.time() - t0
         return None
 
     def readings(self, n=5):
@@ -79,10 +114,25 @@ def moved(base, new):
     return [abs(n - b) > MOVED_FACTOR * max(1, r) for b, r, n in zip(bm, br, nm)], bm, nm
 
 
+def ptc_in(diag):
+    """The 'PTC on, Y 0x....' part of a /diag string, or None."""
+    m = re.search(r'PTC (on|off), Y 0x([0-9a-f]{4})', (diag or [''])[0])
+    return (m.group(1), int(m.group(2), 16)) if m else None
+
+
+def check_ptc(when, diag, pins):
+    """FreeTouch's pads hold the PTC on with their Y lines; anything else, off with none."""
+    want = ('on', sum(1 << YLINE[p] for p in pins)) if pins else ('off', 0)
+    got = ptc_in(diag)
+    check(f'{when}: /diag reads the PTC back {want[0]}, Y 0x{want[1]:04x}', got == want,
+          f'got {got}' if got else f'no PTC in {diag}')
+
+
 def main():
     b = Board(sys.argv[1])
     try:
         b.ask('/rate', 0, wait=0.5)
+        b.ask('/cap/lib', 'FreeTouch', wait=0.6)
         print('defaults and pins:')
         cfg = dict(b.ask('/cap/defaults'))
         n = len(cfg.get('/cap/pins', []))
@@ -91,8 +141,9 @@ def main():
                   '/cap/hop': 1, '/cap/compcap': 8192, '/cap/intcap': 63}
         for k, v in expect.items():
             check(f'{k} default {v} on every pad', cfg.get(k) == [v] * n, cfg.get(k))
-        check('/cap/pins is D0 D1 D6 D7 D8 D9 D10',
-              b.reply('/cap/pins') == [0, 1, 6, 7, 8, 9, 10])
+        ft_pins = [0, 1, 6, 7, 8, 9, 10]
+        check('/cap/pins is D0 D1 D6 D7 D8 D9 D10', b.reply('/cap/pins') == ft_pins)
+        check_ptc('FreeTouch at the start', b.reply('/enq', want='/diag'), ft_pins)
 
         base = b.readings(10)
         bm, br = stats(base)
@@ -160,6 +211,64 @@ def main():
         b.ask('/cap/defaults')
         mv, _, nm = moved(base, b.readings())
         check('defaults restore the baseline on every pad', not any(mv),
+              [round(x, 1) for x in nm])
+
+        print('the library switch:')
+        got = dict(b.ask('/cap/lib', 'FastTouch', wait=0.6))
+        check('/cap/lib FastTouch echoed, and the hello re-sent with 11 pads',
+              got.get('/cap/lib') == ['FastTouch'] and got.get('/enq/cap') == [11], got.get('/enq/cap'))
+        check_ptc('FastTouch', got.get('/diag'), [])
+        check('FastTouch pins are D0..D10', b.reply('/cap/pins') == list(range(11)))
+        ft = b.readings(5)
+        check('FastTouch readings are eleven values within 0..23',
+              len(ft) == 5 and all(len(r) == 11 and all(0 <= v <= 23 for v in r) for r in ft),
+              ft[-1] if ft else None)
+        check('a FreeTouch setting is still answered while FastTouch measures',
+              b.reply('/cap/intcap') == [63] * 7)
+
+        got = dict(b.ask('/cap/lib', 'CapacitiveSensor', wait=0.6))
+        check('/cap/lib CapacitiveSensor echoed, and the hello carries no pads',
+              got.get('/cap/lib') == ['CapacitiveSensor'] and '/enq' in got and '/enq/cap' not in got)
+        check_ptc('CapacitiveSensor', got.get('/diag'), [])
+        check('with no pads, /cap answers nothing', b.reply('/cap') is None)
+        for addr, args, want in [('/cap/send', [11], []), ('/cap/send', [-1], []),
+                                 ('/cap/send', [10], [10]), ('/cap/recv', [10, 9], []),
+                                 ('/cap/recv', [9, 9], []), ('/cap/recv', [9, 8], [9, 8]),
+                                 ('/cap/send', [9], [10])]:
+            check(f'{addr} {" ".join(map(str, args))} -> {want}', b.reply(addr, *args, wait=0.6) == want)
+        check('two pads: samples and timeout at their defaults',
+              b.reply('/cap/samples') == [30, 30] and b.reply('/cap/timeout') == [2000, 2000])
+        check('/cap/timeout 70000 refused', b.reply('/cap/timeout', 70000) == [2000, 2000])
+        b.ask('/cap/timeout', 20)
+        r = b.reply('/cap', wait=0.6)
+        check('with no resistors fitted, both pads read the library\'s -2', r == [-2, -2], r)
+
+        print('OSC between pads (the stream on, four pads timing out):')
+        b.ask('/cap/recv', 9, 8, 7, 6, wait=0.6)
+        b.ask('/cap/timeout', 2000, wait=0.6)
+        b.ask('/rate', 20, wait=0.1)
+        lat = []
+        for k in range(5):
+            time.sleep(0.37 * k)           # land at different points in the scan
+            lat.append(b.latency('/cap/samples'))
+        diag = b.reply('/enq', want='/diag', wait=3.5)
+        m = re.search(r'last scan (\d+) us', (diag or [''])[0])
+        scan_us = int(m.group(1)) if m else None
+        print(f'    latencies {[None if x is None else round(x, 2) for x in lat]} s; '
+              f'last scan {scan_us} us')
+        check('a scan of four timed-out pads takes over 2 s (else the next check proves nothing)',
+              scan_us is not None and scan_us > 2_000_000, scan_us)
+        check(f'every echo came back within {LATENCY_LIMIT} s while such scans ran',
+              all(x is not None and x < LATENCY_LIMIT for x in lat))
+        b.ask('/rate', 0, wait=3.5)
+
+        cfg = dict(b.ask('/cap/defaults', wait=0.6))
+        check('/cap/defaults takes the pins away', cfg.get('/cap/pins') == [] and cfg.get('/cap/send') == [])
+
+        got = dict(b.ask('/cap/lib', 'FreeTouch', wait=0.6))
+        check_ptc('FreeTouch again', got.get('/diag'), ft_pins)
+        mv, _, nm = moved(base, b.readings())
+        check('back on FreeTouch, every pad rests where it did', not any(mv),
               [round(x, 1) for x in nm])
         b.ask('/rate', 20)
     finally:

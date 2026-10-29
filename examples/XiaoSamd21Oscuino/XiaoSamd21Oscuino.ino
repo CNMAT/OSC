@@ -1,23 +1,59 @@
 /*
- * XiaoSamd21Oscuino — every PTC-capable pin of a Seeed XIAO SAMD21 as an
- * Adafruit FreeTouch self-capacitance pad, streamed as OSC over SLIP-encoded
- * USB serial, with the PTC acquisition settings configurable over OSC.
+ * XiaoSamd21Oscuino — the pins of a Seeed XIAO SAMD21 as capacitive touch
+ * pads, measured by one of three libraries chosen live over OSC, streamed as
+ * OSC over SLIP-encoded USB serial, with each library's settings configurable
+ * over OSC.
  * -----------------------------------------------------------------------------
  * Board : Seeed XIAO SAMD21 (Seeeduino XIAO, ATSAMD21G18, VID 0x2886 PID 0x802F)
  * FQBN  : Seeeduino:samd:seeed_XIAO_m0
- * Libs  : "Adafruit FreeTouch Library" (1.1.3 here) and "OSC" (CNMAT, 4.0.0 here)
+ * Libs  : "Adafruit FreeTouch Library" (1.1.3) and "CapacitiveSensor" (0.5.1)
+ *         from the Library Manager; FastTouch (0.91) from
+ *         github.com/adrianfreed/FastTouch, which is not in the Library
+ *         Manager; "OSC" (CNMAT, 4.0.0). Built here against FastTouch at
+ *         fef329c and CapacitiveSensor at aa01848.
  * Page  : XiaoSamd21Oscuino.html beside this sketch; serve this folder
  *         (python3 -m http.server) and open it in Chrome or Edge
  * Tests : test/hardware/contractprobe.py PORT (the contract) and
- *         test/hardware/capsetupprobe.py PORT (the set-up addresses) on the
- *         board; extras/webserial/test/test-xiaosamd21-contract.mjs holds the
- *         sketch, the page and ADDRESSES.md to one parameter list.
+ *         test/hardware/capsetupprobe.py PORT (the set-up addresses and the
+ *         library switch) on the board; extras/webserial/test/
+ *         test-xiaosamd21-contract.mjs holds the sketch, the page and
+ *         ADDRESSES.md to one list of libraries and parameters.
  *         test/hardware/oscsend.py sends one message; touchwatch.py records
- *         the stream to a CSV.
+ *         the stream to a CSV; captouchprobe.py PORT LIB... waits for a touch
+ *         and says which pad rose; xiaosamd21capture.py records the bytes the
+ *         page test decodes.
  *
- * WHICH PINS. FreeTouch measures self-capacitance on the PTC's Y lines only.
- * Its rule (Adafruit_FreeTouch::getYLine) is PA02..PA07 -> Y0..Y5 and
- * PB00..PB09 -> Y6..Y15. Applied to the XIAO_m0 variant's g_APinDescription:
+ * THREE LIBRARIES, ONE AT A TIME. /cap/lib <s> chooses which measures:
+ *
+ *   FreeTouch         Adafruit's driver for the SAMD21's PTC (peripheral touch
+ *                     controller): self-capacitance on the PTC's Y lines. The
+ *                     library at power-up.
+ *   FastTouch         Adrian Freed's: drive the pin LOW for 1 ms, release it to
+ *                     its internal pull-up, and count how many of 23
+ *                     back-to-back port reads still see it LOW; 0..23
+ *                     (fastTouchMax() on SAMD21). Any pin with a pull-up; no
+ *                     settings.
+ *   CapacitiveSensor  Paul Badger's, maintained by Paul Stoffregen: a send pin
+ *                     drives each receive pin through an external resistor,
+ *                     and the count is how long the receive pin takes to
+ *                     follow. Needs that wiring, so it has no pins until you
+ *                     choose them.
+ *
+ * A switch turns the PTC off and releases every header pin to a plain input
+ * first, because the libraries hold pins differently: FreeTouch hands them to
+ * the PTC through the pin multiplexer, and the core's pinMode(), which
+ * FastTouch and CapacitiveSensor both call, rewrites the whole PINCFG register
+ * and so takes them back. That was not enough on its own: with the PTC left
+ * enabled and its Y lines on, FastTouch read nothing on the seven Y-line pins
+ * (see ptcRelease()). Returning to FreeTouch reruns its bring-up. Each
+ * library's settings survive a switch. After a switch the board sends its /enq
+ * bundle again, because the pad count and /cap/pins change with the library.
+ *
+ * WHICH PINS.
+ *
+ * FreeTouch measures self-capacitance on the PTC's Y lines only. Its rule
+ * (Adafruit_FreeTouch::getYLine) is PA02..PA07 -> Y0..Y5 and PB00..PB09 ->
+ * Y6..Y15. Applied to the XIAO_m0 variant's g_APinDescription:
  *
  *   pad  pin  port  Y line  shared with
  *   0    D0   PA02  Y0      A0, DAC
@@ -29,26 +65,40 @@
  *   6    D10  PA06  Y4      SPI MOSI
  *
  * D2..D5 are PA10, PA11, PA08, PA09, which are PTC X lines (mutual
- * capacitance). FreeTouch does not drive X lines, so this library can reach
- * seven of the eleven pins. The LED and USB pins have no Y line either.
- * The table is not hard-coded: setup() walks every pin in the variant and
- * keeps each one that has a Y line and whose library begin() succeeds;
- * /cap/pins and /diag report the result. A pad cannot also serve as Serial1 or
- * SPI, and this sketch starts neither.
- * The Y lines in the table are the library's rule, and Seeed's front pinout
- * (github.com/Seeed-Studio/OSHW-XIAO-Series, pinout/XIAO_SAMD21_front_pinout.png
- * at deb2f88e) labels all seven identically, D9 as "PA05 ... PTC-Y3" included.
- * The Arduino Zero variant's comment table prints Y[5] for PA05, which
- * collides with PA07's Y[5]; two sources to one, but D9 alone has not yet been
- * seen to move pad 5 on hardware. Seeed's Seeeduino-XIAO.md in the same
- * repository lists QTouch on exactly these seven pins (A0, A1, A6..A10).
+ * capacitance). FreeTouch does not drive X lines, so it reaches seven of the
+ * eleven pins. The LED and USB pins have no Y line either. The table is not
+ * hard-coded: setup() walks every pin in the variant and keeps each one that
+ * has a Y line and whose library begin() succeeds. The Y lines are the
+ * library's rule, and Seeed's front pinout (github.com/Seeed-Studio/
+ * OSHW-XIAO-Series, pinout/XIAO_SAMD21_front_pinout.png at deb2f88e) labels
+ * all seven identically, D9 as "PA05 ... PTC-Y3" included. The Arduino Zero
+ * variant's comment table prints Y[5] for PA05, which collides with PA07's
+ * Y[5]; two sources to one, but D9 alone has not yet been seen to move pad 5
+ * on hardware. Seeed's Seeeduino-XIAO.md in the same repository lists QTouch on
+ * exactly these seven pins (A0, A1, A6..A10).
+ *
+ * FastTouch measures D0..D10, every header pin: the variant's pins 0..10, whose
+ * table calls them the "Digital & Analog pins" (11..13 are the LEDs, 14..16
+ * USB).
+ *
+ * CapacitiveSensor measures the receive pins you choose with /cap/recv, each
+ * wired to the send pin you choose with /cap/send through a resistor, all from
+ * D0..D10. Its example sketch uses "a high value resistor e.g. 10M between send
+ * pin and receive pin" and says "50K - 50M. Larger resistor values yield larger
+ * sensor values."
+ *
+ * A pad cannot also serve as Serial1 or SPI, and this sketch starts neither.
  *
  * ADDRESSES. The OSC library's ADDRESSES.md is the contract for these:
  *
- *   /enq                  -> /enq "XiaoSamd21Oscuino", /enq/cap <n>, /enq/diag,
- *                            then /diag <s>: the pads found and the duration
- *                            of the last full scan in microseconds
- *   /cap                  -> /cap <i>xN, a fresh reading of every pad
+ *   /enq                  -> /enq "XiaoSamd21Oscuino", /enq/cap <n> when the
+ *                            library measuring has pads, /enq/diag, then
+ *                            /diag <s>: the library, its pads, the duration
+ *                            of its last full scan in microseconds, and the
+ *                            PTC read back ("PTC on, Y 0xc03d": enabled, and
+ *                            YENABLE's sixteen Y lines as a mask)
+ *   /cap                  -> /cap <i>xN, a fresh reading of every pad (no
+ *                            reply when the library measuring has no pads)
  *   /state                -> /state <seq> <millis>, seq = the next report's
  *   /s/m                  -> /s/m <micros>
  *   /rate <ms>            stream period, 0..1000; 0 stops the stream. Echoed
@@ -58,58 +108,85 @@
  *                         tick reports only when some pad has moved by at
  *                         least N counts since the last report, 1..64
  *
- *   STREAM: one bundle per report, /state <seq> <millis> and /cap <i>xN.
+ *   STREAM: one bundle per report, /state <seq> <millis> and /cap <i>xN;
+ *   /state alone while the library measuring has no pads (CapacitiveSensor
+ *   before its pins are chosen), because it is the stream's heartbeat.
  *   With the default /deadband 0 that is one bundle every /rate ms, which is
  *   what ADDRESSES.md and the repo's contractprobe.py require (at least 10
  *   bundles in about 1 s at /rate 50). Untouched pads hold their counts
  *   exactly, so change-driven reporting, CircuitPlaygroundSensors' default,
- *   would go silent at rest. Here it is opt-in, through /deadband.
+ *   would go silent at rest. Here it is opt-in, through /deadband. A scan
+ *   longer than /rate sets the pace instead: FastTouch's 1 ms discharge per
+ *   pin makes its scan of eleven at least 11 ms.
  *
  * TOUCH SET-UP, ADDRESSES.md's "cap set-up". The addresses sit under the
  * capability's own root, as /mic/gain and /touch/map do. <p> is one of the
- * six parameter names below. N is the pad count.
+ * parameter names below; it belongs to one library, and N is the number of
+ * that library's pads, whichever library is measuring.
  *
+ *   /cap/lib [<s>]           ask, or choose FreeTouch, FastTouch or
+ *                            CapacitiveSensor          -> /cap/lib <s>
  *   /cap/<p>                 ask -> /cap/<p> <i>xN, every pad's setting
  *   /cap/<p> <v>             set every pad to v              -> echoed as above
- *   /cap/<p> <v0> .. <vN-1>  one value per pad, in /cap order -> echoed
+ *   /cap/<p> <v0> .. <vN-1>  one value per pad, in its library's pad order
  *   /cap/<n>/<p> <v>         pad n only, 0..N-1; incoming OSC patterns work,
  *                            so /cap/[0-3]/compcap 4000 sets four -> echoed
- *   /cap/pins                -> /cap/pins <i>xN, the Arduino pin of each pad
- *   /cap/config              -> every /cap/<p> line, then /cap/pins
- *   /cap/defaults            every pad back to the defaults  -> as /cap/config
+ *   /cap/send [<i>]          CapacitiveSensor's send pin, 0..10
+ *                                                       -> /cap/send [<i>]
+ *   /cap/recv [<i> ...]      its receive pins, one pad each, 0..10
+ *                                                       -> /cap/recv <i>...
+ *   /cap/pins                -> /cap/pins <i>xN, the measuring library's pins
+ *   /cap/config              -> /cap/lib, the measuring library's /cap/<p>
+ *                            lines, /cap/send and /cap/recv for
+ *                            CapacitiveSensor, then /cap/pins
+ *   /cap/defaults            the measuring library back to its defaults
+ *                            (CapacitiveSensor: no pins) -> as /cap/config
  *
- *   p           values                   default  FreeTouch field -> PTC register
- *   oversample  1 2 4 8 16 32 64         4        oversample -> CONVCTRL.ADCACCUM
- *   resistor    0 20 50 100 (kOhm)       50       seriesres  -> SERRES.RESISTOR
- *   freq        0 none, 1 hop, 2 spread, 0        freqhop    -> FREQCTRL.FREQSPREADEN
- *               3 spread-median
- *   hop         1..16                    1        hops       -> FREQCTRL.SAMPLEDELAY = hop-1
- *   compcap     0..16383                 8192     compcap    -> COMPCAPH:COMPCAPL
- *   intcap      0..63                    63       intcap     -> INTCAP
+ *   p           library           values                  default  writes / calls
+ *   oversample  FreeTouch         1 2 4 8 16 32 64        4        CONVCTRL.ADCACCUM
+ *   resistor    FreeTouch         0 20 50 100 (kOhm)      50       SERRES.RESISTOR
+ *   freq        FreeTouch         0 none, 1 hop,          0        FREQCTRL.FREQSPREADEN
+ *                                 2 spread, 3 spread-median
+ *   hop         FreeTouch         1..16                   1        FREQCTRL.SAMPLEDELAY = hop-1
+ *   compcap     FreeTouch         0..16383                8192     COMPCAPH:COMPCAPL
+ *   intcap      FreeTouch         0..63                   63       INTCAP
+ *   samples     CapacitiveSensor  1..255                  30       capacitiveSensorRaw(samples)
+ *   timeout     CapacitiveSensor  1..60000                2000     set_CS_Timeout_Millis()
  *
  * A value outside its set changes nothing, and the echo then shows the
  * setting still in force. Ints and floats are both accepted (floats are
- * rounded), because Max sends either.
+ * rounded), because Max sends either. A send pin among the receive pins, a
+ * receive pin given twice, or a pin outside 0..10 is refused the same way.
  *
  * WHERE THE DEFAULTS COME FROM. oversample 4, resistor 50 kOhm and freq 0 are
- * what the library's own example (examples/freetouch) and the OSC repo's
- * CircuitPlaygroundSensors pass. The constructor's default resistor is 0; this
- * sketch follows the example. compcap 0x2000 and intcap 0x3F come from
- * adafruit_ptc_get_config_default(). The library never initialises `hops`;
+ * what FreeTouch's own example (examples/freetouch) and the OSC repo's
+ * CircuitPlaygroundSensors pass. FreeTouch's constructor defaults the resistor
+ * to 0; this sketch follows the example. compcap 0x2000 and intcap 0x3F come
+ * from adafruit_ptc_get_config_default(). FreeTouch never initialises `hops`;
  * hop 1 (FREQ_HOP_1) is the value a zero-initialised object holds.
- * /rate 20 and /heartbeat 2000, with their ranges and the deadband's range,
- * are CircuitPlaygroundSensors' values. Its default deadband of 4 is not
- * used, for the reason given under STREAM.
+ * samples 30 is what CapacitiveSensor's example (CapacitiveSensorSketch)
+ * passes; timeout 2000 is its constructor's, a count that the library scales
+ * by F_CPU and a loopTimingFactor of 310 its source calls "determined
+ * empirically - a hack", so it is milliseconds only approximately. The upper
+ * bound of 60000 is /heartbeat's. /rate 20 and /heartbeat 2000, with their
+ * ranges and the deadband's range, are CircuitPlaygroundSensors' values. Its
+ * default deadband of 4 is not used, for the reason given under STREAM.
  *
- * THE READING is what the library's measure() returns: the PTC result divided
- * by the oversample count. That keeps it on one scale when oversample changes.
- * It is a count that rises with the capacitance on the pin, not picofarads,
- * and no conversion to picofarads is attempted. For scale: on a Circuit
- * Playground Express with the same library and the same defaults, untouched
- * pads read 196..275 and touched pads 686..1014 (CircuitPlaygroundSensors'
- * header). That was measured on that board, not this one.
+ * THE READINGS are each library's own count, none of them picofarads, and no
+ * conversion is attempted.
+ *   FreeTouch: what measure() returns, the PTC result divided by the
+ *   oversample count, so it stays on one scale when oversample changes. On a
+ *   Circuit Playground Express with the same library and defaults, untouched
+ *   pads read 196..275 and touched ones 686..1014 (CircuitPlaygroundSensors'
+ *   header), measured on that board, not this one.
+ *   FastTouch: fastTouchRead(), 0..23; its README: "0 = no touch, higher =
+ *   more capacitance".
+ *   CapacitiveSensor: capacitiveSensorRaw(samples), the total over `samples`
+ *   charge cycles, or the library's own -2 when a cycle timed out (no
+ *   resistor, or more capacitance than the timeout allows), passed through
+ *   unchanged.
  *
- * WHY THE SKETCH CALLS THE LIBRARY'S C LAYER. Adafruit_FreeTouch's setters
+ * WHY FREETOUCH IS DRIVEN THROUGH ITS C LAYER. Adafruit_FreeTouch's setters
  * (setCompCap, setIntCap, setFreqHopping, ...) are private, and its
  * constructor takes only oversample, resistor and frequency mode, so compcap,
  * intcap and hop cannot be set through the class. The library's adafruit_ptc.h
@@ -121,39 +198,44 @@
  * Reconfiguring is only a write to that struct; nothing is re-initialised.
  *
  * From reading the library source, not from measurement: for any freq other
- * than 0 the library writes the same registers (FREQSPREADEN = 1,
+ * than 0 FreeTouch writes the same registers (FREQSPREADEN = 1,
  * SAMPLEDELAY = hop-1), so in FreeTouch 1.1.3 modes 1, 2 and 3 behave
  * identically.
  *
- * STATUS, 2026-10-28, on a Seeeduino XIAO (USB serial 3316130B...302F), Seeed
- * SAMD core 1.8.6, arduino-cli 1.5.1, this file built against this
- * repository's library at 6f640f4 (what was on the pins was not recorded):
- *   - test/hardware/contractprobe.py: 10 passed, 0 failed, 1 skipped (/diag,
- *     free text), on three consecutive runs
- *   - test/hardware/capsetupprobe.py: 30 passed, 0 failed. Every set-up form
- *     is echoed, illegal values are refused, and readings move on the pad
- *     addressed and no other: compcap 4000 raised all seven by 82..87 counts
- *     (means of 5 asks), intcap 10 on pad 3 took pad 3 to 0 and left six
- *     unchanged
- *   - resting counts at the defaults: D0 460..461, D1 348..355, D6 195,
- *     D7 166..167, D8 171..172, D9 173..175, D10 208..209
- *   - one full scan of seven pads, one /diag reading at each setting: 249 us
- *     at oversample 1, 413 at 4, 1038 at 16, 3556 at 64
- *   - all seven pads rose under a finger, D0 by up to 161 counts and D6 by up
- *     to 540 (test/hardware/xiaosamd21-touch-2026-10-28.csv, taken with the
- *     build before the move, whose readPad() is this one). The touches were not one pin
- *     at a time, so that capture does not tie each pad to its pin.
+ * STATUS, 2026-10-29: this build (50,876 bytes; arduino-cli 1.5.1, Seeeduino
+ * SAMD core 1.8.6) on one bare XIAO SAMD21 with nothing on its pins but touch
+ * wires, no resistors:
+ *   capsetupprobe.py  54 passed, 0 failed: every setting's echo and its effect
+ *                     on the readings, the library switch, CapacitiveSensor's
+ *                     pin rules, the PTC read back (on, Y 0xc03d under
+ *                     FreeTouch; off, Y 0x0000 under the other two), and OSC
+ *                     answered between pads (echoes in 0.16..0.59 s while
+ *                     four timed-out pads made 2.65 s scans)
+ *   contractprobe.py  10 passed, 0 failed, 1 skipped (/diag, free text)
+ * The same probe failed on the builds it is meant to catch: its PTC checks on
+ * this sketch without ptcRelease(), and its latency check on the previous
+ * build (one echo of five back within 4 s) and on one that stepped the pads
+ * but kept the template's pollOSC() (1.69..1.96 s).
+ * By hand through the page, 2026-10-28, after ptcRelease(): FastTouch rose on
+ * all eleven pins, and FreeTouch "works where it should" (the user's words);
+ * observed, not recorded.
+ * Not verified: D9 as pad 5 in a recorded isolated touch; CapacitiveSensor
+ * with resistors fitted; noise, under any setting.
  */
 
 #include <Adafruit_FreeTouch.h>
+#include <FastTouch.h>
+#include <CapacitiveSensor.h>
 #include <OSCBundle.h>
 #include <OSCBoards.h>
 #include <SLIPEncodedSerial.h>
 
 #ifdef BOARD_HAS_USB_SERIAL
 SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
+#define SLIP_PORT thisBoardsSerialUSB      // the port under SLIPSerial, for pollOSC()
 #else
 SLIPEncodedSerial SLIPSerial(Serial);
+#define SLIP_PORT Serial
 #endif
 
 static const unsigned long BAUD = 115200;  // ignored on native USB
@@ -164,27 +246,52 @@ static const unsigned long BAUD = 115200;  // ignored on native USB
  * mentions has to be declared before that point.
  */
 static const uint8_t MAX_PADS = 16;        // the PTC has sixteen Y lines
+static const uint8_t HEADER_PINS = 11;     // D0..D10, the variant's pins 0..10
 
-struct Pad {
+enum Lib { LIB_FREETOUCH, LIB_FASTTOUCH, LIB_CAPSENSE, LIB_COUNT };
+static const char *const LIB_NAME[LIB_COUNT] = { "FreeTouch", "FastTouch", "CapacitiveSensor" };
+
+struct Pad {                               // a FreeTouch pad
   uint8_t pin;                             // Arduino pin number
   struct adafruit_ptc_config cfg;          // everything a conversion uses
 };
 
-struct Sample {
-  uint16_t v[MAX_PADS];
+struct CsPad {                             // a CapacitiveSensor receive pin
+  uint8_t pin;
+  uint8_t samples;
+  uint16_t timeoutMs;
+  CapacitiveSensor *cs;                    // only while CapacitiveSensor measures
 };
 
-static Pad pads[MAX_PADS];
-static uint8_t padCount = 0;
+struct Sample {
+  int32_t v[MAX_PADS];
+};
 
-enum Param { P_OVERSAMPLE, P_RESISTOR, P_FREQ, P_HOP, P_COMPCAP, P_INTCAP, P_COUNT };
+static Pad ptcPads[MAX_PADS];
+static uint8_t ptcCount = 0;
+static uint8_t ftPins[MAX_PADS];
+static uint8_t ftCount = 0;
+static CsPad csPads[MAX_PADS];
+static uint8_t csCount = 0;
+static int8_t csSend = -1;                 // -1 until chosen; never sent as a value
+static uint8_t lib = LIB_FREETOUCH;
+
+enum Param { P_OVERSAMPLE, P_RESISTOR, P_FREQ, P_HOP, P_COMPCAP, P_INTCAP,
+             P_SAMPLES, P_TIMEOUT, P_COUNT };
 // Whole addresses, so the table reads as what goes on the wire; the router
 // matches the part after "/cap" against the offset route("/cap") hands it.
 static const char *const PARAM_ADDR[P_COUNT] = {
-  "/cap/oversample", "/cap/resistor", "/cap/freq", "/cap/hop", "/cap/compcap", "/cap/intcap"
+  "/cap/oversample", "/cap/resistor", "/cap/freq", "/cap/hop", "/cap/compcap", "/cap/intcap",
+  "/cap/samples", "/cap/timeout"
+};
+static const uint8_t PARAM_LIB[P_COUNT] = {
+  LIB_FREETOUCH, LIB_FREETOUCH, LIB_FREETOUCH, LIB_FREETOUCH, LIB_FREETOUCH, LIB_FREETOUCH,
+  LIB_CAPSENSE, LIB_CAPSENSE
 };
 static const size_t CAP_ROOT = 4;          // strlen("/cap")
 static const int32_t RESISTOR_KOHM[] = { 0, 20, 50, 100 };  // series_resistor_t order
+static const uint8_t CS_SAMPLES_DEFAULT = 30;     // CapacitiveSensor's example
+static const uint16_t CS_TIMEOUT_DEFAULT = 2000;  // CapacitiveSensor's constructor
 
 // bundleIN must outlive one pass through loop(): pollOSC() returns as soon as
 // the serial buffer runs dry, often part way through a packet.
@@ -197,11 +304,18 @@ static uint16_t heartbeatMs = 2000;        // with a deadband: report even when 
 static uint16_t deadband = 0;              // 0 = every tick; N = change of N counts needed
 static uint32_t lastReport = 0;
 static uint32_t scanMicros = 0;            // duration of the last full scan
+static int8_t scanLib = -1;                // the library that scan belonged to
 static bool havePrev = false;
 static Sample prev;
 static char bootNote[48] = "";             // a disagreement found at boot, if any
 
-/* ------------------------------------------------------------------- PTC */
+// The stream's scan in progress, read one pad per loop() pass (see loop()).
+static Sample roundS;
+static uint8_t roundNext = 0;              // its next pad; 0 = none in progress
+static uint32_t roundStart = 0;            // millis() when it began
+static uint32_t roundMicros = 0;           // time spent reading pads, OSC excluded
+
+/* ------------------------------------------------------------- FreeTouch */
 
 // Adafruit_FreeTouch::getYLine(), which is private, so the rule is repeated
 // here: PA02..PA07 -> Y0..Y5, PB00..PB09 -> Y6..Y15, any other pin has none.
@@ -228,8 +342,8 @@ static void setDefaults(struct adafruit_ptc_config &c) {
 // begin() returns false exactly when the pin has none, before touching any
 // register, so it is safe on the USB and LED pins, and the two answers must
 // agree.
-static void findPads() {
-  for (uint8_t pin = 0; pin < NUM_DIGITAL_PINS && padCount < MAX_PADS; pin++) {
+static void findPtcPads() {
+  for (uint8_t pin = 0; pin < NUM_DIGITAL_PINS && ptcCount < MAX_PADS; pin++) {
     const int8_t y = yLineOf(pin);
     Adafruit_FreeTouch bringup(pin, OVERSAMPLE_4, RESISTOR_50K, FREQ_MODE_NONE);
     const bool ok = bringup.begin();
@@ -238,7 +352,7 @@ static void findPads() {
       continue;
     }
     if (!ok) continue;
-    Pad &p = pads[padCount++];
+    Pad &p = ptcPads[ptcCount++];
     const PinDescription &d = g_APinDescription[pin];
     p.pin = pin;
     p.cfg.pin = (d.ulPort == PORTB ? 32 : 0) + d.ulPin;   // ASF numbering, as the library
@@ -247,23 +361,130 @@ static void findPads() {
   }
 }
 
+// Back to the PTC after another library has had the pins: begin() again for
+// each pad (clock, pin mux, Y enable). The pads' settings are untouched.
+static void ptcBringUp() {
+  for (uint8_t i = 0; i < ptcCount; i++) {
+    Adafruit_FreeTouch bringup(ptcPads[i].pin, OVERSAMPLE_4, RESISTOR_50K, FREQ_MODE_NONE);
+    bringup.begin();
+  }
+}
+
+// The PTC off, and its Y lines with it, before another library takes the pins.
+// With the PTC left enabled and the Y lines on, pinMode() alone was not
+// enough: under FastTouch only D2..D5, the four pins with no Y line, rose
+// under a finger (2026-10-28, the touch probe and by hand). With this release
+// FastTouch rose on all eleven pins and FreeTouch still on its seven
+// (2026-10-28, by hand). Which of the two writes is the one that matters was
+// not isolated. ptcBringUp() turns both back on, and /diag reads both back.
+// Register names are FreeTouch's samd21_ptc_component.h.
+static void ptcRelease() {
+  while (PTC->CTRLB.bit.SYNCFLAG) ;
+  PTC->CTRLA.bit.ENABLE = 0;
+  while (PTC->CTRLB.bit.SYNCFLAG) ;
+  PTC->YENABLEL.reg = 0;
+  PTC->YENABLEH.reg = 0;
+  while (PTC->CTRLB.bit.SYNCFLAG) ;
+}
+
 // One conversion on one pad: Adafruit_FreeTouch::measure(), with this pad's
 // own config. The shift is measure()'s division by the oversample count.
-static uint16_t readPad(const Pad &pad) {
+static uint16_t readPtc(const Pad &pad) {
   adafruit_ptc_start_conversion(PTC, &pad.cfg);
   while (!adafruit_ptc_is_conversion_finished(PTC)) yield();
   return adafruit_ptc_get_conversion_result(PTC) >> pad.cfg.oversample;
 }
 
+/* ------------------------------------------------------------- FastTouch */
+
+static void findFtPins() {
+  for (uint8_t pin = 0; pin < HEADER_PINS; pin++) ftPins[ftCount++] = pin;
+}
+
+/* ------------------------------------------------------ CapacitiveSensor */
+
+// Constructing a CapacitiveSensor sets its pins (send OUTPUT LOW, receive
+// INPUT), so the objects exist only while CapacitiveSensor is measuring.
+static void csDrop() {
+  for (uint8_t i = 0; i < csCount; i++) {
+    delete csPads[i].cs;
+    csPads[i].cs = nullptr;
+  }
+}
+
+static void csBuild() {
+  csDrop();
+  if (csSend < 0) return;
+  for (uint8_t i = 0; i < csCount; i++) {
+    csPads[i].cs = new CapacitiveSensor(csSend, csPads[i].pin);
+    csPads[i].cs->set_CS_Timeout_Millis(csPads[i].timeoutMs);
+  }
+}
+
+static bool isRecv(int32_t pin) {
+  for (uint8_t i = 0; i < csCount; i++)
+    if (csPads[i].pin == pin) return true;
+  return false;
+}
+
+/* --------------------------------------------------- the library measuring */
+
+static uint8_t padCountOf(uint8_t l) {     // pads measured while l is chosen
+  if (l == LIB_FREETOUCH) return ptcCount;
+  if (l == LIB_FASTTOUCH) return ftCount;
+  return csSend >= 0 ? csCount : 0;
+}
+
+static uint8_t setupCountOf(uint8_t l) {   // pads that carry l's settings
+  if (l == LIB_FREETOUCH) return ptcCount;
+  if (l == LIB_CAPSENSE) return csCount;
+  return 0;
+}
+
+static uint8_t pinOf(uint8_t l, uint8_t i) {
+  if (l == LIB_FREETOUCH) return ptcPads[i].pin;
+  if (l == LIB_FASTTOUCH) return ftPins[i];
+  return csPads[i].pin;
+}
+
+static void releasePins() {
+  for (uint8_t pin = 0; pin < HEADER_PINS; pin++) pinMode(pin, INPUT);
+}
+
+static void selectLib(uint8_t l) {
+  csDrop();
+  ptcRelease();
+  releasePins();
+  lib = l;
+  if (lib == LIB_FREETOUCH) ptcBringUp();
+  if (lib == LIB_CAPSENSE) csBuild();
+  havePrev = false;
+}
+
+static int32_t readOne(uint8_t i) {
+  if (lib == LIB_FREETOUCH) return readPtc(ptcPads[i]);
+  if (lib == LIB_FASTTOUCH) {
+    const uint8_t pin = ftPins[i];
+    return fastTouchRead(pin);
+  }
+  CapacitiveSensor *cs = csPads[i].cs;
+  return cs ? cs->capacitiveSensorRaw(csPads[i].samples) : -1;   // -1: the library's "bad pin"
+}
+
 static void scan(Sample &s) {
+  const uint8_t n = padCountOf(lib);
   const uint32_t t0 = micros();
-  for (uint8_t i = 0; i < padCount; i++) s.v[i] = readPad(pads[i]);
+  for (uint8_t i = 0; i < n; i++) s.v[i] = readOne(i);
   scanMicros = micros() - t0;
+  scanLib = lib;
 }
 
 /* ------------------------------------------------------------ parameters */
 
-static int32_t getParam(const struct adafruit_ptc_config &c, uint8_t p) {
+static int32_t getParam(uint8_t p, uint8_t i) {
+  if (p == P_SAMPLES) return csPads[i].samples;
+  if (p == P_TIMEOUT) return csPads[i].timeoutMs;
+  const struct adafruit_ptc_config &c = ptcPads[i].cfg;
   switch (p) {
   case P_OVERSAMPLE: return 1L << c.oversample;
   case P_RESISTOR:   return RESISTOR_KOHM[c.seriesres];
@@ -275,9 +496,22 @@ static int32_t getParam(const struct adafruit_ptc_config &c, uint8_t p) {
   return 0;
 }
 
-// Writes v into c when it is one of the parameter's legal values. An illegal
-// value writes nothing, so applying it to every pad leaves every pad as it was.
-static bool setParam(struct adafruit_ptc_config &c, uint8_t p, int32_t v) {
+// Writes v into pad i when it is one of the parameter's legal values. An
+// illegal value writes nothing, so applying it to every pad leaves every pad
+// as it was.
+static bool setParam(uint8_t p, uint8_t i, int32_t v) {
+  if (p == P_SAMPLES) {
+    if (v < 1 || v > 255) return false;
+    csPads[i].samples = (uint8_t) v;
+    return true;
+  }
+  if (p == P_TIMEOUT) {
+    if (v < 1 || v > 60000) return false;
+    csPads[i].timeoutMs = (uint16_t) v;
+    if (csPads[i].cs) csPads[i].cs->set_CS_Timeout_Millis(v);
+    return true;
+  }
+  struct adafruit_ptc_config &c = ptcPads[i].cfg;
   switch (p) {
   case P_OVERSAMPLE:
     for (uint8_t k = OVERSAMPLE_1; k <= OVERSAMPLE_64; k++)
@@ -319,41 +553,74 @@ static void flush() {
 
 static void addCap(const Sample &s) {
   OSCMessage &m = bundleOUT.add("/cap");
-  for (uint8_t i = 0; i < padCount; i++) m.add((intOSC_t) s.v[i]);
+  const uint8_t n = padCountOf(lib);
+  for (uint8_t i = 0; i < n; i++) m.add((intOSC_t) s.v[i]);
 }
 
 static void addParam(uint8_t p) {
   OSCMessage &m = bundleOUT.add(PARAM_ADDR[p]);
-  for (uint8_t i = 0; i < padCount; i++) m.add((intOSC_t) getParam(pads[i].cfg, p));
+  const uint8_t n = setupCountOf(PARAM_LIB[p]);
+  for (uint8_t i = 0; i < n; i++) m.add((intOSC_t) getParam(p, i));
+}
+
+static void addLib() {
+  bundleOUT.add("/cap/lib").add(LIB_NAME[lib]);
+}
+
+static void addSend() {
+  OSCMessage &m = bundleOUT.add("/cap/send");
+  if (csSend >= 0) m.add((intOSC_t) csSend);
+}
+
+static void addRecv() {
+  OSCMessage &m = bundleOUT.add("/cap/recv");
+  for (uint8_t i = 0; i < csCount; i++) m.add((intOSC_t) csPads[i].pin);
 }
 
 static void addPins() {
   OSCMessage &m = bundleOUT.add("/cap/pins");
-  for (uint8_t i = 0; i < padCount; i++) m.add((intOSC_t) pads[i].pin);
+  const uint8_t n = padCountOf(lib);
+  for (uint8_t i = 0; i < n; i++) m.add((intOSC_t) pinOf(lib, i));
 }
 
 static void addConfig() {
-  for (uint8_t p = 0; p < P_COUNT; p++) addParam(p);
+  addLib();
+  for (uint8_t p = 0; p < P_COUNT; p++)
+    if (PARAM_LIB[p] == lib) addParam(p);
+  if (lib == LIB_CAPSENSE) {
+    addSend();
+    addRecv();
+  }
   addPins();
 }
 
 static void sayHello() {
+  const uint8_t n = padCountOf(lib);
   bundleOUT.add("/enq").add("XiaoSamd21Oscuino");
-  if (padCount) bundleOUT.add("/enq/cap").add((intOSC_t) padCount);
+  if (n) bundleOUT.add("/enq/cap").add((intOSC_t) n);
   bundleOUT.add("/enq/diag");
-  char diag[128];
-  int n = snprintf(diag, sizeof diag, "pads");
-  for (uint8_t i = 0; i < padCount; i++)
-    n += snprintf(diag + n, sizeof diag - n, " D%u", pads[i].pin);
-  snprintf(diag + n, sizeof diag - n, "; last scan %lu us%s",
-           (unsigned long) scanMicros, bootNote);
+  char diag[160];
+  int k = snprintf(diag, sizeof diag, "%s pads", LIB_NAME[lib]);
+  for (uint8_t i = 0; i < n; i++)
+    k += snprintf(diag + k, sizeof diag - k, " D%u", pinOf(lib, i));
+  if (!n) k += snprintf(diag + k, sizeof diag - k, " none");
+  if (scanLib == lib)
+    k += snprintf(diag + k, sizeof diag - k, "; last scan %lu us", (unsigned long) scanMicros);
+  // The PTC as it is, not as this sketch believes it left it: off with no Y
+  // lines while another library has the pins, which capsetupprobe.py checks.
+  k += snprintf(diag + k, sizeof diag - k, "; PTC %s, Y 0x%04x",
+                PTC->CTRLA.bit.ENABLE ? "on" : "off",
+                (unsigned) (PTC->YENABLEH.reg << 8 | PTC->YENABLEL.reg));
+  snprintf(diag + k, sizeof diag - k, "%s", bootNote);
   bundleOUT.add("/diag").add(diag);
   flush();
 }
 
+// /state goes out even when the library measuring has no pads: it is the
+// stream's heartbeat, and a client waiting on /rate must still see it.
 static void report(const Sample &s) {
   bundleOUT.add("/state").add(seq++).add((intOSC_t) millis());
-  addCap(s);
+  if (padCountOf(lib)) addCap(s);
   flush();
 }
 
@@ -377,9 +644,38 @@ static char *numToOSCAddress(int n) {
   return &s[i];
 }
 
+// /cap/recv <i>...: every pin 0..10, none twice, none the send pin. Settings
+// follow a pin that stays; a new pin starts at the defaults.
+static bool setRecv(OSCMessage &m) {
+  const int n = m.size();
+  if (n < 1 || n > HEADER_PINS - 1) return false;
+  uint8_t want[MAX_PADS];
+  for (int a = 0; a < n; a++) {
+    int32_t v;
+    if (!argInt(m, a, v) || v < 0 || v >= HEADER_PINS || v == csSend) return false;
+    for (int b = 0; b < a; b++)
+      if (want[b] == v) return false;
+    want[a] = (uint8_t) v;
+  }
+  CsPad old[MAX_PADS];
+  memcpy(old, csPads, sizeof old);
+  const uint8_t oldCount = csCount;
+  for (int a = 0; a < n; a++) {
+    csPads[a] = { want[a], CS_SAMPLES_DEFAULT, CS_TIMEOUT_DEFAULT, nullptr };
+    for (uint8_t b = 0; b < oldCount; b++)
+      if (old[b].pin == want[a]) {
+        csPads[a].samples = old[b].samples;
+        csPads[a].timeoutMs = old[b].timeoutMs;
+      }
+  }
+  csCount = (uint8_t) n;
+  return true;
+}
+
 // Every /cap... message. Bare /cap is the ask; everything below it is set-up.
 static void routeCap(OSCMessage &m, int off) {
   if (m.fullMatch("/cap")) {
+    if (!padCountOf(lib)) return;          // no pads: nothing to answer
     Sample s;
     scan(s);
     addCap(s);
@@ -387,35 +683,82 @@ static void routeCap(OSCMessage &m, int off) {
     return;
   }
 
-  uint8_t echo = 0;                        // one bit per parameter to echo
+  uint16_t echo = 0;                       // one bit per parameter to echo
+  bool config = false, hello = false;
   int32_t v;
 
   // /cap/<p> [<v> | <v0> .. <vN-1>]
   for (uint8_t p = 0; p < P_COUNT; p++) {
     if (!m.fullMatch(PARAM_ADDR[p] + CAP_ROOT, off)) continue;
-    echo |= 1 << p;
+    echo |= 1u << p;
+    const uint8_t n = setupCountOf(PARAM_LIB[p]);
     if (m.size() == 1 && argInt(m, 0, v)) {
-      for (uint8_t i = 0; i < padCount; i++) setParam(pads[i].cfg, p, v);
-    } else if (m.size() == padCount) {
-      for (uint8_t i = 0; i < padCount; i++)
-        if (argInt(m, i, v)) setParam(pads[i].cfg, p, v);
+      for (uint8_t i = 0; i < n; i++) setParam(p, i, v);
+    } else if (n && m.size() == n) {
+      for (uint8_t i = 0; i < n; i++)
+        if (argInt(m, i, v)) setParam(p, i, v);
     }
   }
 
   // /cap/<n>/<p> <v>. No early return, so a pattern can select several pads.
-  for (uint8_t i = 0; i < padCount; i++) {
+  for (uint8_t i = 0; i < MAX_PADS; i++) {
     const int k = m.match(numToOSCAddress(i), off);
     if (!k) continue;
     for (uint8_t p = 0; p < P_COUNT; p++) {
+      if (i >= setupCountOf(PARAM_LIB[p])) continue;
       if (!m.fullMatch(PARAM_ADDR[p] + CAP_ROOT, off + k)) continue;
-      echo |= 1 << p;
-      if (argInt(m, 0, v)) setParam(pads[i].cfg, p, v);
+      echo |= 1u << p;
+      if (argInt(m, 0, v)) setParam(p, i, v);
     }
   }
 
-  bool config = m.fullMatch("/config", off);
+  if (m.fullMatch("/lib", off)) {
+    if (m.isString(0)) {
+      char want[24];
+      m.getString(0, want, sizeof want);
+      for (uint8_t l = 0; l < LIB_COUNT; l++)
+        if (!strcmp(want, LIB_NAME[l]) && l != lib) {
+          selectLib(l);
+          hello = true;
+        }
+    }
+    addLib();
+  }
+
+  // CapacitiveSensor's pins. While it measures, a change rebuilds its pads.
+  if (m.fullMatch("/send", off)) {
+    if (argInt(m, 0, v) && v >= 0 && v < HEADER_PINS && !isRecv(v) && v != csSend) {
+      const bool live = lib == LIB_CAPSENSE;
+      if (live) { csDrop(); releasePins(); }
+      csSend = (int8_t) v;
+      if (live) { csBuild(); hello = true; }
+    }
+    addSend();
+  }
+  if (m.fullMatch("/recv", off)) {
+    if (m.size() > 0) {
+      const bool live = lib == LIB_CAPSENSE;
+      if (live) { csDrop(); releasePins(); }
+      const bool ok = setRecv(m);
+      if (live) {
+        csBuild();
+        hello = hello || ok;
+      }
+    }
+    addRecv();
+  }
+
+  if (m.fullMatch("/config", off)) config = true;
   if (m.fullMatch("/defaults", off) && m.size() == 0) {
-    for (uint8_t i = 0; i < padCount; i++) setDefaults(pads[i].cfg);
+    if (lib == LIB_FREETOUCH)
+      for (uint8_t i = 0; i < ptcCount; i++) setDefaults(ptcPads[i].cfg);
+    if (lib == LIB_CAPSENSE) {
+      csDrop();
+      releasePins();
+      csSend = -1;
+      csCount = 0;
+      hello = true;
+    }
     config = true;
   }
 
@@ -423,11 +766,13 @@ static void routeCap(OSCMessage &m, int off) {
     addConfig();
   } else {
     for (uint8_t p = 0; p < P_COUNT; p++)
-      if (echo & (1 << p)) addParam(p);
+      if (echo & (1u << p)) addParam(p);
     if (m.fullMatch("/pins", off)) addPins();
   }
-  if (echo || config) havePrev = false;    // next report is a full one
+  if (echo || config || hello) havePrev = false;   // next report is a full one
+  if (hello) roundNext = roundMicros = 0;  // a scan begun on the old pads is dropped
   flush();
+  if (hello) sayHello();                   // the pad count changed with the pins
 }
 
 static void routeEnq(OSCMessage &m) {
@@ -454,6 +799,7 @@ static void routeRate(OSCMessage &m) {
   if (!argInt(m, 0, v)) return;
   reportInterval = (uint16_t) constrain(v, 0, 1000);
   havePrev = false;                        // restarting begins with a full report
+  roundNext = roundMicros = 0;             // and a fresh scan, not one left half done
   bundleOUT.add("/rate").add((intOSC_t) reportInterval);
   flush();
 }
@@ -472,24 +818,39 @@ static void routeDeadband(OSCMessage &m) {
 }
 
 // Returns true once a whole packet has been accumulated in bundleIN.
+//
+// The template's pollOSC() returns whenever available() says 0, but
+// available() also says 0 just after it has swallowed a frame's opening END
+// with the frame still buffered behind it, and the closing END only reads as
+// the end on the next call. In the template's quick loop() that costs nothing.
+// Here a pass can be a 0.70 s CapacitiveSensor pad, and every message waited
+// two extra pads: echoes took 1.69..1.96 s against a 2.81 s scan of four
+// (capsetupprobe.py, 2026-10-29). So this keeps going while the port still
+// holds bytes, and asks endofPacket() once more before giving up: the
+// template's calls in the template's order (endofPacket() before available()),
+// without a loop() pass between them.
 static bool pollOSC() {
-  while (!SLIPSerial.endofPacket()) {
+  for (;;) {
+    if (SLIPSerial.endofPacket()) return true;
     int avail = SLIPSerial.available();
-    if (avail <= 0) return false;          // nothing buffered; try next loop()
+    if (avail <= 0) {
+      if (SLIP_PORT.available() > 0) continue;   // an END was swallowed; more behind it
+      return SLIPSerial.endofPacket();           // the closing END, if that was the last byte
+    }
     while (avail--) {
       int c = SLIPSerial.read();
       if (c >= 0) bundleIN.fill((uint8_t) c);   // read() returns -1 on a SLIP error
     }
   }
-  return true;
 }
 
 // Deadband 0 reports every tick; otherwise a move of at least N counts on any
 // pad is needed.
 static bool changed(const Sample &a, const Sample &b) {
   if (deadband == 0) return true;
-  for (uint8_t i = 0; i < padCount; i++) {
-    int32_t d = (int32_t) a.v[i] - (int32_t) b.v[i];
+  const uint8_t n = padCountOf(lib);
+  for (uint8_t i = 0; i < n; i++) {
+    int32_t d = a.v[i] - b.v[i];
     if (d < 0) d = -d;
     if (d >= (int32_t) deadband) return true;
   }
@@ -500,7 +861,8 @@ static bool changed(const Sample &a, const Sample &b) {
 
 void setup() {
   SLIPSerial.begin(BAUD);
-  findPads();
+  findPtcPads();                           // FreeTouch measures first; this is its bring-up
+  findFtPins();
   Sample s;
   scan(s);                                 // so /diag carries a real scan time
   delay(300);                              // let the host finish enumerating
@@ -521,17 +883,33 @@ void loop() {
     bundleIN.empty();
   }
 
-  if (reportInterval == 0 || padCount == 0) return;
+  if (reportInterval == 0) return;
   const uint32_t now = millis();
-  if ((uint32_t)(now - lastReport) < reportInterval) return;
+  if (!roundNext) {
+    if ((uint32_t)(now - lastReport) < reportInterval) return;
+    roundStart = now;
+  }
 
-  Sample s;
-  scan(s);
-  const bool due = heartbeatMs && (uint32_t)(now - lastReport) >= heartbeatMs;
-  if (!havePrev || due || changed(s, prev)) {
-    lastReport = now;
-    prev = s;
+  // One pad per pass, so OSC is read between pads. CapacitiveSensor on a pad
+  // with no resistor waits out its timeout, 0.70 s at the default 2000 on this
+  // board, and a scan of several such pads read in one go held off every
+  // message, a /cap/lib included, for seconds.
+  const uint8_t n = padCountOf(lib);
+  if (roundNext < n) {
+    const uint32_t t0 = micros();
+    roundS.v[roundNext] = readOne(roundNext);
+    roundMicros += micros() - t0;
+    if (++roundNext < n) return;
+  }
+  scanMicros = roundMicros;
+  scanLib = lib;
+  roundNext = roundMicros = 0;
+
+  const bool due = heartbeatMs && (uint32_t)(roundStart - lastReport) >= heartbeatMs;
+  if (!havePrev || due || changed(roundS, prev)) {
+    lastReport = roundStart;
+    prev = roundS;
     havePrev = true;
-    report(s);
+    report(roundS);
   }
 }
