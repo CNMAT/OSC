@@ -7,13 +7,16 @@
 #   make check      fail if any generated file drifted from the template,
 #                   oscuino.html included
 #   make test       codec bytes, the capability model, per-board page wiring,
-#                   the CircuitPlayground pair, and the address-space contract
+#                   the CircuitPlayground pair, the address-space contract, and
+#                   that the Web Serial pages let go of their port
 #   make all        check + test, the set worth running before a commit
 #
 # test-cpx-contract.mjs is the odd one out: it covers the hand-written
 # CircuitPlaygroundSensors sketch and page, which `make check` cannot see at all
 # because they are not generated from boards.json. It checks that the two still
-# agree about the shape of the stream.
+# agree about the shape of the stream. test-serial-close.mjs also reaches past
+# the template: it runs five hand-written pages, and the board-less generated
+# one, against a fake port that will not close while its stream is locked.
 
 NODE = node
 
@@ -30,6 +33,7 @@ test:
 	$(NODE) test/test-cpx-contract.mjs
 	$(NODE) test/test-namespace.mjs
 	$(NODE) test/test-announce.mjs
+	$(NODE) test/test-serial-close.mjs
 
 all: check test
 

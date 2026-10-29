@@ -1676,8 +1676,10 @@ $("disconnect").onclick = async () => {
   logLine("sys", "disconnected");
 };
 
-navigator.serial?.addEventListener("disconnect", () => {
-  if (transport === serialTransport) lost("device unplugged");
+// Fired at the port that went, bubbling here (Web Serial, "ondisconnect"):
+// another serial device unplugged is not this board.
+navigator.serial?.addEventListener("disconnect", e => {
+  if (transport === serialTransport && e.target === serialTransport.port) lost("device unplugged");
 });
 
 setInterval(() => { $("pps").textContent = frames; frames = 0; }, 1000);
