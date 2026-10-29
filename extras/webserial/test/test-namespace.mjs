@@ -28,6 +28,7 @@ const ALLOWED = new Set([
   "c", "touch", "cap", "joy", "pot", "enc", "rtc", "rfid", "cam", "stream",
   "motor", "servo", "relay", "net", "diag",
   "dist", "gas", "ir",          // the Elecrow kit's rangefinder, MQ-2 and remote receiver (2026-09-04)
+  "i2c", "wii",                 // an I2C bus and a Wii extension on it, XiaoSamd21Oscuino (2026-10-29)
 ]);
 
 // Page-internal HTTP routes are URLs, not OSC addresses.

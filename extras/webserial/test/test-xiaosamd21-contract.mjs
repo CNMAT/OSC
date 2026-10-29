@@ -37,15 +37,27 @@
         bytes as test/hardware/oscprobe.py, whose bytes the board accepted
      7. what the page asks the board back, run against a stub document: one
         /cap/config per library switch, another when a /cap's length is not
-        /cap/pins', none for a library it has no tab for; and its port is
-        held only once open, and let go only on its own disconnect
+        /cap/pins', none for a library it has no tab for; its port is held
+        only once open, and let go only on its own disconnect; /i2c moves it
+        between touch and the I2C tab
+     8. the Wii binding: WiiExtension.h, the page's WII_KINDS and
+        ADDRESSES.md's "wii fields" list the same kinds and fields, with the
+        same ranges; each kind reads through the view of its own library
+        class; each drawing on the page reads only fields its kind has; and,
+        where NintendoExtensionCtrl is installed (NXC_SRC, or the Library
+        Manager's folder on this machine), each kind's fields are every
+        public, const, no-argument getter its class declares, in order, with
+        the float ones marked as floats, booleans 0..1, and each range the
+        library's comment states
 
    Graded by test/mutants-xiaosamd21.mjs: one mutant per claim above, and each
    must fail this test.
 
    Run: node test/test-xiaosamd21-contract.mjs   (or `make test`). No dependencies. */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 const ROOT = new URL("../../../", import.meta.url);
 const read = p => readFileSync(new URL(p, ROOT), "utf8");
@@ -54,7 +66,7 @@ const html = read("examples/XiaoSamd21Oscuino/XiaoSamd21Oscuino.html");
 const contract = read("ADDRESSES.md");
 const capture = new Uint8Array(readFileSync(new URL("xiaosamd21-2026-10-29.slip", import.meta.url)));
 
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, skip = 0;
 const ok = (label, cond, detail = "") => {
   if (cond) { pass++; console.log(`  ok   ${label}`); }
   else { fail++; console.log(`  FAIL ${label}${detail ? "\n       " + detail : ""}`); }
@@ -251,7 +263,8 @@ feed("/cap/lib", ["FreeTouch"]);       // at rest on FreeTouch, as after boot
 asked();
 feed("/cap/lib", ["FastTouch"]);       // a switch: the echo, then the hello
 feed("/enq", ["XiaoSamd21Oscuino"]);
-eq("a library switch, its echo then its hello, asks for /cap/config once", asked(), ["/cap/config"]);
+eq("a library switch, its echo then its hello, asks for /cap/config once, and /i2c once",
+   asked(), ["/cap/config", "/i2c"]);
 eq("the echo moved the page to that library", ui.now().lib, "FastTouch");
 feed("/cap/pins", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 feed("/cap", Array(11).fill(0));
@@ -283,5 +296,146 @@ listeners.disconnect({ target: board });
 await tick();
 eq("this port's disconnect lets it go", net.holds(), null);
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
+// The I2C mode: /i2c 1 moves the page to it and asks what is on the bus;
+// /i2c 0 moves it back. A /wii before any /wii/id is drawn as unknown bytes
+// without throwing.
+const ui2 = new Function("document", "navigator", "location", "setInterval",
+  script + "\nreturn { onFrame, plug: w => { writer = w; }, mode: () => mode };")(
+  stub(), stub(), { search: "" }, () => 0);
+ui2.plug({ write: async bytes => new page.SlipDecoder().transform(bytes, {
+  enqueue: f => sent.push(...page.messagesOf(page.decodePacket(f)).map(m => m.address)) }) });
+asked();
+ui2.onFrame(page.encodeMessage("/i2c", [1]));
+eq("/i2c 1 moves the page to the I2C tab", ui2.mode(), "i2c");
+eq("... and asks for the scan and the identity", asked(), ["/i2c/scan", "/wii/id"]);
+let threw = null;
+try { ui2.onFrame(page.encodeMessage("/wii", [1, 2, 3, 4, 5, 6])); } catch (e) { threw = e.message; }
+ok("a /wii with no /wii/id yet does not throw", threw === null, threw);
+ui2.onFrame(page.encodeMessage("/i2c", [0]));
+eq("/i2c 0 moves it back to touch", ui2.mode(), "touch");
+
+/* ---------- 8. the Wii binding: one list in three places, true to the library */
+console.log("\nThe Wii binding");
+const wiiH = read("examples/XiaoSamd21Oscuino/WiiExtension.h");
+const views = Object.fromEntries([...wiiH.matchAll(/static (\w+)::Shared (\w+)\(wiiPort\);/g)].map(([, cls, v]) => [v, cls]));
+const hRows = {};
+for (const [, arr, body] of wiiH.matchAll(/static const WiiField (\w+)\[\] = \{([\s\S]*?)\n\};/g))
+  hRows[arr] = [...body.matchAll(/WII_GET(F?)\((\w+), ([\w.]+), (-?\d+), (-?\d+)\)/g)]
+    .map(([, f, view, getter, lo, hi]) => ({ view, field: f ? [getter, +lo, +hi, "f"] : [getter, +lo, +hi] }));
+const hKinds = [...wiiH.matchAll(/\{ "(\w+)", ExtensionType::(\w+), (\w+), WII_COUNT_OF\(\3\) \}/g)]
+  .map(([, name, lib, arr]) => ({ name, lib, rows: hRows[arr] || [] }));
+const getLines = (wiiH.match(/^\s*WII_GETF?\(/gm) || []).length;
+const hCount = hKinds.reduce((n, k) => n + k.rows.length, 0);
+ok(`WiiExtension.h parsed: seven kinds, all ${getLines} WII_GET lines read into them`,
+   hKinds.length === 7 && hKinds.every(k => k.rows.length) && hCount === getLines && getLines > 0,
+   `${hKinds.map(k => `${k.name} ${k.rows.length}`).join(", ")}; ${getLines} lines`);
+ok("each kind reads every field through the view of its own library class",
+   hKinds.every(k => k.rows.every(r => views[r.view] === k.lib)),
+   hKinds.flatMap(k => k.rows.filter(r => views[r.view] !== k.lib).map(r => `${k.name}.${r.field[0]} via ${r.view}`)).join(" "));
+ok("every range runs low to high", hKinds.every(k => k.rows.every(r => r.field[1] < r.field[2])));
+
+const kindsLit = (script.match(/const WII_KINDS = (\[[\s\S]*?\n\]);/) || [])[1];
+const pKinds = kindsLit ? new Function("return " + kindsLit)() : [];
+eq("the page's WII_KINDS are the header's, kind by kind and field by field",
+   pKinds.map(k => [k.name, k.lib, k.fields]), hKinds.map(k => [k.name, k.lib, k.rows.map(r => r.field)]));
+const wiiAt = contract.indexOf("### wii fields");
+const wiiBlock = wiiAt < 0 ? "" : contract.slice(wiiAt, contract.indexOf("\n## ", wiiAt));
+const docKinds = [...wiiBlock.matchAll(/^\| `(\w+)` \| `(\w+)` \| (.+) \|$/gm)].map(([, name, lib, fields]) =>
+  [name, lib, [...fields.matchAll(/`([\w.]+)` (-?\d+)\.\.(-?\d+)( float)?/g)]
+    .map(([, n, lo, hi, f]) => f ? [n, +lo, +hi, "f"] : [n, +lo, +hi])]);
+eq("ADDRESSES.md's wii fields: the header's kinds, classes, fields and ranges, in order",
+   docKinds, hKinds.map(k => [k.name, k.lib, k.rows.map(r => r.field)]));
+
+// Each drawing, run against a stand-in for the fields that records every name
+// asked of it, reads only fields its kind has.
+const art = new Function("document", "navigator", "location", "setInterval",
+  script + "\nreturn { WII_ART, WII_KINDS };")(stub(), stub(), { search: "" }, () => 0);
+for (const k of art.WII_KINDS) {
+  const names = new Set(k.fields.map(x => x[0])), asked = new Set();
+  const f = new Proxy({}, { get: (_, n) => { if (typeof n === "string") asked.add(n); return 1; } });
+  let threw = null;
+  try { art.WII_ART[k.name](stub()).update(f, k); } catch (e) { threw = e.message; }
+  const strays = [...asked].filter(n => !names.has(n));
+  ok(`${k.name}: its drawing reads ${asked.size} fields, every one the kind's own`,
+     !threw && asked.size > 0 && !strays.length, threw || strays.join(" "));
+}
+
+// The library's own headers, where they are installed: each class's public,
+// const, no-argument getters, in the order declared, with their types and the
+// "a-b" range of any comment beside them; a member object (the turntable's
+// left and right) contributes its class's base's getters under its name.
+const nxcDir = process.env.NXC_SRC ||
+  join(homedir(), "Documents", "Arduino", "libraries", "Nintendo_Extension_Ctrl", "src", "controllers");
+const GETTER = /^\s*(?:virtual\s+)?(uint8_t|uint16_t|int8_t|int16_t|boolean|bool|float|VelocityID)\s+(\w+)\(\)\s*const\s*(?:=\s*0\s*)?;\s*(?:\/\/\s*(.*))?$/;
+function classesOf(text) {
+  const classes = {}, stack = [];
+  let depth = 0;
+  for (const line of text.split("\n")) {
+    const head = line.match(/^\s*class\s+(\w+)(?:\s*:\s*(?:public|private|protected)?\s*([\w:]+))?\s*\{/);
+    const top = stack[stack.length - 1];
+    if (head) {
+      classes[head[1]] = { base: head[2] ? head[2].split("::").pop() : null, getters: [], members: [] };
+      stack.push({ name: head[1], depth: depth + 1, access: "private" });
+    } else if (top) {
+      const acc = line.match(/^\s*(public|private|protected)\s*:/);
+      if (acc && depth === top.depth) top.access = acc[1];
+      const g = line.match(GETTER);
+      if (g && depth === top.depth && top.access === "public")
+        classes[top.name].getters.push({ name: g[2], type: g[1], comment: g[3] || "" });
+    }
+    for (const ch of line) depth += ch === "{" ? 1 : ch === "}" ? -1 : 0;
+    const open = stack[stack.length - 1];
+    if (open && depth < open.depth) {
+      stack.pop();
+      const inst = line.match(/\}\s*(\w+)\s*;/), parent = stack[stack.length - 1];
+      if (inst && parent) classes[parent.name].members.push({ name: inst[1], cls: open.name });
+    }
+  }
+  return classes;
+}
+// Where a range differs from the library's comment on purpose, and why.
+const RANGE_NOT_COMMENT = {
+  "DJTurntableController.turntable": "left's plus right's turntable(), each -32..31 by the code",
+};
+if (existsSync(nxcDir)) {
+  const headers = readdirSync(nxcDir).filter(f => f.endsWith(".h")).map(f => readFileSync(join(nxcDir, f), "utf8"));
+  const classes = Object.assign({}, ...headers.map(classesOf));
+  const alias = {};
+  for (const h of headers)
+    for (const [, a, base] of h.matchAll(/using (\w+) = NintendoExtensionCtrl::BuildControllerClass\s*<NintendoExtensionCtrl::(\w+)>/g))
+      alias[a] = base;
+  const bound = cls => {
+    const c = classes[cls];
+    if (!c) return [];
+    const out = [...c.getters];
+    for (const m of c.members) {
+      const mc = classes[m.cls], via = mc && mc.base && classes[mc.base] ? classes[mc.base] : mc;
+      if (via) out.push(...via.getters.map(g => ({ ...g, name: `${m.name}.${g.name}` })));
+    }
+    return out;
+  };
+  console.log(`  (the library's headers: ${nxcDir})`);
+  for (const k of hKinds) {
+    const lib = bound(alias[k.lib]);
+    eq(`${k.name}: every public, const, no-argument getter of ${k.lib}, in the header's order`,
+       k.rows.map(r => r.field[0]), lib.map(g => g.name));
+    const byName = Object.fromEntries(lib.map(g => [g.name, g]));
+    const wrong = k.rows.filter(r => {
+      const g = byName[r.field[0]];
+      if (!g) return false;
+      const isFloat = g.type === "float", isBool = g.type === "boolean" || g.type === "bool";
+      if (isFloat !== (r.field[3] === "f")) return true;
+      if (isBool && (r.field[1] !== 0 || r.field[2] !== 1)) return true;
+      const c = g.comment.match(/(-?\d+)(?:\.0)?(?:-| to )(-?\d+)(?:\.0)?/);
+      return !!c && !RANGE_NOT_COMMENT[`${k.lib}.${g.name}`] && (r.field[1] !== +c[1] || r.field[2] !== +c[2]);
+    });
+    ok(`${k.name}: floats marked float, booleans 0..1, each range the comment beside its getter states`,
+       lib.length > 0 && !wrong.length, wrong.map(r => r.field.join(" ")).join("; "));
+  }
+} else {
+  skip++;
+  console.log(`  skip the binding against the library's own headers: none at ${nxcDir}`);
+}
+
+console.log(`\n${pass} passed, ${fail} failed, ${skip} skipped\n`);
 if (fail) process.exit(1);

@@ -43,17 +43,18 @@ console.log("\nThe contract's capabilities all have a panel");
 {
   const contract = readFileSync(CONTRACT, "utf8");
   const table = contract.slice(contract.indexOf("## Capabilities"), contract.indexOf("## What moved"));
-  const caps = [...table.matchAll(/^\| \*\*([a-z]+)\*\*/gm)].map(m => m[1]);
+  // Names may carry digits (i2c): a narrower pattern skipped them silently.
+  const caps = [...table.matchAll(/^\| \*\*([a-z][a-z0-9]*)\*\*/gm)].map(m => m[1]);
   // motor/servo/relay share one row; diag has no panel by design (it is
   // free text for the log).
-  const rowCaps = [...table.matchAll(/^\| \*\*([a-z]+)\*\*(?:, \*\*([a-z]+)\*\*)?(?:, \*\*([a-z]+)\*\*)?/gm)]
+  const rowCaps = [...table.matchAll(/^\| \*\*([a-z][a-z0-9]*)\*\*(?:, \*\*([a-z][a-z0-9]*)\*\*)?(?:, \*\*([a-z][a-z0-9]*)\*\*)?/gm)]
     .flatMap(m => [m[1], m[2], m[3]].filter(Boolean));
   ok("contract table parsed", caps.length > 10, String(caps.length));
   for (const c of rowCaps) if (c !== "diag")
     ok(`${c} is in PANEL_ORDER`, PANEL_ORDER.includes(c));
   for (const c of PANEL_ORDER)
     ok(`page has a panel element for ${c}`, html.includes(`data-cap="${c}"`));
-  ok("panels start hidden", (html.match(/class="panel cap" data-cap="[a-z]+" hidden/g) || []).length === PANEL_ORDER.length);
+  ok("panels start hidden", (html.match(/class="panel cap" data-cap="[a-z][a-z0-9]*" hidden/g) || []).length === PANEL_ORDER.length);
 }
 
 console.log("\nBefore any hello");

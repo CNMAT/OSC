@@ -61,6 +61,8 @@ CAPS = {
     'volts': dict(ask='/s/v',   reply='/s/v',   tag='f', n=1),
     'dist':  dict(ask='/dist',  reply='/dist',  tag='f', n=1),
     'gas':   dict(ask='/gas',   reply='/gas',   tag='i', n=1),
+    'i2c':   dict(ask='/i2c',   reply='/i2c',   tag='i', n=1),
+    'wii':   dict(ask='/wii',   reply='/wii',   tag='i', n=('min', 1)),
 }
 
 # Actuators: written with a value chosen to be harmless, then checked for the

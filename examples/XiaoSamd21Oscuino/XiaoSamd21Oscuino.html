@@ -115,6 +115,12 @@
   .params q { font-style: italic; }
   .params ul.src { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
   .params ul.src li { margin: 3px 0; }
+  #wiiShelf { width: 100%; height: auto; display: block; margin: 8px 0 4px; }
+  .wiitab { border-collapse: collapse; font-size: 12.5px; margin: 4px 0 14px; }
+  .wiitab caption { text-align: left; color: var(--dim); padding: 4px 0; }
+  .wiitab th, .wiitab td { border-bottom: 1px solid var(--line); padding: 2px 14px 2px 0; text-align: left; }
+  .wiitab th { color: var(--dim); font-weight: 500; }
+  .wiitab code { color: var(--accent); }
   .wiring { max-width: 520px; width: 100%; height: auto; display: block; margin: 8px 0; }
 </style>
 </head>
@@ -144,6 +150,7 @@
     <button role="tab" data-lib="FreeTouch" aria-selected="true"><i></i><div>FreeTouch<span>the PTC · 7 pins</span></div></button>
     <button role="tab" data-lib="FastTouch" aria-selected="false"><i></i><div>FastTouch<span>pull-up timing · 11 pins</span></div></button>
     <button role="tab" data-lib="CapacitiveSensor" aria-selected="false"><i></i><div>CapacitiveSensor<span>send and receive · pins you wire</span></div></button>
+    <button role="tab" data-mode="i2c" aria-selected="false"><i></i><div>I2C<span>Wii extensions · D4 D5</span></div></button>
   </div>
 
   <!-- The instrument. Coordinates are the photograph's own pixels (768 x 629):
@@ -177,6 +184,26 @@
         <stop offset=".35" stop-color="#2a2d33"/>
         <stop offset="1" stop-color="#16181b"/>
       </linearGradient>
+      <!-- Wii extension plastics: gloss white, a dark stick well, a grey cap -->
+      <linearGradient id="wiiWhite" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#ffffff"/>
+        <stop offset=".55" stop-color="#e9ebee"/>
+        <stop offset="1" stop-color="#c3c7ce"/>
+      </linearGradient>
+      <linearGradient id="wiiGrey" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#d9dce1"/>
+        <stop offset="1" stop-color="#9da2aa"/>
+      </linearGradient>
+      <radialGradient id="wiiWell" cx=".5" cy=".42" r=".6">
+        <stop offset="0" stop-color="#4a4e55"/>
+        <stop offset=".8" stop-color="#2a2d32"/>
+        <stop offset="1" stop-color="#17191c"/>
+      </radialGradient>
+      <radialGradient id="wiiStick" cx=".38" cy=".32" r=".75">
+        <stop offset="0" stop-color="#f2f3f5"/>
+        <stop offset=".6" stop-color="#b9bdc4"/>
+        <stop offset="1" stop-color="#80858d"/>
+      </radialGradient>
       <linearGradient id="bootGrad" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0" stop-color="#33363c"/>
         <stop offset="1" stop-color="#15171a"/>
@@ -209,6 +236,17 @@
       <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0" stop-color="#b9bec5"/>
         <stop offset="1" stop-color="#a2a8b0"/>
+      </linearGradient>
+      <!-- a header pin soldered into a pad: a bright solder fillet, a square tip -->
+      <radialGradient id="solder" cx=".42" cy=".38" r=".62">
+        <stop offset="0" stop-color="#ffffff"/>
+        <stop offset=".45" stop-color="#d4d7db"/>
+        <stop offset="1" stop-color="#7f858c"/>
+      </radialGradient>
+      <linearGradient id="pinTip" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#fff4c9"/>
+        <stop offset=".5" stop-color="#d8b85a"/>
+        <stop offset="1" stop-color="#8f7429"/>
       </linearGradient>
       <radialGradient id="screw" cx=".38" cy=".35" r=".7">
         <stop offset="0" stop-color="#ffffff"/>
@@ -244,8 +282,8 @@
       <text x="-310" y="90" font-size="12" fill="#cfd4da">XIAO SAMD21</text>
       <text id="titleHi" x="-310" y="109" font-size="10.5" fill="#000" fill-opacity=".6"></text>
       <text id="titleLo" x="-310" y="108" font-size="10.5" fill="#9aa3af"></text>
-      <text x="810" y="91" font-size="11" fill="#000" fill-opacity=".6" text-anchor="end">/cap · COUNTS</text>
-      <text x="810" y="90" font-size="11" fill="#cfd4da" text-anchor="end">/cap · COUNTS</text>
+      <text id="unitHi" x="810" y="91" font-size="11" fill="#000" fill-opacity=".6" text-anchor="end">/cap · COUNTS</text>
+      <text id="unitLo" x="810" y="90" font-size="11" fill="#cfd4da" text-anchor="end">/cap · COUNTS</text>
     </g>
 
     <!-- the board, seated in the breadboard -->
@@ -265,8 +303,12 @@
       <rect x="181" y="196" width="106" height="8" rx="3" fill="#9ea4ac" stroke="#5b6168" stroke-width=".8"/>
     </g>
 
+    <!-- header pins in the XIAO's pads, each naming its pin on hover -->
+    <g id="headers"></g>
+
     <g id="rows"></g>
     <g id="scales"></g>
+    <g id="bus" display="none"></g>
 
     <text x="810" y="810" font-size="8.5" fill="#7d8592" text-anchor="end"
           font-family="system-ui,sans-serif">board photo: Seeed Studio, OSHW-XIAO-Series, MIT</text>
@@ -274,11 +316,18 @@
 
   <div class="panel" style="margin-top:14px">
     <div class="row" style="margin-bottom:10px">
+      <span class="touchonly row" style="gap:8px">
       <label>apply to</label>
       <select id="target"><option value="all">every pad</option></select>
       <span style="width:6px"></span>
       <button id="readCfg" title="/cap/config">read set-up</button>
       <button id="defaults" title="/cap/defaults: the measuring library back to its defaults">defaults</button>
+      </span>
+      <span class="i2cpane row" style="gap:8px" hidden>
+      <button id="i2cScan" title="/i2c/scan: every address that answers a one-byte read">scan the bus</button>
+      <button id="wiiId" title="/wii/id: what is at 0x52">identify</button>
+      <span id="wiiIdOut" style="color:var(--dim); font-family:var(--mono); font-size:12px">–</span>
+      </span>
       <span style="flex:1"></span>
       <label>rate</label>
       <select id="rate" title="/rate: stream period in ms; 0 stops the stream">
@@ -286,6 +335,7 @@
         <option value="20" selected>20 ms</option><option value="50">50 ms</option>
         <option value="100">100 ms</option><option value="200">200 ms</option>
       </select>
+      <span class="touchonly row" style="gap:8px">
       <label>deadband</label>
       <input type="number" id="deadband" value="0" min="0" max="64" style="width:64px"
              title="/deadband: 0 sends every tick; N needs a move of N counts on some pad">
@@ -294,6 +344,7 @@
         <option value="0">off</option><option value="500">0.5 s</option>
         <option value="2000" selected>2 s</option><option value="5000">5 s</option>
       </select>
+      </span>
     </div>
 
     <div class="libpane" data-lib="FreeTouch">
@@ -598,6 +649,81 @@
           <code>examples/CapacitiveSensorSketch</code>, read at commit aa01848.</li>
         <li><a href="https://www.pjrc.com/teensy/td_libs_CapacitiveSensor.html">CapacitiveSensor Arduino Library with Teensy</a>,
           PJRC: the wiring, the resistor range and the samples trade-off.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="i2cpane" hidden>
+    <h2>I2C · Wii extensions</h2>
+    <p>The board's I2C bus on D4 and D5, and any Wii extension controller plugged into it, found,
+      identified and read by <a href="https://github.com/dmadison/NintendoExtensionCtrl">NintendoExtensionCtrl</a>
+      every <code>/rate</code> tick, and drawn above as it moves. Every kind the library reads is on the
+      shelf below, labelled with the library class that reads it.</p>
+    <svg id="wiiShelf" viewBox="0 0 1360 600" role="img"
+         aria-label="Every Wii extension the library reads, drawn, with the library class for each"></svg>
+
+    <div class="param">
+      <h3>Wiring<span>D4 SDA · D5 SCL · 3V3 · GND</span></h3>
+      <p>An extension's plug slides onto Adafruit's Wii Nunchuck Breakout Adapter, whose header pins are
+        VIN, 3V, GND, SCL and SDA. Its guide: VIN is the power pin, <q>give it the same power as the logic
+        level of your microcontroller</q>, so the XIAO's 3V3 goes to VIN, not to 3V, which is <q>the 3.3V
+        output from the voltage regulator</q>; SCL and SDA are level shifted, each with a 10K pull-up. The
+        adapter's schematic pulls the microcontroller's side of both up to VIN, which is why VIN is not the
+        XIAO's 5V: Seeed's wiki says of its pins <q>Voltage input connected to general I/O pins may cause
+        chip damage if it' higher than 3.3V.</q> SCL goes to D5 and SDA to D4, the XIAO variant's Wire pins
+        (<code>PIN_WIRE_SCL</code> 5, <code>PIN_WIRE_SDA</code> 4, on SERCOM2). While the bus is on they
+        are not touch pads: the board measures no pads, and a touch tab gives them back.</p>
+      <p>Pull-ups. Before Wire takes the pins the board reads each line with the SAMD21's own pull-down on,
+        so a lamp lit means something outside held the line up, as the adapter's 10K do. Then it turns its
+        own pull-ups on, which Wire leaves set, and a line that is still LOW stops the bus starting at all,
+        because the core's Wire waits on the bus with no timeout. How strong the internal pull-ups are was
+        not looked up or measured here.</p>
+    </div>
+
+    <div class="param">
+      <h3>How an extension is found<span>NintendoExtensionCtrl 0.8.3 · 100 kHz</span></h3>
+      <p>Every 250 ms while nothing is plugged in, the board calls the library's
+        <code>ExtensionPort::connect()</code>, which initialises whatever answers at 0x52, reads its
+        identity and runs the matching type's own start-up; <code>getControllerType()</code> then names it,
+        and the library's <code>requestIdentity()</code> gives the six bytes shown beside the name. From
+        then on each tick is one <code>update()</code>. When an update fails the board connects again, as
+        the library's MultipleTypes example does, and forgets the extension if that fails too. A type the
+        library does not know is shown as Unknown, with the six bytes the library read for it as bits. The
+        sketch has no protocol code of its own.</p>
+      <p>Measured on this board with a Nunchuk through the adapter, VIN on 3V3, 2026-10-29, by the library
+        alone (<code>test/hardware/WiiLibProbe</code>): at 100 kHz, the core's default, <code>update()</code>
+        succeeded 90 times of 90 a second, over 8 s; at 400 kHz, 1..56 times of 19..62. The bus stays at
+        100 kHz.</p>
+      <p>The scan, <code>/i2c/scan</code>, is not the library's: a one-byte read of each address from 0x08
+        to 0x77, 1 ms apart. Probed alone ten times, 1 ms apart, the Nunchuk answered an empty write (what
+        most scanners send) 9 times and a one-byte read 10 times; in scans that went from address to
+        address with no gap it answered neither.</p>
+    </div>
+
+    <div class="param">
+      <h3>The fields<span><code>/wii</code>, in this order</span></h3>
+      <p>Each field is one of the library's getters, named as the library names it, in the order its
+        header declares them: every public, const getter that takes no argument, and for the turntable
+        then those of its <code>left</code> and <code>right</code> platters. Ranges are the library's
+        comments on those getters, or the getter's type where it gives none; buttons are the library's
+        booleans, 1 while pressed. The turntable's differ from its comment: by the library's code each
+        platter's <code>turntable()</code> is five bits and a sign, -32..31, and the combined one their
+        sum, where the comment on it says <q>6 bits, -30-29</q>.</p>
+      <div id="wiiFields"></div>
+    </div>
+
+    <div class="param">
+      <h3>Sources, opened 2026-10-29</h3>
+      <ul class="src">
+        <li><a href="https://github.com/dmadison/NintendoExtensionCtrl">NintendoExtensionCtrl</a> 0.8.3, by
+          David Madison, LGPL-3.0 by the LICENSE file it ships with: its <code>src/</code> and the
+          MultipleTypes example, as the Library Manager installed them. The sketch builds against that
+          install.</li>
+        <li>Adafruit, <a href="https://learn.adafruit.com/adafruit-wii-nunchuck-breakout-adapter">Adafruit Wii
+          Nunchuck Breakout Adapter</a>, and the adapter's schematic in
+          <a href="https://github.com/adafruit/Adafruit-Wii-Nunchuck-Breakout-Adapter-PCB">Adafruit-Wii-Nunchuck-Breakout-Adapter-PCB</a>.</li>
+        <li>Seeed, <a href="https://wiki.seeedstudio.com/Seeeduino-XIAO/">Seeeduino XIAO</a>: the pins' 3.3 V
+          limit and the 3V3 pin.</li>
       </ul>
     </div>
   </div>
@@ -1006,6 +1132,29 @@ function buildBreadboard() {
   }
 }
 
+// Header pins soldered into the XIAO's pads, as they sit in a breadboard,
+// each with a tooltip naming the pin. Ports and functions are the XIAO_m0
+// variant's (variant.h, variant.cpp in the Seeeduino SAMD core 1.8.6): A0..A10
+// are D0..D10, PIN_DAC0 is A0, Wire is D4/D5, Serial1 D6/D7, SPI D8/D9/D10.
+const PIN_TIPS = {
+  D0: "A0 · DAC · PA02", D1: "A1 · PA04", D2: "A2 · PA10", D3: "A3 · PA11",
+  D4: "A4 · SDA · PA08", D5: "A5 · SCL · PA09", D6: "A6 · TX · PB08", D7: "A7 · RX · PB09",
+  D8: "A8 · SCK · PA07", D9: "A9 · MISO · PA05", D10: "A10 · MOSI · PA06",
+};
+function buildHeaders() {
+  const g = $("headers");
+  g.textContent = "";
+  for (const [name, , , px, py, yline] of PINS) {
+    const pin = el("g", {}, g);
+    el("title", {}, pin).textContent = [name, PIN_TIPS[name], yline === null ? null : "PTC Y" + yline]
+      .filter(Boolean).join(" · ");
+    el("circle", { cx: px, cy: py, r: 7.5, fill: "url(#solder)", stroke: "#5f646b", "stroke-width": .6 }, pin);
+    el("rect", { x: px - 3.5, y: py - 3.5, width: 7, height: 7, rx: 1, fill: "url(#pinTip)",
+                 stroke: "#6d5a24", "stroke-width": .6 }, pin);
+    el("circle", { cx: px, cy: py, r: 14, fill: "transparent", "pointer-events": "all" }, pin);
+  }
+}
+
 // A jumper wire from the strip's outboard hole to the pin's name plate, with a
 // little sag, an insulation highlight and a dark pin where it goes in.
 function jumper(parent, x0, x1, y, colour) {
@@ -1127,6 +1276,650 @@ function buildScales() {
 const xOf = (S, v) => S.track + clamp(v / fullScale(), 0, 1) * S.trackLen;
 
 /* ============================================================
+   7b. The I2C bus, and the Wii extension on it
+   ============================================================ */
+// WiiExtension.h's binding of NintendoExtensionCtrl, field for field: each
+// field is one of the library's getters, [name, lo, hi], with "f" after a
+// float one; lib is the library's class. The board reads the library; the
+// page needs the names, their order and their ranges.
+// test-xiaosamd21-contract.mjs holds this, the header and ADDRESSES.md equal.
+const WII_KINDS = [
+  { name: "Nunchuk", lib: "Nunchuk", fields: [
+      ["joyX", 0, 255], ["joyY", 0, 255], ["accelX", 0, 1023], ["accelY", 0, 1023], ["accelZ", 0, 1023],
+      ["buttonC", 0, 1], ["buttonZ", 0, 1], ["rollAngle", -180, 180, "f"], ["pitchAngle", -180, 180, "f"],
+  ] },
+  { name: "Classic", lib: "ClassicController", fields: [
+      ["getHighRes", 0, 1], ["leftJoyX", 0, 255], ["leftJoyY", 0, 255], ["rightJoyX", 0, 255],
+      ["rightJoyY", 0, 255], ["dpadUp", 0, 1], ["dpadDown", 0, 1], ["dpadLeft", 0, 1], ["dpadRight", 0, 1],
+      ["buttonA", 0, 1], ["buttonB", 0, 1], ["buttonX", 0, 1], ["buttonY", 0, 1], ["triggerL", 0, 255],
+      ["triggerR", 0, 255], ["buttonL", 0, 1], ["buttonR", 0, 1], ["buttonZL", 0, 1], ["buttonZR", 0, 1],
+      ["buttonStart", 0, 1], ["buttonSelect", 0, 1], ["buttonPlus", 0, 1], ["buttonMinus", 0, 1],
+      ["buttonHome", 0, 1],
+  ] },
+  { name: "Guitar", lib: "GuitarController", fields: [
+      ["joyX", 0, 63], ["joyY", 0, 63], ["strum", 0, 1], ["strumUp", 0, 1], ["strumDown", 0, 1],
+      ["fretGreen", 0, 1], ["fretRed", 0, 1], ["fretYellow", 0, 1], ["fretBlue", 0, 1], ["fretOrange", 0, 1],
+      ["whammyBar", 0, 31], ["touchbar", 0, 31], ["touchGreen", 0, 1], ["touchRed", 0, 1],
+      ["touchYellow", 0, 1], ["touchBlue", 0, 1], ["touchOrange", 0, 1], ["buttonPlus", 0, 1],
+      ["buttonMinus", 0, 1],
+  ] },
+  { name: "Drums", lib: "DrumController", fields: [
+      ["joyX", 0, 63], ["joyY", 0, 63], ["drumRed", 0, 1], ["drumBlue", 0, 1], ["drumGreen", 0, 1],
+      ["cymbalYellow", 0, 1], ["cymbalOrange", 0, 1], ["bassPedal", 0, 1], ["buttonPlus", 0, 1],
+      ["buttonMinus", 0, 1], ["velocityAvailable", 0, 1], ["velocityID", 0, 31], ["velocity", 0, 7],
+      ["velocityRed", 0, 7], ["velocityBlue", 0, 7], ["velocityGreen", 0, 7], ["velocityYellow", 0, 7],
+      ["velocityOrange", 0, 7], ["velocityPedal", 0, 7],
+  ] },
+  { name: "Turntable", lib: "DJTurntableController", fields: [
+      ["turntable", -64, 62], ["buttonGreen", 0, 1], ["buttonRed", 0, 1], ["buttonBlue", 0, 1],
+      ["effectDial", 0, 31], ["crossfadeSlider", 0, 15], ["buttonEuphoria", 0, 1], ["joyX", 0, 63],
+      ["joyY", 0, 63], ["buttonPlus", 0, 1], ["buttonMinus", 0, 1], ["left.connected", 0, 1],
+      ["left.turntable", -32, 31], ["left.buttonGreen", 0, 1], ["left.buttonRed", 0, 1],
+      ["left.buttonBlue", 0, 1], ["right.connected", 0, 1], ["right.turntable", -32, 31],
+      ["right.buttonGreen", 0, 1], ["right.buttonRed", 0, 1], ["right.buttonBlue", 0, 1],
+  ] },
+  { name: "uDraw", lib: "uDrawTablet", fields: [
+      ["penX", 0, 4095], ["penY", 0, 4095], ["penPressure", 0, 511], ["buttonLower", 0, 1],
+      ["buttonUpper", 0, 1], ["penDetected", 0, 1],
+  ] },
+  { name: "Drawsome", lib: "DrawsomeTablet", fields: [
+      ["penX", 0, 65535], ["penY", 0, 65535], ["penPressure", 0, 4095], ["penDetected", 0, 1],
+  ] },
+];
+const wiiKindByName = n => WII_KINDS.find(k => k.name === n) || null;
+const wiiRange = f => [f[1], f[2]];
+
+let mode = "touch";                       // "i2c" while the board says /i2c 1
+const bus = { pull: null, scan: null };   // /i2c/pull [sda, scl]; /i2c/scan addresses
+const wii = { kind: null, id: null, view: null };   // /enq/wii, /wii/id, the drawn device
+
+// Tabs, panes and the rig's layers for the mode and library showing.
+function applyView() {
+  const i2c = mode === "i2c";
+  for (const b of document.querySelectorAll("#tabs button"))
+    b.setAttribute("aria-selected", (i2c ? b.dataset.mode === "i2c" : b.dataset.lib === lib) ? "true" : "false");
+  for (const p of document.querySelectorAll(".libpane")) p.hidden = i2c || p.dataset.lib !== lib;
+  for (const p of document.querySelectorAll(".i2cpane")) p.hidden = !i2c;
+  for (const n of document.querySelectorAll(".touchonly")) n.hidden = i2c;
+  $("rows").setAttribute("display", i2c ? "none" : "inline");
+  $("scales").setAttribute("display", i2c ? "none" : "inline");
+  $("bus").setAttribute("display", i2c ? "inline" : "none");
+  $("titleHi").textContent = $("titleLo").textContent = i2c ? "I2C · D4 SDA · D5 SCL" : TITLE_OF[lib];
+  $("unitHi").textContent = $("unitLo").textContent = i2c ? "/wii · FIELDS" : "/cap · COUNTS";
+}
+
+function setMode(m) {
+  if (m !== mode) {
+    mode = m;
+    if (mode === "i2c") buildBus();
+  }
+  applyView();
+}
+
+// A wire between two holes, drawn as jumper() draws one. It sags a little;
+// with level, it leaves the first hole downward and comes into the second
+// level from the left, so its end sits squarely in that hole.
+function wire(parent, x0, y0, x1, y1, colour, level = false) {
+  const dx = x1 - x0, dy = y1 - y0;
+  const d = level
+    ? `M${x0},${y0} C${x0 + dx * .1},${y0 + dy * .7} ${x1 - Math.max(40, dx * .35)},${y1} ${x1},${y1}`
+    : `M${x0},${y0} Q${(x0 + x1) / 2},${(y0 + y1) / 2 + Math.min(40, Math.hypot(dx, dy) / 6)} ${x1},${y1}`;
+  el("path", { d, fill: "none", stroke: "#000", "stroke-opacity": ".45", "stroke-width": 7.5, "stroke-linecap": "round" }, parent);
+  el("path", { d, fill: "none", stroke: colour, "stroke-width": 5.5, "stroke-linecap": "round" }, parent);
+  el("path", { d, fill: "none", stroke: "#fff", "stroke-opacity": ".35", "stroke-width": 1.4,
+               "stroke-linecap": "round", transform: "translate(0,-1.4)" }, parent);
+  for (const [x, y] of [[x0, y0], [x1, y1]])
+    el("rect", { x: x - 3, y: y - 3, width: 6, height: 6, rx: 1, fill: "#2a2a2a" }, parent);
+}
+
+// The address grid's place on the left bench, i2cdetect's layout: rows of
+// sixteen, 0x00 to 0x70.
+const GRID = { x: -318, y: 300, cell: 20 };
+// Adafruit's Wii Nunchuck Breakout Adapter (product 4836): its five header
+// pins, in the order its pinout photo shows them, VIN 3V GND SCL SDA, down the
+// breadboard's outermost column, j, strips 10 to 14 (k 9..13). Its board hangs
+// off the right edge, so h and i of those strips stay open for the jumpers.
+// Adafruit's guide: VIN is the power input, "the same power as the logic level
+// of your microcontroller"; 3V is its regulator's output, left unconnected;
+// SCL and SDA are level shifted, with a 10K pull-up each.
+const ADAPTER = { k: 9, names: ["VIN", "3V", "GND", "SCL", "SDA"] };
+const TONGUE_X = BB.x1 + 34;              // the tongue the extension's plug slides onto
+const SLOT = { x: 500, y: 150 };          // the device's corner on the right bench
+
+let busLeds = {}, pullLamps = [], wiiSlot = null;   // wiiSlot: the device's group, once drawn
+
+function buildBus() {
+  const g = $("bus");
+  g.textContent = "";
+  busLeds = {};
+
+  // The pull-up lamps.
+  engrave(g, GRID.x, 196, "PULL-UPS OUTSIDE THE BOARD", 10, "start", 700, true);
+  pullLamps = ["SDA", "SCL"].map((name, i) => {
+    const x = GRID.x + 14 + i * 150, y = 228;
+    const lamp = el("circle", { cx: x, cy: y, r: 10, fill: "url(#lampOff)" }, g);
+    const on = el("circle", { cx: x, cy: y, r: 10, fill: "url(#lampOn)", opacity: 0 }, g);
+    engrave(g, x + 18, y + 4, name, 12, "start", 700, true);
+    const note = el("text", { x: x + 18, y: y + 20, "font-size": 9.5, fill: "#8e96a6",
+                              "font-family": "system-ui,sans-serif" }, g);
+    return { on, note };
+  });
+
+  // The address grid.
+  engrave(g, GRID.x, GRID.y - 30, "ADDRESSES THAT ANSWER · /i2c/scan", 10, "start", 700, true);
+  for (let c = 0; c < 16; c++)
+    engrave(g, GRID.x + 34 + c * GRID.cell, GRID.y - 10, c.toString(16), 9, "middle", 600, true);
+  for (let r = 0; r < 8; r++) {
+    engrave(g, GRID.x + 12, GRID.y + 4 + r * GRID.cell, (r * 16).toString(16).padStart(2, "0"), 9, "middle", 600, true);
+    for (let c = 0; c < 16; c++) {
+      const a = r * 16 + c, x = GRID.x + 34 + c * GRID.cell, y = GRID.y + r * GRID.cell;
+      const reserved = a < 0x08 || a > 0x77;
+      el("circle", { cx: x, cy: y, r: 7, fill: "#0b0d10", stroke: "#3a3f48", "stroke-width": 1 }, g);
+      const led = el("circle", { cx: x, cy: y, r: 5.5, fill: reserved ? "#191b20" : "url(#lampOff)" }, g);
+      const lit = el("circle", { cx: x, cy: y, r: 5.5, fill: "#7dffb0", opacity: 0 }, g);
+      if (!reserved) busLeds[a] = { led, lit };
+    }
+  }
+  const scanBtn = el("g", { cursor: "pointer" }, g);
+  el("rect", { x: GRID.x, y: GRID.y + 8 * GRID.cell, width: 92, height: 24, rx: 5, fill: "url(#plate)",
+               stroke: "#878d95", "stroke-width": .8 }, scanBtn);
+  engrave(scanBtn, GRID.x + 46, GRID.y + 8 * GRID.cell + 16, "SCAN", 11, "middle");
+  scanBtn.onclick = () => send("/i2c/scan", []);
+  engrave(g, GRID.x + 102, GRID.y + 8 * GRID.cell + 16, "lit: answered a one-byte read · dark: reserved", 9.5, "start", 500, true);
+
+  // The adapter: Adafruit's black board, its five header pins in column j,
+  // the rest off the right edge with the "Notch Up" tongue the plug slides on.
+  const last = ADAPTER.names.length - 1;
+  const ax = HOLE_X.j, ay0 = stripY(ADAPTER.k) - 15, ay1 = stripY(ADAPTER.k + last) + 15;
+  const aw = TONGUE_X + 8 - (ax - 14);
+  el("rect", { x: ax - 12, y: ay0 + 4, width: aw, height: ay1 - ay0, rx: 7, fill: "#000", "fill-opacity": ".4" }, g);
+  el("rect", { x: ax - 14, y: ay0, width: aw, height: ay1 - ay0, rx: 7, fill: "#1d1f23",
+               stroke: "#0c0d0f", "stroke-width": 1.2 }, g);
+  ADAPTER.names.forEach((name, i) => {
+    const y = stripY(ADAPTER.k + i);
+    el("circle", { cx: ax, cy: y, r: 6, fill: "#d9b54a", stroke: "#8a6d1e" }, g);
+    el("circle", { cx: ax, cy: y, r: 2.6, fill: "#2a2a2a" }, g);
+    el("text", { x: ax + 11, y: y + 3.5, "font-size": 9, fill: "#e8eaee", "font-weight": 700,
+                 "font-family": "system-ui,sans-serif" }, g).textContent = name;
+  });
+  el("rect", { x: ax + 34, y: ay0 + 8, width: 7, height: 4, rx: 1, fill: "#7dffb0", opacity: .9 }, g);   // its ON LED
+  el("text", { x: ax + 44, y: ay0 + 13, "font-size": 7, fill: "#e8eaee", "font-family": "system-ui,sans-serif" }, g)
+    .textContent = "ON";
+  // The tongue: two wide contacts, "Notch Up".
+  const ty = (ay0 + ay1) / 2;
+  el("rect", { x: TONGUE_X, y: ty - 24, width: 50, height: 48, rx: 4, fill: "#1d1f23", stroke: "#0c0d0f" }, g);
+  for (const dy of [-18, 6])
+    el("rect", { x: TONGUE_X + 4, y: ty + dy, width: 42, height: 12, rx: 1.5, fill: "#d8b85a" }, g);
+
+  // Jumpers, hole to hole, each into an open hole beside its adapter pin:
+  // the XIAO's 3V3 down column i to VIN, its GND down column h to GND, D5
+  // (SCL) and D4 (SDA) across from column a to column i. 3V stays open. A
+  // XIAO pin's hole is its strip's, found from the pad's place in the photo.
+  const pinY = n => stripY(ADAPTER.k + ADAPTER.names.indexOf(n));
+  const xiao = n => stripY(Math.round((PINS.find(r => r[0] === n)[4] - STRIP_Y0) / P));
+  wire(g, HOLE_X.h, xiao("GND"), HOLE_X.h, pinY("GND"), "#222");
+  wire(g, HOLE_X.i, xiao("3V3"), HOLE_X.i, pinY("VIN"), "#d8362b");
+  wire(g, HOLE_X.a, xiao("D5"), HOLE_X.i, pinY("SCL"), "#e9c21c", true);
+  wire(g, HOLE_X.a, xiao("D4"), HOLE_X.i, pinY("SDA"), "#2f6fd6", true);
+
+  // The device's own place on the right bench.
+  wiiSlot = el("g", { transform: `translate(${SLOT.x},${SLOT.y})` }, g);
+  drawWiiSlot();
+  renderBus();
+}
+
+function renderBus() {
+  if (!pullLamps.length) return;
+  pullLamps.forEach((p, i) => {
+    const v = bus.pull ? bus.pull[i] : null;
+    p.on.setAttribute("opacity", v ? 1 : 0);
+    p.note.textContent = v === null ? "not read" : v ? "yes, outside" : "none: the board's own only";
+  });
+  const found = new Set(bus.scan || []);
+  for (const [a, l] of Object.entries(busLeds)) l.lit.setAttribute("opacity", found.has(+a) ? 1 : 0);
+}
+
+// The connected extension, drawn by its kind's art; or what is known of an
+// unknown one; or an empty plug.
+function drawWiiSlot() {
+  const slot = wiiSlot;
+  if (!slot) return;
+  slot.textContent = "";
+  wii.view = null;
+  const kind = wii.kind && wiiKindByName(wii.kind);
+  const art = kind ? WII_ART[kind.name] : wii.kind ? WII_ART.Unknown : null;
+  if (art) {
+    wii.view = art(slot);
+  } else {
+    el("rect", { x: 20, y: 120, width: 280, height: 220, rx: 18, fill: "#1b1e24", stroke: "#3a3f48",
+                 "stroke-dasharray": "6 5" }, slot);
+    engrave(slot, 160, 220, "NO EXTENSION", 13, "middle", 700, true);
+    engrave(slot, 160, 244, "plug one into the adapter", 11, "middle", 500, true);
+  }
+  wii.readout = el("text", { x: 60, y: 490, "font-size": 10.5, fill: "#9aa3af",
+                             "font-family": "ui-monospace,Menlo,monospace" }, slot);
+  markShelf();
+}
+
+// /wii's arguments, by name, to the drawing and the numbers under it, as many
+// to a line as fit in 44 characters; floats to one decimal.
+function renderWii(args) {
+  const kind = wii.kind && wiiKindByName(wii.kind);
+  const names = kind ? kind.fields.map(f => f[0]) : args.map((_, i) => "b" + i);
+  const f = {};
+  names.forEach((n, i) => { f[n] = args[i]; });
+  if (wii.view) wii.view.update(f, kind);
+  if (!wii.readout) return;
+  wii.readout.textContent = "";
+  const lines = [];
+  let line = "";
+  names.forEach((n, i) => {
+    const v = args[i];
+    const item = `${n} ${v === undefined ? "–" : Number.isInteger(v) ? v : v.toFixed(1)}`;
+    if (line && line.length + 2 + item.length > 44) { lines.push(line); line = ""; }
+    line += (line ? "  " : "") + item;
+  });
+  if (line) lines.push(line);
+  lines.forEach((t, i) => { el("tspan", { x: 40, dy: i ? 15 : 0 }, wii.readout).textContent = t; });
+}
+
+// Every kind the library reads, on a shelf in the I2C pane, drawn by the same
+// art and labelled with the library class that reads it. The one plugged in
+// is ringed.
+const SHELF = { cols: 4, w: 340, h: 300, scale: .55 };
+let shelfCells = {};
+function buildShelf() {
+  const svg = $("wiiShelf");
+  if (!svg) return;
+  svg.textContent = "";
+  shelfCells = {};
+  WII_KINDS.forEach((k, i) => {
+    const x = (i % SHELF.cols) * SHELF.w, y = Math.floor(i / SHELF.cols) * SHELF.h;
+    const cell = el("g", { transform: `translate(${x},${y})`, cursor: "pointer" }, svg);
+    const ring = el("rect", { x: 6, y: 6, width: SHELF.w - 12, height: SHELF.h - 12, rx: 14, fill: "#1b1e24",
+                              stroke: "#343945", "stroke-width": 2 }, cell);
+    WII_ART[k.name](el("g", { transform: `translate(${SHELF.w / 2 - 160 * SHELF.scale},14) scale(${SHELF.scale})` }, cell));
+    engrave(cell, SHELF.w / 2, SHELF.h - 34, k.name, 12, "middle", 700, true);
+    engrave(cell, SHELF.w / 2, SHELF.h - 17, k.lib, 10, "middle", 500, true);
+    cell.onclick = () => { if (demoTimer) startWiiDemo(k.name); };
+    shelfCells[k.name] = ring;
+  });
+  markShelf();
+}
+
+// The I2C pane's field tables, written out from WII_KINDS so they cannot
+// drift from it: each field, the getter it is, its range and its type.
+function buildFieldTable() {
+  const host = $("wiiFields");
+  if (!host) return;
+  host.textContent = "";
+  for (const k of WII_KINDS) {
+    const t = document.createElement("table");
+    t.className = "wiitab";
+    t.innerHTML = `<caption><b>${k.name}</b> · NintendoExtensionCtrl's <code>${k.lib}</code> · ` +
+      `${k.fields.length} fields</caption>` +
+      "<tr><th>field, the getter</th><th>range</th><th>type</th></tr>" +
+      k.fields.map(f => `<tr><td><code>${f[0]}()</code></td><td>${f[1]}..${f[2]}</td>` +
+        `<td>${f[3] === "f" ? "float" : f[1] === 0 && f[2] === 1 ? "boolean, 1 = pressed or true" : "int"}</td></tr>`).join("");
+    host.appendChild(t);
+  }
+}
+
+function markShelf() {
+  for (const [name, ring] of Object.entries(shelfCells))
+    ring.setAttribute("stroke", name === wii.kind ? "#ff8a2a" : "#343945");
+}
+
+function onWiiKind(name, id) {
+  wii.kind = name || null;
+  wii.id = id || null;
+  if (mode === "i2c") drawWiiSlot();
+}
+
+/* ---- the extensions' own drawings: each takes its slot (320 x 460) and
+   returns update(fields, kind), fields by the library's getter names ---- */
+const WII_ART = {};
+
+// The extension's cable, from where it leaves the body to a plug on the
+// adapter's tongue (the slot's left edge, level with the adapter).
+const PLUG_Y = (stripY(ADAPTER.k) + stripY(ADAPTER.k + ADAPTER.names.length - 1)) / 2 - SLOT.y;
+function wiiCable(slot, x, y) {
+  const px = TONGUE_X + 22 - SLOT.x, d = `M${x},${y} C${x},${y + 60} ${px + 80},${PLUG_Y} ${px + 26},${PLUG_Y}`;
+  el("path", { d, fill: "none", stroke: "#000", "stroke-opacity": ".4", "stroke-width": 11, "stroke-linecap": "round" }, slot);
+  el("path", { d, fill: "none", stroke: "#d6d9de", "stroke-width": 8, "stroke-linecap": "round" }, slot);
+  el("rect", { x: px - 6, y: PLUG_Y - 26, width: 36, height: 52, rx: 6, fill: "url(#wiiGrey)", stroke: "#7d828a" }, slot);
+}
+
+// A press button: shape drawn at rest, a lit copy shown while pressed.
+function wiiKey(parent, shape, label, colour = "#ffb23e") {
+  const g = el("g", {}, parent);
+  const base = el(shape.tag, { ...shape.attrs, fill: shape.fill || "url(#wiiGrey)", stroke: "#7d828a", "stroke-width": 1 }, g);
+  const lit = el(shape.tag, { ...shape.attrs, fill: colour, opacity: 0 }, g);
+  if (label) {
+    const [x, y] = shape.labelAt;
+    el("text", { x, y, "font-size": shape.labelSize || 11, "text-anchor": "middle", "font-weight": 700,
+                 fill: "#3a3e45", "font-family": "system-ui,sans-serif" }, g).textContent = label;
+  }
+  return on => {
+    lit.setAttribute("opacity", on ? .85 : 0);
+    g.setAttribute("transform", on ? "translate(0,1.5)" : "");
+    base.setAttribute("stroke", on ? colour : "#7d828a");
+  };
+}
+
+// Three bars, for an accelerometer's axes, around the 511 that the library's
+// rollAngle() and pitchAngle() take as level (Nunchuk.cpp).
+function wiiAccelBars(parent, x, y, names) {
+  const bars = names.map((n, i) => {
+    const bx = x + i * 26;
+    el("rect", { x: bx, y, width: 14, height: 90, rx: 3, fill: "#0b0d10", stroke: "#3a3f48" }, parent);
+    el("line", { x1: bx - 2, x2: bx + 16, y1: y + 45, y2: y + 45, stroke: "#555b65" }, parent);
+    engrave(parent, bx + 7, y + 106, n, 9, "middle", 600, true);
+    return el("rect", { x: bx + 2, y: y + 45, width: 10, height: 0, fill: "#7dffb0" }, parent);
+  });
+  return vals => bars.forEach((b, i) => {
+    const h = clamp((vals[i] - 511) / 512, -1, 1) * 43;
+    b.setAttribute("y", y + 45 - Math.max(h, 0));
+    b.setAttribute("height", Math.abs(h));
+  });
+}
+
+// A field's value as 0..1 of its range.
+const wiiUnit = (kind, name, v) => {
+  const [lo, hi] = wiiRange(kind.fields.find(x => x[0] === name));
+  return clamp((v - lo) / (hi - lo), 0, 1);
+};
+
+// Nunchuk, from above: the stick in its well on the head, C and Z on the
+// front edge, the whole body rolled by the library's rollAngle().
+WII_ART.Nunchuk = slot => {
+  wiiCable(slot, 160, 400);
+  const tilt = el("g", { transform: "translate(160,230)" }, slot);
+  const body = "M0,-180 C70,-180 96,-118 96,-64 C96,8 72,64 54,124 C42,170 -42,170 -54,124 " +
+               "C-72,64 -96,8 -96,-64 C-96,-118 -70,-180 0,-180 Z";
+  const pressZ = wiiKey(tilt, { tag: "rect", attrs: { x: -40, y: -196, width: 80, height: 22, rx: 9 },
+                                labelAt: [0, -180], labelSize: 12 }, "Z");
+  const pressC = wiiKey(tilt, { tag: "ellipse", attrs: { cx: 0, cy: -210, rx: 22, ry: 11 },
+                                labelAt: [0, -206], labelSize: 11 }, "C");
+  el("path", { d: body, fill: "#000", "fill-opacity": ".4", transform: "translate(5,9)" }, tilt);
+  el("path", { d: body, fill: "url(#wiiWhite)", stroke: "#a9adb5", "stroke-width": 1.2 }, tilt);
+  el("path", { d: "M-70,-60 C-60,-150 60,-150 70,-60", fill: "none", stroke: "#fff", "stroke-width": 3, "stroke-opacity": ".7" }, tilt);
+  el("circle", { cx: 0, cy: -92, r: 46, fill: "url(#wiiWell)" }, tilt);
+  const cap = el("g", {}, tilt);
+  el("circle", { cx: 0, cy: -92, r: 28, fill: "url(#wiiStick)", stroke: "#6f747c" }, cap);
+  el("circle", { cx: 0, cy: -92, r: 17, fill: "none", stroke: "#8b9098", "stroke-width": 2 }, cap);
+  engrave(tilt, 0, 60, "Nunchuk", 13, "middle");
+  const bars = wiiAccelBars(slot, 236, 300, ["X", "Y", "Z"]);
+  return {
+    update(f, kind) {
+      const nx = 2 * wiiUnit(kind, "joyX", f.joyX) - 1, ny = 2 * wiiUnit(kind, "joyY", f.joyY) - 1;
+      cap.setAttribute("transform", `translate(${(nx * 24).toFixed(1)},${(-ny * 24).toFixed(1)})`);
+      pressC(f.buttonC); pressZ(f.buttonZ);
+      tilt.setAttribute("transform", `translate(160,230) rotate(${clamp(f.rollAngle, -70, 70).toFixed(1)})`);
+      bars([f.accelX, f.accelY, f.accelZ]);
+    },
+  };
+};
+
+function wiiShape(parent, d, fill = "url(#wiiWhite)") {
+  el("path", { d, fill: "#000", "fill-opacity": ".4", transform: "translate(5,9)" }, parent);
+  return el("path", { d, fill, stroke: "#a9adb5", "stroke-width": 1.2 }, parent);
+}
+
+// A thumbstick: well and cap; set(nx, ny), each -1..1, up positive.
+function wiiThumb(parent, cx, cy, r) {
+  el("circle", { cx, cy, r: r + 6, fill: "url(#wiiWell)" }, parent);
+  const cap = el("g", {}, parent);
+  el("circle", { cx, cy, r, fill: "url(#wiiStick)", stroke: "#6f747c" }, cap);
+  el("circle", { cx, cy, r: r * .6, fill: "none", stroke: "#8b9098", "stroke-width": 1.5 }, cap);
+  return (nx, ny) => cap.setAttribute("transform", `translate(${(nx * r * .8).toFixed(1)},${(-ny * r * .8).toFixed(1)})`);
+}
+// The library's joyX() and joyY() for a stick drawn by wiiThumb.
+const wiiStickOf = (stick, f, kind) =>
+  stick(2 * wiiUnit(kind, "joyX", f.joyX) - 1, 2 * wiiUnit(kind, "joyY", f.joyY) - 1);
+
+const wiiDisc = (parent, cx, cy, r, label, colour, fill) =>
+  wiiKey(parent, { tag: "circle", attrs: { cx, cy, r }, fill, labelAt: [cx, cy + 4], labelSize: r > 11 ? 12 : 9 }, label, colour);
+
+// A row of eight lamps per byte: a report shown as bits, for a type the
+// library does not know.
+function wiiBits(parent, x, y, rows) {
+  const lamps = [];
+  for (let r = 0; r < rows; r++) {
+    engrave(parent, x - 8, y + 4 + r * 22, "b" + r, 9, "end", 600, true);
+    for (let b = 0; b < 8; b++) {
+      const cx = x + 8 + (7 - b) * 22;
+      el("circle", { cx, cy: y + r * 22, r: 7, fill: "#0b0d10", stroke: "#3a3f48" }, parent);
+      lamps.push(el("circle", { cx, cy: y + r * 22, r: 5.5, fill: "#ffb23e", opacity: 0 }, parent));
+    }
+  }
+  for (let b = 0; b < 8; b++) engrave(parent, x + 8 + (7 - b) * 22, y - 14, String(b), 8.5, "middle", 600, true);
+  return bytes => bytes.forEach((v, r) => {
+    for (let b = 0; b < 8; b++) if (lamps[r * 8 + b]) lamps[r * 8 + b].setAttribute("opacity", (v >> b) & 1 ? .9 : 0);
+  });
+}
+
+// Classic Controller: shoulders with the analog triggers' travel shown as
+// fill, d-pad, the four face buttons, -, home, +, and the two sticks.
+WII_ART.Classic = slot => {
+  wiiCable(slot, 160, 128);
+  const shoulder = (x, w, label) => {
+    const g = el("g", {}, slot);
+    el("rect", { x, y: 126, width: w, height: 24, rx: 9, fill: "url(#wiiGrey)", stroke: "#7d828a" }, g);
+    const fill = el("rect", { x: x + 3, y: 129, width: 0, height: 18, rx: 7, fill: "#ffb23e", opacity: .8 }, g);
+    engrave(g, x + w / 2, 142, label, 10, "middle");
+    return { g, fill, w };
+  };
+  const L = shoulder(22, 82, "L"), ZL = shoulder(108, 40, "ZL"), ZR = shoulder(172, 40, "ZR"), R = shoulder(216, 82, "R");
+  wiiShape(slot, "M76,146 C34,146 14,186 14,232 C14,288 48,326 96,326 C124,326 138,304 160,304 " +
+                 "C182,304 196,326 224,326 C272,326 306,288 306,232 C306,186 286,146 244,146 Z");
+  // d-pad
+  const pad = {};
+  el("rect", { x: 56, y: 222, width: 44, height: 20, rx: 3, fill: "#2b2e34" }, slot);
+  el("rect", { x: 68, y: 210, width: 20, height: 44, rx: 3, fill: "#2b2e34" }, slot);
+  for (const [dir, x, y, w, h] of [["Up", 68, 208, 20, 18], ["Down", 68, 238, 20, 18],
+                                    ["Left", 54, 222, 18, 20], ["Right", 84, 222, 18, 20]])
+    pad[dir] = el("rect", { x, y, width: w, height: h, rx: 3, fill: "#ffb23e", opacity: 0 }, slot);
+  // face buttons, Nintendo's diamond: x top, a right, b bottom, y left
+  const face = {
+    X: wiiDisc(slot, 244, 206, 13, "x"), A: wiiDisc(slot, 270, 232, 13, "a"),
+    B: wiiDisc(slot, 244, 258, 13, "b"), Y: wiiDisc(slot, 218, 232, 13, "y"),
+  };
+  const centre = { Minus: wiiDisc(slot, 128, 214, 8, "−"), Home: wiiDisc(slot, 160, 214, 10, "⌂"),
+                   Plus: wiiDisc(slot, 192, 214, 8, "+") };
+  const left = wiiThumb(slot, 116, 282, 16), right = wiiThumb(slot, 204, 282, 16);
+  engrave(slot, 160, 186, "Classic Controller", 11, "middle");
+  return {
+    update(f, kind) {
+      const u = n => wiiUnit(kind, n, f[n]);
+      left(2 * u("leftJoyX") - 1, 2 * u("leftJoyY") - 1);
+      right(2 * u("rightJoyX") - 1, 2 * u("rightJoyY") - 1);
+      L.fill.setAttribute("width", (L.w - 6) * Math.max(u("triggerL"), f.buttonL ? 1 : 0));
+      R.fill.setAttribute("width", (R.w - 6) * Math.max(u("triggerR"), f.buttonR ? 1 : 0));
+      ZL.fill.setAttribute("width", f.buttonZL ? ZL.w - 6 : 0);
+      ZR.fill.setAttribute("width", f.buttonZR ? ZR.w - 6 : 0);
+      for (const d of ["Up", "Down", "Left", "Right"]) pad[d].setAttribute("opacity", f["dpad" + d] ? .9 : 0);
+      for (const k of ["A", "B", "X", "Y", "Minus", "Home", "Plus"]) (face[k] || centre[k])(f["button" + k]);
+    },
+  };
+};
+
+// Guitar Hero guitar: the five frets up the neck, the World Tour touch bar
+// below them as the library's five zones (touchGreen() .. touchOrange()),
+// strum bar, whammy, + and −, the small stick.
+const WII_FRETS = ["Green", "Red", "Yellow", "Blue", "Orange"];
+const WII_FRET_COLOUR = { Green: "#36c45a", Red: "#e8423a", Yellow: "#f2cf2e", Blue: "#3a7ee8", Orange: "#f08a24" };
+WII_ART.Guitar = slot => {
+  wiiCable(slot, 70, 404);
+  el("path", { d: "M146,18 L174,18 L180,62 L140,62 Z", fill: "#2b2e34", stroke: "#15171a" }, slot);
+  el("rect", { x: 144, y: 60, width: 32, height: 206, rx: 3, fill: "#3b2a1f", stroke: "#1e140e" }, slot);
+  const press = {}, touch = {};
+  WII_FRETS.forEach((c, i) => {
+    press[c] = wiiKey(slot, { tag: "rect", attrs: { x: 148, y: 74 + i * 26, width: 24, height: 20, rx: 4 },
+                              fill: WII_FRET_COLOUR[c], labelAt: [160, 0] }, null, "#ffffff");
+  });
+  el("rect", { x: 150, y: 210, width: 20, height: 50, rx: 3, fill: "#1c1d21", stroke: "#4a4f58" }, slot);
+  WII_FRETS.forEach((c, i) => {
+    touch[c] = el("rect", { x: 151, y: 211 + i * 10, width: 18, height: 8, rx: 2, fill: WII_FRET_COLOUR[c], opacity: 0 }, slot);
+  });
+  wiiShape(slot, "M160,262 C206,262 214,286 246,290 C290,296 304,332 298,366 C290,412 236,428 160,428 " +
+                 "C84,428 30,412 22,366 C16,332 30,296 74,290 C106,286 114,262 160,262 Z", "#c4262c");
+  const strum = el("g", {}, slot);
+  el("rect", { x: 112, y: 300, width: 96, height: 18, rx: 8, fill: "url(#wiiGrey)", stroke: "#6f747c" }, strum);
+  const whammy = el("g", {}, slot);
+  el("line", { x1: 236, y1: 376, x2: 296, y2: 420, stroke: "#c9ccd2", "stroke-width": 5, "stroke-linecap": "round" }, whammy);
+  const plus = wiiDisc(slot, 178, 352, 8, "+"), minus = wiiDisc(slot, 142, 352, 8, "−");
+  const stick = wiiThumb(slot, 92, 360, 10);
+  engrave(slot, 160, 400, "Guitar", 11, "middle", 600, true);
+  return {
+    update(f, kind) {
+      for (const c of WII_FRETS) {
+        press[c](f["fret" + c]);
+        touch[c].setAttribute("opacity", f["touch" + c] ? .9 : 0);
+      }
+      strum.setAttribute("transform", f.strumUp ? "translate(0,-6)" : f.strumDown ? "translate(0,6)" : "");
+      whammy.setAttribute("transform", `rotate(${(wiiUnit(kind, "whammyBar", f.whammyBar) * 28).toFixed(1)},236,376)`);
+      plus(f.buttonPlus); minus(f.buttonMinus);
+      wiiStickOf(stick, f, kind);
+    },
+  };
+};
+
+// Guitar Hero World Tour drums from above: three pads, two cymbals, the kick
+// pedal, and the Wii Remote's cradle with + − and the stick.
+WII_ART.Drums = slot => {
+  wiiCable(slot, 160, 92);
+  const hit = {};
+  const pad = (name, cx, cy, r, colour, cymbal) => {
+    el("circle", { cx: cx + 4, cy: cy + 7, r, fill: "#000", "fill-opacity": .4 }, slot);
+    el("circle", { cx, cy, r, fill: cymbal ? "#c9a84a" : "#26282d", stroke: "#111" }, slot);
+    el("circle", { cx, cy, r: r - 7, fill: colour, opacity: cymbal ? .55 : .35 }, slot);
+    const lit = el("circle", { cx, cy, r: r - 7, fill: colour, opacity: 0 }, slot);
+    hit[name] = on => lit.setAttribute("opacity", on ? .95 : 0);
+  };
+  el("rect", { x: 110, y: 40, width: 100, height: 56, rx: 10, fill: "url(#wiiGrey)", stroke: "#6f747c" }, slot);
+  const minus = wiiDisc(slot, 128, 64, 7, "−"), plus = wiiDisc(slot, 192, 64, 7, "+");
+  const stick = wiiThumb(slot, 160, 70, 9);
+  pad("cymbalYellow", 100, 150, 40, "#f2cf2e", true);
+  pad("cymbalOrange", 224, 150, 40, "#f08a24", true);
+  pad("drumRed", 62, 252, 44, "#e8423a");
+  pad("drumBlue", 160, 282, 44, "#3a7ee8");
+  pad("drumGreen", 258, 252, 44, "#36c45a");
+  el("rect", { x: 132, y: 344, width: 56, height: 46, rx: 8, fill: "#26282d", stroke: "#111" }, slot);
+  const kick = el("rect", { x: 138, y: 350, width: 44, height: 34, rx: 6, fill: "#ffb23e", opacity: 0 }, slot);
+  engrave(slot, 160, 410, "Drums", 11, "middle", 600, true);
+  return {
+    update(f, kind) {
+      for (const n of Object.keys(hit)) hit[n](f[n]);
+      kick.setAttribute("opacity", f.bassPedal ? .9 : 0);
+      plus(f.buttonPlus); minus(f.buttonMinus);
+      wiiStickOf(stick, f, kind);
+    },
+  };
+};
+
+// DJ Hero turntable: both platters turn by their own turntable() speeds; each
+// has its green, red and blue buttons. Crossfader, effects dial, euphoria,
+// + −, stick.
+WII_ART.Turntable = slot => {
+  wiiCable(slot, 24, 300);
+  wiiShape(slot, "M30,96 L290,96 Q304,96 304,110 L304,372 Q304,386 290,386 L30,386 Q16,386 16,372 L16,110 Q16,96 30,96 Z", "#2b2e34");
+  const deck = {};
+  for (const [side, cx] of [["left", 88], ["right", 232]]) {
+    el("circle", { cx, cy: 196, r: 62, fill: "#111215", stroke: "#3a3f48" }, slot);
+    const disc = el("g", {}, slot);
+    for (let r = 56; r > 18; r -= 6) el("circle", { cx, cy: 196, r, fill: "none", stroke: "#24262b", "stroke-width": 2 }, disc);
+    el("rect", { x: cx - 3, y: 136, width: 6, height: 22, rx: 2, fill: "#d9dce1" }, disc);
+    deck[side] = {
+      disc, cx, angle: 0,
+      Green: wiiDisc(slot, cx - 20, 196, 9, "", "#36c45a", "#1d4f2b"),
+      Red: wiiDisc(slot, cx, 196, 9, "", "#e8423a", "#5a1f1c"),
+      Blue: wiiDisc(slot, cx + 20, 196, 9, "", "#3a7ee8", "#1f3a63"),
+    };
+  }
+  el("rect", { x: 110, y: 330, width: 100, height: 10, rx: 5, fill: "#111215" }, slot);
+  const fader = el("rect", { x: 152, y: 322, width: 16, height: 26, rx: 3, fill: "url(#wiiGrey)" }, slot);
+  el("circle", { cx: 160, cy: 286, r: 18, fill: "url(#wiiGrey)", stroke: "#6f747c" }, slot);
+  const knob = el("line", { x1: 160, y1: 286, x2: 160, y2: 270, stroke: "#2b2e34", "stroke-width": 3, "stroke-linecap": "round" }, slot);
+  const euphoria = wiiDisc(slot, 160, 120, 11, "", "#e83ad8", "#4a1f47");
+  const minus = wiiDisc(slot, 40, 360, 7, "−"), plus = wiiDisc(slot, 280, 360, 7, "+");
+  const stick = wiiThumb(slot, 260, 300, 9);
+  engrave(slot, 160, 412, "Turntable", 11, "middle", 600, true);
+  return {
+    update(f, kind) {
+      for (const side of ["left", "right"]) {
+        const d = deck[side];
+        d.angle = (d.angle + f[side + ".turntable"] * 3) % 360;   // 3 degrees per count per report: a choice
+        d.disc.setAttribute("transform", `rotate(${d.angle.toFixed(1)},${d.cx},196)`);
+        for (const c of ["Green", "Red", "Blue"]) d[c](f[side + ".button" + c]);
+      }
+      fader.setAttribute("x", 104 + wiiUnit(kind, "crossfadeSlider", f.crossfadeSlider) * 96);
+      knob.setAttribute("transform", `rotate(${(wiiUnit(kind, "effectDial", f.effectDial) * 360).toFixed(1)},160,286)`);
+      euphoria(f.buttonEuphoria); plus(f.buttonPlus); minus(f.buttonMinus);
+      wiiStickOf(stick, f, kind);
+    },
+  };
+};
+
+// A tablet's drawing surface: the pen's place and pressure while the
+// library's penDetected() is 1, and a short trail behind it. penX and penY
+// are scaled by the smallest and largest seen since the surface was drawn,
+// because the library gives each getter's width and no active area; which
+// way y runs it does not say, and no tablet has been tried here, so larger y
+// is drawn higher as a guess.
+function wiiPen(slot, x0, y0, w, h) {
+  const trail = el("polyline", { points: "", fill: "none", stroke: "#7dffb0", "stroke-opacity": .5, "stroke-width": 2 }, slot);
+  const pen = el("circle", { cx: 0, cy: 0, r: 4, fill: "#7dffb0", opacity: 0 }, slot);
+  const seen = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+  const pts = [];
+  const unit = (v, lo, hi) => hi > lo ? (v - lo) / (hi - lo) : .5;
+  return (f, kind) => {
+    if (!f.penDetected) { pen.setAttribute("opacity", 0); return; }
+    seen.x0 = Math.min(seen.x0, f.penX); seen.x1 = Math.max(seen.x1, f.penX);
+    seen.y0 = Math.min(seen.y0, f.penY); seen.y1 = Math.max(seen.y1, f.penY);
+    const x = x0 + unit(f.penX, seen.x0, seen.x1) * w, y = y0 + h - unit(f.penY, seen.y0, seen.y1) * h;
+    pen.setAttribute("cx", x.toFixed(1)); pen.setAttribute("cy", y.toFixed(1));
+    pen.setAttribute("r", (3 + wiiUnit(kind, "penPressure", f.penPressure) * 9).toFixed(1));
+    pen.setAttribute("opacity", .95);
+    pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+    if (pts.length > 40) pts.shift();
+    trail.setAttribute("points", pts.join(" "));
+  };
+}
+
+// uDraw GameTablet: the drawing surface and the two side buttons.
+WII_ART.uDraw = slot => {
+  wiiCable(slot, 24, 230);
+  wiiShape(slot, "M40,60 L290,60 Q304,60 304,74 L304,386 Q304,400 290,400 L40,400 Q26,400 26,386 L26,74 Q26,60 40,60 Z");
+  el("rect", { x: 56, y: 84, width: 232, height: 260, rx: 6, fill: "#1d2027", stroke: "#3a3f48" }, slot);
+  const pen = wiiPen(slot, 56, 84, 232, 260);
+  const lower = wiiKey(slot, { tag: "rect", attrs: { x: 32, y: 250, width: 16, height: 34, rx: 5 } }, null);
+  const upper = wiiKey(slot, { tag: "rect", attrs: { x: 32, y: 206, width: 16, height: 34, rx: 5 } }, null);
+  engrave(slot, 172, 372, "uDraw", 11, "middle");
+  return { update(f, kind) { lower(f.buttonLower); upper(f.buttonUpper); pen(f, kind); } };
+};
+
+// Drawsome tablet: the drawing surface.
+WII_ART.Drawsome = slot => {
+  wiiCable(slot, 24, 230);
+  wiiShape(slot, "M40,60 L290,60 Q304,60 304,74 L304,386 Q304,400 290,400 L40,400 Q26,400 26,386 L26,74 Q26,60 40,60 Z", "#e6e1d6");
+  el("rect", { x: 56, y: 84, width: 232, height: 260, rx: 6, fill: "#1d2027", stroke: "#3a3f48" }, slot);
+  const pen = wiiPen(slot, 56, 84, 232, 260);
+  engrave(slot, 172, 372, "Drawsome", 11, "middle");
+  return { update(f, kind) { pen(f, kind); } };
+};
+
+// A type the library does not know: its identity, and the six bytes the
+// library read for it, as bits.
+WII_ART.Unknown = slot => {
+  el("rect", { x: 20, y: 60, width: 280, height: 300, rx: 18, fill: "#1b1e24", stroke: "#3a3f48", "stroke-dasharray": "6 5" }, slot);
+  engrave(slot, 160, 96, "UNKNOWN EXTENSION", 13, "middle", 700, true);
+  engrave(slot, 160, 118, wii.id ? wii.id.map(b => b.toString(16).padStart(2, "0")).join(" ") : "", 11, "middle", 500, true);
+  const bits = wiiBits(slot, 92, 170, 6);
+  return { update(f) { bits([f.b0, f.b1, f.b2, f.b3, f.b4, f.b5]); } };
+};
+
+/* ============================================================
    8. What the board says
    ============================================================ */
 const padBase = new PadBaseline(16);
@@ -1140,7 +1933,7 @@ function onFrame(bytes) {
 
   if (msgs.some(m => m.address === "/enq")) { onHello(msgs); return; }
 
-  let cap = null, state = null;
+  let cap = null, state = null, wiiArgs = null;
   for (const m of msgs) {
     const a = m.address, p = a.slice(5);
     if (a === "/cap") cap = m.args;
@@ -1152,6 +1945,21 @@ function onFrame(bytes) {
     else if (a.startsWith("/cap/") && LIBS.some(l => PARAMS[l].includes(p))) {
       config[p] = m.args.slice();
       renderConfig();
+    } else if (a === "/i2c") {
+      onI2c(m.args[0]);
+    } else if (a === "/i2c/pull") {
+      bus.pull = m.args.length === 2 ? m.args.slice() : null;
+      renderBus();
+    } else if (a === "/i2c/scan") {
+      bus.scan = m.args.slice();
+      renderBus();
+      logLine("", "/i2c/scan " + (m.args.map(x => "0x" + x.toString(16)).join(" ") || "nothing answered"));
+    } else if (a === "/wii/id") {
+      onWiiKind(m.args.length ? m.args[0] : null, m.args.length ? m.args.slice(1) : null);
+      $("wiiIdOut").textContent = m.args.length
+        ? m.args[0] + " · " + m.args.slice(1).map(b => b.toString(16).padStart(2, "0")).join(" ") : "nothing at 0x52";
+    } else if (a === "/wii") {
+      wiiArgs = m.args;
     } else if (a === "/rate") {
       $("rate").value = String(m.args[0]);
       logLine("", "/rate " + m.args[0]);
@@ -1165,6 +1973,18 @@ function onFrame(bytes) {
     frames++;
   }
   if (cap) renderCap(cap);
+  if (wiiArgs) renderWii(wiiArgs);
+  if (state && mode === "i2c") $("rig").classList.remove("stale");
+}
+
+// The board's /i2c: 1 while D4 and D5 are the bus. It moves the I2C tab, and
+// asks what is on the bus now.
+function onI2c(on) {
+  setMode(on ? "i2c" : "touch");
+  if (on && writer) {
+    send("/i2c/scan", []);
+    send("/wii/id", []);
+  }
 }
 
 function onHello(msgs) {
@@ -1173,7 +1993,9 @@ function onHello(msgs) {
   for (const m of msgs) if (m.address.startsWith("/enq/")) enq[m.address.slice(5)] = m.args;
   const diag = msgs.filter(m => m.address === "/diag").map(m => m.args.join(" "));
   const n = (enq.cap || [])[0];
-  $("status").textContent = `${name} · ${n === undefined ? "no pads" : n + " pads"}` +
+  const what = enq.wii ? "Wii " + enq.wii[0] : n === undefined ? "no pads" : n + " pads";
+  if (!enq.wii && wii.kind) onWiiKind(null, null);
+  $("status").textContent = `${name} · ${what}` +
                             (diag.length ? " · " + diag.join(" ") : "");
   logLine("", `hello from ${name}: ` + Object.entries(enq)
     .map(([k, a]) => k + (a.length ? " " + a.join(" ") : "")).join(", "));
@@ -1181,7 +2003,10 @@ function onHello(msgs) {
   // The board sends a hello whenever its pads change (a library switch,
   // CapacitiveSensor's pins), so ask for the set-up: /cap/lib and /cap/pins
   // come back together in one bundle, the library first.
-  if (writer) send("/cap/config", []);
+  if (writer) {
+    send("/cap/config", []);
+    send("/i2c", []);                     // which of touch and the bus has D4 and D5
+  }
 }
 
 // The board's /cap/lib, the only thing that moves the tabs while connected. It
@@ -1208,12 +2033,10 @@ function setLib(name) {
     csFull = 64;
     padBase.reset();
   }
-  for (const b of document.querySelectorAll("#tabs button"))
-    b.setAttribute("aria-selected", b.dataset.lib === lib ? "true" : "false");
-  for (const p of document.querySelectorAll(".libpane")) p.hidden = p.dataset.lib !== lib;
   buildRig();
   buildTargets();
   renderConfig();
+  applyView();
   if (!writer) markStale();
 }
 
@@ -1377,7 +2200,10 @@ setInterval(() => {
    9. Wiring
    ============================================================ */
 buildBreadboard();
+buildHeaders();
 buildCsPick();
+buildShelf();
+buildFieldTable();
 setLib("FreeTouch");
 markStale();
 
@@ -1393,7 +2219,24 @@ if (!("serial" in navigator)) {
 // A tab asks the board; the board's echo moves the tab. With no board, the
 // tab just shows that library's drawing and notes.
 for (const b of document.querySelectorAll("#tabs button"))
-  b.onclick = () => writer ? send("/cap/lib", [b.dataset.lib]) : setLib(b.dataset.lib);
+  b.onclick = () => {
+    if (b.dataset.mode === "i2c") {
+      if (!writer) return setMode("i2c");
+      send("/i2c", [1]);
+      // The board's echo moves the tab; a sketch from before the I2C mode
+      // never sends one, so say so rather than sit still.
+      setTimeout(() => {
+        if (writer && mode !== "i2c")
+          logLine("warn", "no /i2c echo: this board's sketch may predate the I2C mode; upload the current XiaoSamd21Oscuino");
+      }, 1500);
+      return;
+    }
+    if (!writer) { setMode("touch"); setLib(b.dataset.lib); return; }
+    if (mode === "i2c") send("/i2c", [0]);
+    send("/cap/lib", [b.dataset.lib]);
+  };
+$("i2cScan").onclick = () => send("/i2c/scan", []);
+$("wiiId").onclick = () => send("/wii/id", []);
 
 $("connect").onclick = () => connect().catch(e => logLine("warn", e.message));
 $("disconnect").onclick = () => disconnect();
@@ -1435,13 +2278,42 @@ $("csApply").onclick = () => {
 };
 
 // For looking at the drawing with no board: ?demo animates the faders of the
-// tab showing, with synthetic counts.
-if (new URLSearchParams(location.search).has("demo")) {
-  const want = new URLSearchParams(location.search).get("lib");
+// tab showing, with synthetic counts; ?demo&mode=i2c&wii=<kind> animates a
+// Wii extension instead, and a click on the shelf shows another.
+let demoTimer = null;
+// Synthetic fields for one kind: each multi-bit field swings through its
+// range on its own phase, and each one-bit field blinks.
+function startWiiDemo(name) {
+  const kind = wiiKindByName(name);
+  if (!kind) return;
+  bus.pull = [1, 1];
+  bus.scan = [0x52];
+  renderBus();
+  onWiiKind(name, null);
+  let t = 0;
+  clearInterval(demoTimer);
+  demoTimer = setInterval(() => {
+    t += 0.05;
+    renderWii(kind.fields.map((f, i) => {
+      const [lo, hi] = wiiRange(f);
+      if (hi - lo === 1) return Math.sin(t * 1.3 + i * 1.7) > 0.55 ? 1 : 0;
+      const v = lo + (hi - lo) * (0.5 + 0.45 * Math.sin(t * 0.9 + i * 0.8));
+      return f[3] === "f" ? v : Math.round(v);
+    }));
+  }, 50);
+}
+
+const demoParams = new URLSearchParams(location.search);
+if (demoParams.has("demo") && demoParams.get("mode") === "i2c") {
+  setMode("i2c");
+  startWiiDemo(wiiKindByName(demoParams.get("wii")) ? demoParams.get("wii") : "Nunchuk");
+  logLine("", "demo: synthetic Wii fields, not a board; click a device on the shelf to show it");
+} else if (demoParams.has("demo")) {
+  const want = demoParams.get("lib");
   if (want === "CapacitiveSensor") { csSend = 10; csRecv = [9, 8]; syncCsPins(); }
   if (LIBS.includes(want)) setLib(want);
   let t = 0;
-  setInterval(() => {
+  demoTimer = setInterval(() => {
     if (!pins) setPins(defaultPins(lib));
     t += 0.05;
     const rest = lib === "FreeTouch" ? [461, 350, 195, 167, 172, 174, 209]
