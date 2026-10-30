@@ -290,9 +290,10 @@
  * each message END before and after: a Classic Controller found, identified
  * and drawn live, "the Classic draws with its numbers", and every control's
  * mapping on the drawing correct (the user's words and check); then the
- * Nunchuk, "the nunchuck works too", "although the nunchuck goes from side
- * to side but doesn't rotate" (the user's words, open); observed, not
- * recorded.
+ * Nunchuk, "the nunchuck works too", and once the page drew it as a slab
+ * turned by rollAngle() and pitchAngle(), rolling it right dipped the
+ * drawing on the right and tipping its head up showed the front wall (the
+ * user's check); observed, not recorded.
  * Not verified: D9 as pad 5 in a recorded isolated touch; CapacitiveSensor
  * with resistors fitted; noise, under any setting; wiiprobe.py on the
  * Classic; any Wii type but these two.

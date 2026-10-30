@@ -1639,31 +1639,67 @@ const wiiUnit = (kind, name, v) => {
 };
 
 // Nunchuk, from above: the stick in its well on the head, C and Z on the
-// front edge, the whole body rolled by the library's rollAngle().
+// front edge, drawn as a slab NUNCHUK_THICK thick that turns as the
+// controller does, seen from straight above. The library's rollAngle() turns
+// it about its long axis and pitchAngle() about its width, about the end the
+// cable leaves from: each face's width goes as cos(roll) and its length as
+// cos(pitch), the face nearer the eye moves toward the side that dips, and
+// the wall between the two faces shows on the side that rises. Seen from
+// below (the two cosines of opposite sign) that face is the plain underside.
+// No perspective, and no shear for a roll and a pitch together. Turning it
+// flat on a table changes neither angle: an accelerometer cannot see that.
+//
+// Which way the angles lean: pitchAngle() is "Inverted so pulling back is a
+// positive pitch" (the library's Nunchuk.cpp), taken here as the head rising.
+// For rollAngle() the library says nothing: NUNCHUK_ROLL_SIGN 1 draws a
+// positive roll as the right side dipping. Checked by hand on one genuine
+// Nunchuk, 2026-10-29: rolling it right dips the drawing on the right, and
+// tipping its head up shows the front wall (the user's check, not recorded).
+const NUNCHUK_THICK = 56;      // drawing units, against a width of 192: a choice
+const NUNCHUK_ROLL_SIGN = 1;   // as checked above
+const NUNCHUK_WALL_STEPS = 8;  // copies of the outline that fill the wall: a choice
 WII_ART.Nunchuk = slot => {
   wiiCable(slot, 160, 400);
-  const tilt = el("g", { transform: "translate(160,230)" }, slot);
+  const PIVOT = 170;                       // the body's back end, where the cable leaves
+  const at = el("g", { transform: `translate(160,${230 + PIVOT})` }, slot);
   const body = "M0,-180 C70,-180 96,-118 96,-64 C96,8 72,64 54,124 C42,170 -42,170 -54,124 " +
                "C-72,64 -96,8 -96,-64 C-96,-118 -70,-180 0,-180 Z";
-  const pressZ = wiiKey(tilt, { tag: "rect", attrs: { x: -40, y: -196, width: 80, height: 22, rx: 9 },
+  const shadow = el("path", { d: body, fill: "#000", "fill-opacity": ".4" }, at);
+  const wall = [];
+  for (let i = 0; i < NUNCHUK_WALL_STEPS; i++)
+    wall.push(el("path", { d: body, fill: "#b4b8bf", stroke: "#8e939b", "stroke-width": .8 }, at));
+  const face = el("g", {}, at);
+  const pressZ = wiiKey(face, { tag: "rect", attrs: { x: -40, y: -196, width: 80, height: 22, rx: 9 },
                                 labelAt: [0, -180], labelSize: 12 }, "Z");
-  const pressC = wiiKey(tilt, { tag: "ellipse", attrs: { cx: 0, cy: -210, rx: 22, ry: 11 },
+  const pressC = wiiKey(face, { tag: "ellipse", attrs: { cx: 0, cy: -210, rx: 22, ry: 11 },
                                 labelAt: [0, -206], labelSize: 11 }, "C");
-  el("path", { d: body, fill: "#000", "fill-opacity": ".4", transform: "translate(5,9)" }, tilt);
-  el("path", { d: body, fill: "url(#wiiWhite)", stroke: "#a9adb5", "stroke-width": 1.2 }, tilt);
-  el("path", { d: "M-70,-60 C-60,-150 60,-150 70,-60", fill: "none", stroke: "#fff", "stroke-width": 3, "stroke-opacity": ".7" }, tilt);
-  el("circle", { cx: 0, cy: -92, r: 46, fill: "url(#wiiWell)" }, tilt);
-  const cap = el("g", {}, tilt);
+  el("path", { d: body, fill: "url(#wiiWhite)", stroke: "#a9adb5", "stroke-width": 1.2 }, face);
+  const top = el("g", {}, face);
+  el("path", { d: "M-70,-60 C-60,-150 60,-150 70,-60", fill: "none", stroke: "#fff", "stroke-width": 3, "stroke-opacity": ".7" }, top);
+  el("circle", { cx: 0, cy: -92, r: 46, fill: "url(#wiiWell)" }, top);
+  const cap = el("g", {}, top);
   el("circle", { cx: 0, cy: -92, r: 28, fill: "url(#wiiStick)", stroke: "#6f747c" }, cap);
   el("circle", { cx: 0, cy: -92, r: 17, fill: "none", stroke: "#8b9098", "stroke-width": 2 }, cap);
-  engrave(tilt, 0, 60, "Nunchuk", 13, "middle");
+  engrave(top, 0, 60, "Nunchuk", 13, "middle");
   const bars = wiiAccelBars(slot, 236, 300, ["X", "Y", "Z"]);
   return {
     update(f, kind) {
       const nx = 2 * wiiUnit(kind, "joyX", f.joyX) - 1, ny = 2 * wiiUnit(kind, "joyY", f.joyY) - 1;
       cap.setAttribute("transform", `translate(${(nx * 24).toFixed(1)},${(-ny * 24).toFixed(1)})`);
       pressC(f.buttonC); pressZ(f.buttonZ);
-      tilt.setAttribute("transform", `translate(160,230) rotate(${clamp(f.rollAngle, -70, 70).toFixed(1)})`);
+      const r = NUNCHUK_ROLL_SIGN * f.rollAngle * Math.PI / 180, p = f.pitchAngle * Math.PI / 180;
+      const cr = Math.cos(r), cp = Math.cos(p), up = cr * cp >= 0;
+      // The top face's offset from the body's middle plane; the underside's
+      // is the opposite. A dipping right side moves the top face right; a
+      // rising head moves it back, toward the cable (down the screen).
+      const ox = NUNCHUK_THICK / 2 * Math.sin(r), oy = NUNCHUK_THICK / 2 * Math.sin(p);
+      const scale = `matrix(${cr.toFixed(3)},0,0,${cp.toFixed(3)},0,0) translate(0,${-PIVOT})`;
+      const placed = k => `translate(${(k * ox).toFixed(1)},${(k * oy).toFixed(1)}) ${scale}`;
+      const near = up ? 1 : -1;            // +1: the top face is the one nearer the eye
+      shadow.setAttribute("transform", `translate(5,9) ${placed(-near)}`);
+      wall.forEach((w, i) => w.setAttribute("transform", placed(-near + 2 * near * i / NUNCHUK_WALL_STEPS)));
+      face.setAttribute("transform", placed(near));
+      top.setAttribute("opacity", up ? 1 : 0);
       bars([f.accelX, f.accelY, f.accelZ]);
     },
   };
