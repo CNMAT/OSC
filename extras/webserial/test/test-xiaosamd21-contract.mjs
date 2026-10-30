@@ -34,7 +34,11 @@
      5. the page's drawing has a fader for every pin each library reports, and
         as many FreeTouch faders as /enq/cap says
      6. the page encodes a set-up request and a /cap/lib choice to the same
-        bytes as test/hardware/oscprobe.py, whose bytes the board accepted
+        bytes as test/hardware/oscprobe.py, whose bytes the board accepted,
+        and frames them as it does, END before and after; through the OSC
+        library's own SLIP decoder (test/host/slipframes) two such frames sent
+        back to back arrive as two packets, where with the closing END alone
+        the second was lost
      7. what the page asks the board back, run against a stub document: one
         /cap/config per library switch, another when a /cap's length is not
         /cap/pins', none for a library it has no tab for; its port is held
@@ -65,6 +69,7 @@ const ino = read("examples/XiaoSamd21Oscuino/XiaoSamd21Oscuino.ino");
 const html = read("examples/XiaoSamd21Oscuino/XiaoSamd21Oscuino.html");
 const contract = read("ADDRESSES.md");
 const capture = new Uint8Array(readFileSync(new URL("xiaosamd21-2026-10-29.slip", import.meta.url)));
+const slipframes = read("test/host/slipframes.cpp");
 
 let pass = 0, fail = 0, skip = 0;
 const ok = (label, cond, detail = "") => {
@@ -77,7 +82,7 @@ const eq = (label, a, b) => ok(label, JSON.stringify(a) === JSON.stringify(b),
 const script = html.split(/<script>/)[1].split(/<\/script>/)[0];
 const page = new Function(
   script.split("/* ============================================================\n   3. Web Serial")[0] +
-  "return { decodePacket, messagesOf, SlipDecoder, encodeMessage };")();
+  "return { decodePacket, messagesOf, SlipDecoder, encodeMessage, slipEncode };")();
 const constOf = name => {
   const m = script.match(new RegExp(`const ${name} = ([\\[{][\\s\\S]*?[\\]}]);\\n`));
   return m ? new Function(`return ${m[1]}`)() : undefined;
@@ -235,6 +240,16 @@ eq("/cap/recv 9 8 encodes as oscprobe.py encodes it",
    "2f6361702f726563760000002c6969000000000900000008");
 eq("an ask carries an empty type tag string",
    hex(page.encodeMessage("/cap/config", [])), "2f6361702f636f6e666967002c000000");
+// oscprobe.py slip_encode(msg("/wii/id", [])): END, the message, END. A byte
+// to escape is in the second check, as END and ESC inside an int argument.
+eq("/wii/id is framed as oscprobe.py frames it, END before and after",
+   hex(page.slipEncode(page.encodeMessage("/wii/id", []))), "c02f7769692f6964002c000000c0");
+eq("END and ESC inside a message are escaped, the frame still END before and after",
+   hex(page.slipEncode(new Uint8Array([0x01, 0xC0, 0xDB, 0x02]))), "c001dbdcdbdd02c0");
+// test/host/slipframes.cpp runs a copy of the sketch's pollOSC() on such frames.
+const pollOf = src => (src.match(/static bool pollOSC\(\) \{[\s\S]*?\n\}\n/) || [""])[0];
+ok("test/host/slipframes.cpp's pollOSC() is the sketch's, line for line",
+   pollOf(ino).length > 100 && pollOf(ino) === pollOf(slipframes), `${pollOf(ino).length} and ${pollOf(slipframes).length} characters`);
 
 /* ---------- 7. what the page asks the board, given what the board says */
 // The whole script, UI half included, against a stub document: every element

@@ -830,8 +830,16 @@ function encodeMessage(address, args) {
    ============================================================ */
 const END = 0xC0, ESC = 0xDB, ESC_END = 0xDC, ESC_ESC = 0xDD;
 
+// END, the message with END and ESC escaped, END: the frame the OSC library's
+// own sender makes (beginPacket() and endPacket() each put an END) and
+// test/hardware/oscprobe.py makes. The leading END is needed. The library's
+// decoder takes an END followed straight by data for the opening END of the
+// next frame and reads on, so with the closing END alone a message sent right
+// behind another was read into it and lost: /wii/id behind /i2c/scan, which is
+// why the extension was never drawn (replayed on the host, 2026-10-29).
 function slipEncode(data) {
-  const out = new Uint8Array(data.length * 2 + 1); let n = 0;
+  const out = new Uint8Array(data.length * 2 + 2); let n = 0;
+  out[n++] = END;
   for (const b of data) {
     if (b === END)      { out[n++] = ESC; out[n++] = ESC_END; }
     else if (b === ESC) { out[n++] = ESC; out[n++] = ESC_ESC; }

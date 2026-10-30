@@ -18,7 +18,8 @@ const FILES = ["ADDRESSES.md",
                "examples/XiaoSamd21Oscuino/XiaoSamd21Oscuino.html",
                "extras/webserial/test/test-xiaosamd21-contract.mjs",
                "extras/webserial/test/xiaosamd21-2026-10-29.slip",
-               "examples/XiaoSamd21Oscuino/WiiExtension.h"];
+               "examples/XiaoSamd21Oscuino/WiiExtension.h",
+               "test/host/slipframes.cpp"];
 const INO = FILES[1], HTML = FILES[2], SLIP = FILES[4], WII = FILES[5];
 
 const MUTANTS = [
@@ -48,6 +49,12 @@ const MUTANTS = [
   // 6. outbound bytes
   ["page encodes ints as floats", HTML, '"s" : "i").join("")', '"s" : "f").join("")'],
   ["page tags strings as ints", HTML, 'typeof v === "string" ? "s" : "i"', 'typeof v === "string" ? "i" : "i"'],
+  ["page frames each message with the closing END alone", HTML,
+   "  const out = new Uint8Array(data.length * 2 + 2); let n = 0;\n  out[n++] = END;\n",
+   "  const out = new Uint8Array(data.length * 2 + 2); let n = 0;\n"],
+  ["the host test's copy of pollOSC() drifts from the sketch's", "test/host/slipframes.cpp",
+   "      if (SLIP_PORT.available() > 0) continue;   // an END was swallowed; more behind it",
+   "      if (SLIP_PORT.available() > 1) continue;   // an END was swallowed; more behind it"],
   // 7. what the page asks
   ["page asks /cap/pins after a hello", HTML,
    '    send("/cap/config", []);\n    send("/i2c", []);',

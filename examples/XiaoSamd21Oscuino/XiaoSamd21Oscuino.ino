@@ -286,11 +286,16 @@
  * identity check on the build without I2C_GAP_MS (six zero bytes).
  * By hand through the page, 2026-10-28, after ptcRelease(): FastTouch rose on
  * all eleven pins, and FreeTouch "works where it should" (the user's words);
- * observed, not recorded.
+ * observed, not recorded. 2026-10-29, on this build, once the page framed
+ * each message END before and after: a Classic Controller found, identified
+ * and drawn live, "the Classic draws with its numbers", and every control's
+ * mapping on the drawing correct (the user's words and check); then the
+ * Nunchuk, "the nunchuck works too", "although the nunchuck goes from side
+ * to side but doesn't rotate" (the user's words, open); observed, not
+ * recorded.
  * Not verified: D9 as pad 5 in a recorded isolated touch; CapacitiveSensor
- * with resistors fitted; noise, under any setting; on this build, any Wii
- * extension but the Nunchuk (the Classic Controller is on hand), which way
- * each stick and button reads, and the page drawing a live extension.
+ * with resistors fitted; noise, under any setting; wiiprobe.py on the
+ * Classic; any Wii type but these two.
  */
 
 #include <Adafruit_FreeTouch.h>
