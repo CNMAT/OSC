@@ -29,6 +29,9 @@
 #   sliptcp      SLIP over TCP against a stub Client: framing, escaping,
 #                underrun-and-resume. Caught SLIPEncodedTCP's drift from
 #                _SLIPSerial without any Ethernet hardware.
+#   slipframes   two asks framed as XiaoSamd21Oscuino's page frames them, back
+#                to back, through that sketch's pollOSC(): both must arrive.
+#                With the closing END alone the second was read into the first.
 #   buffered     OSCBufferedPrint against a recording Print: the buffered bytes
 #                must match the direct send exactly, in one write, and survive
 #                an undersized buffer and a sink that takes less than offered.
@@ -59,7 +62,7 @@ CXX      ?= c++
 CXXFLAGS := -std=c++11 -I shim -I $(LIB) -Wall -Wno-unused-parameter
 SRC      := $(LIB)/OSCData.cpp $(LIB)/OSCMessage.cpp $(LIB)/OSCBundle.cpp $(LIB)/OSCMatch.c
 HDRS     := $(wildcard $(LIB)/*.h) $(wildcard shim/*.h)
-TESTS    := vectors roundtrip regressions types harden copygrowth fuzzbad patterns dos sliptcp buffered onecall
+TESTS    := vectors roundtrip regressions types harden copygrowth fuzzbad patterns dos sliptcp slipframes buffered onecall
 SAN      := -fsanitize=address,undefined -fno-omit-frame-pointer
 MUSTFAIL := 1 2 3 4 5 6 7 8
 
@@ -96,6 +99,7 @@ run: $(TESTS) alloc/setfail mustfail std11
 	@echo "== patterns";   set -o pipefail; ./patterns   | tail -1
 	@echo "== dos";        set -o pipefail; ./dos        | tail -1
 	@echo "== sliptcp";    set -o pipefail; ./sliptcp    | tail -1
+	@echo "== slipframes"; set -o pipefail; ./slipframes | tail -1
 	@echo "== buffered";   set -o pipefail; ./buffered   | tail -1
 	@echo "== onecall";    set -o pipefail; ./onecall    | tail -1
 	@echo "== setfail";    set -o pipefail; ./alloc/setfail | tail -1

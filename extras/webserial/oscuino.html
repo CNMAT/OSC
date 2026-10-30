@@ -364,6 +364,25 @@ the browser</textarea>
     </div>
   </div>
 
+  <div class="panel cap" data-cap="i2c" hidden>
+    <div class="ph"><label>i2c</label></div>
+    <div class="row">
+      <span class="v" id="i2cV">&ndash;</span>
+      <button id="i2cOn">/i2c 1</button>
+      <button id="i2cOff">/i2c 0</button>
+      <button id="i2cScan">/i2c/scan</button>
+    </div>
+  </div>
+
+  <div class="panel cap" data-cap="wii" hidden>
+    <div class="ph"><label>wii</label><span class="shape" id="wiiShape"></span></div>
+    <div class="row" style="align-items:flex-start">
+      <table class="kv" id="wiiRows"></table>
+      <button id="wiiRead">/wii</button>
+      <button id="wiiIdent">/wii/id</button>
+    </div>
+  </div>
+
   <div class="panel cap" data-cap="cam" hidden>
     <div class="ph"><label>cam</label><span class="shape" id="camShape"></span></div>
     <div class="row" style="align-items:flex-start">
@@ -711,7 +730,7 @@ class SlipDecoder {                   // a TransformStream transformer; the BLE
 // The panels, in page order. /enq/<name> for anything else is still listed
 // in the capability chips, it just has no panel.
 const PANEL_ORDER = ["rgb", "display", "buzz", "btn", "imu", "mic", "light", "temp",
-  "hum", "dist", "gas", "ir", "led", "volts", "bat", "chg", "touch", "cap", "joy", "pot", "enc", "rtc", "rfid", "cam",
+  "hum", "dist", "gas", "ir", "led", "volts", "bat", "chg", "touch", "cap", "joy", "pot", "enc", "rtc", "rfid", "i2c", "wii", "cam",
   "motor", "servo", "relay", "net"];
 
 function newModel() {
@@ -1260,6 +1279,9 @@ const SETUP = {
   joy(p) { const n = p[0] | 0 || 2; $("joyShape").textContent = n + " axes"; vectorRows($("joyRows"), indexLabels("axis", n), null, 0); },
   pot(p) { const n = p[0] | 0 || 1; $("potShape").textContent = n + (n === 1 ? " pot" : " pots"); vectorRows($("potRows"), indexLabels("pot", n), null, 0); },
   cam(p) { $("camShape").textContent = `${p[0] | 0} × ${p[1] | 0}`; },
+  // The kind is the /enq line's parameter; its field names are in ADDRESSES.md's
+  // "wii fields", so this generic page shows them by index.
+  wii(p) { $("wiiShape").textContent = p[0] || ""; vectorRows($("wiiRows"), [], null, 0); },
   motor(p) {
     const n = p[0] | 0 || 1;
     $("motorShape").textContent = n + (n === 1 ? " motor" : " motors");
@@ -1426,6 +1448,17 @@ const RENDER = {
     const p = x => String(x).padStart(2, "0");
     $("rtcV").textContent = `${v[0]}-${p(v[1])}-${p(v[2])} ${p(v[3])}:${p(v[4])}:${p(v[5])}`;
   },
+  i2c(m) {
+    const on = m.values.i2c, pull = m.sub["/i2c/pull"], scan = m.sub["/i2c/scan"];
+    $("i2cV").textContent = (on ? (on[0] ? "on" : "off") : "–") +
+      (pull && pull.length === 2 ? `  held high against the pull-down: SDA ${pull[0] ? "yes" : "no"}, SCL ${pull[1] ? "yes" : "no"}` : "") +
+      (scan ? "  answered: " + (scan.map(a => "0x" + a.toString(16)).join(" ") || "none") : "");
+  },
+  wii(m) {
+    const v = m.values.wii, id = m.sub["/wii/id"];
+    if (id) $("wiiShape").textContent = id.length ? id[0] + "  " + id.slice(1).map(b => b.toString(16).padStart(2, "0")).join(" ") : "none";
+    if (v) vectorRows($("wiiRows"), indexLabels("field", v.length), v, Math.max(...v.map(Math.abs), 1), v.some(x => x < 0));
+  },
   rfid(m) {
     const v = m.values.rfid;
     if (!v) return;
@@ -1539,6 +1572,11 @@ $("rtcSet").onclick = () => {
   send("/rtc", [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds()]);
 };
 $("rfidDiag").onclick = () => send("/rfid/diag");
+$("i2cOn").onclick = () => send("/i2c", [1]);
+$("i2cOff").onclick = () => send("/i2c", [0]);
+$("i2cScan").onclick = () => send("/i2c/scan");
+$("wiiRead").onclick = () => send("/wii");
+$("wiiIdent").onclick = () => send("/wii/id");
 $("camStream1").onclick = () => send("/stream", [1]);
 $("camStream0").onclick = () => send("/stream", [0]);
 $("camSizeSet").onclick = () => send("/cam/size", [+$("camSize").value]);
