@@ -49,10 +49,16 @@
         same ranges; each kind reads through the view of its own library
         class; each drawing on the page reads only fields its kind has; and,
         where NintendoExtensionCtrl is installed (NXC_SRC, or the Library
-        Manager's folder on this machine), each kind's fields are every
-        public, const, no-argument getter its class declares, in order, with
-        the float ones marked as floats, booleans 0..1, and each range the
-        library's comment states
+        Manager's folder on this machine), each kind's fields are the
+        getters its class declares that are public, const, take no argument
+        and return a number or a boolean (the platters' from their base,
+        TurntableExpansion), in order, with the float ones marked as floats,
+        booleans 0..1, and each range the library's comment states
+     9. the Nunchuk drawing, run against a stub document that keeps what is
+        drawn: flat; rolled and pitched 30 degrees, each the way it was
+        checked by hand on the board; both at once, against the shortest
+        rotation onto up worked out here another way; upside down; rolled
+        120 degrees; and rolled across 90
 
    Graded by test/mutants-xiaosamd21.mjs: one mutant per claim above, and each
    must fail this test.
@@ -376,7 +382,9 @@ for (const k of art.WII_KINDS) {
 }
 
 // The library's own headers, where they are installed: each class's public,
-// const, no-argument getters, in the order declared, with their types and the
+// const, no-argument getters that return a number or a boolean (GETTER's
+// types: not getExpectedType(), nor what ExtensionController gives them all),
+// in the order declared, with their types and the
 // "a-b" range of any comment beside them; a member object (the turntable's
 // left and right) contributes its class's base's getters under its name.
 const nxcDir = process.env.NXC_SRC ||
@@ -432,7 +440,7 @@ if (existsSync(nxcDir)) {
   console.log(`  (the library's headers: ${nxcDir})`);
   for (const k of hKinds) {
     const lib = bound(alias[k.lib]);
-    eq(`${k.name}: every public, const, no-argument getter of ${k.lib}, in the header's order`,
+    eq(`${k.name}: every public, const, no-argument getter of ${k.lib} that returns a number or a boolean, in the header's order`,
        k.rows.map(r => r.field[0]), lib.map(g => g.name));
     const byName = Object.fromEntries(lib.map(g => [g.name, g]));
     const wrong = k.rows.filter(r => {
@@ -451,6 +459,91 @@ if (existsSync(nxcDir)) {
   skip++;
   console.log(`  skip the binding against the library's own headers: none at ${nxcDir}`);
 }
+
+console.log("\nThe Nunchuk drawing");
+// Against a document that keeps what is drawn, given accelerometer values
+// built from the library's angle formulas (Nunchuk.cpp: rollAngle()
+// atan2(accelX - 511, accelZ - 511), pitchAngle() -atan2(accelY - 511, accelZ
+// - 511)). The face nearer the eye moves toward the side that dips and
+// narrows across a roll, and moves back and shortens along a pitch: the two
+// directions checked by hand on the board. Upside down it is the plain
+// underside, and a roll past 90 degrees keeps the head up the screen.
+const kept = tag => new Proxy({ tag, attrs: {}, kids: [] }, {
+  get: (t, k) => k === "setAttribute" ? (a, v) => { t.attrs[a] = String(v); }
+               : k === "appendChild" ? c => { t.kids.push(c); return c; }
+               : k in t ? t[k] : stub(),
+  set: (t, k, v) => { t[k] = v; return true; },
+});
+const nunchukPage = new Function("document", "navigator", "location", "setInterval",
+  script + "\nreturn { WII_ART, WII_KINDS };")(
+  new Proxy({}, { get: (_, k) => k === "createElementNS" ? (ns, tag) => kept(tag) : stub() }),
+  stub(), { search: "" }, () => 0);
+const THICK = +(script.match(/const NUNCHUK_THICK = (\d+);/) || [])[1];
+const G = 200;   // gravity's length in counts: any will do, only its direction is drawn
+const deg = Math.PI / 180;
+const rolled = a => [511 + G * Math.sin(a * deg), 511, 511 + G * Math.cos(a * deg)];   // right side down
+const pitched = a => [511, 511 - G * Math.sin(a * deg), 511 + G * Math.cos(a * deg)];  // head up
+const both = (r, p) => {   // rollAngle() r and pitchAngle() p at once, each under 90
+  const tx = Math.tan(r * deg), ty = Math.tan(p * deg), z = G / Math.hypot(1, tx, ty);
+  return [511 + z * tx, 511 - z * ty, 511 + z];
+};
+function nunchukAt([accelX, accelY, accelZ]) {
+  const slot = kept("g");
+  nunchukPage.WII_ART.Nunchuk(slot).update({ joyX: 128, joyY: 128, buttonC: false, buttonZ: false,
+    accelX, accelY, accelZ,
+    rollAngle: Math.atan2(accelX - 511, accelZ - 511) / deg,
+    pitchAngle: -Math.atan2(accelY - 511, accelZ - 511) / deg },
+    nunchukPage.WII_KINDS.find(k => k.name === "Nunchuk"));
+  const all = [];
+  (function walk(n) { all.push(n); n.kids.forEach(walk); })(slot);
+  const face = all.find(n => n.tag === "g" && n.kids.some(c => c.attrs.fill === "url(#wiiWhite)"));
+  const top = face && face.kids.find(n => n.tag === "g" && "opacity" in n.attrs);
+  const m = ((face && face.attrs.transform) || "").match(
+    /^translate\((-?[\d.]+),(-?[\d.]+)\) matrix\((-?[\d.]+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),/);
+  const [x, y, a, b, c, d] = m ? m.slice(1).map(Number) : Array(6).fill(NaN);
+  return { x, y, a, b, c, d, top: top ? top.attrs.opacity !== "0" : null };
+}
+// The shortest rotation taking up (x right, y toward the head, z out of the
+// top face) onto the eye's direction, worked as a turn by its angle about
+// up x eye (Rodrigues' formula applied to each axis of the body), not by the
+// page's closed form; then seen from the eye, with the screen's y down.
+function shortestTurn([ux, uy, uz]) {
+  const k = [uy, -ux, 0].map(v => v / Math.hypot(uy, ux)), th = Math.acos(uz);
+  const turn = v => {
+    const kv = k[0] * v[0] + k[1] * v[1] + k[2] * v[2];
+    const kxv = [k[1] * v[2] - k[2] * v[1], k[2] * v[0] - k[0] * v[2], k[0] * v[1] - k[1] * v[0]];
+    return v.map((vi, i) => vi * Math.cos(th) + kxv[i] * Math.sin(th) + k[i] * kv * (1 - Math.cos(th)));
+  };
+  const [ex, ey, ez] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map(turn);
+  return { a: ex[0], b: -ex[1], c: -ey[0], d: ey[1], x: ez[0] * THICK / 2, y: -ez[1] * THICK / 2 };
+}
+const near = (v, w, tol = 0.02) => Math.abs(v - w) <= tol;
+const flat = nunchukAt([511, 511, 511 + G]);
+ok("Nunchuk drawing, flat: the top face where it lies, full size",
+   near(flat.x, 0, 0.1) && near(flat.y, 0, 0.1) && near(flat.a, 1) && near(flat.d, 1) &&
+   near(flat.b, 0) && near(flat.c, 0) && flat.top === true, JSON.stringify(flat));
+const r30 = nunchukAt(rolled(30));
+ok("... rolled 30 degrees right side down: the face moves right and narrows across",
+   r30.x > 1 && near(r30.y, 0, 0.1) && r30.a > 0.8 && r30.a < 0.9 && near(r30.d, 1) && r30.top === true,
+   JSON.stringify(r30));
+const p30 = nunchukAt(pitched(30));
+ok("... pitched 30 degrees head up: the face moves back, toward the cable, and shortens",
+   near(p30.x, 0, 0.1) && p30.y > 1 && p30.d > 0.8 && p30.d < 0.9 && near(p30.a, 1) && p30.top === true,
+   JSON.stringify(p30));
+const rp = both(30, 20), gRp = Math.hypot(rp[0] - 511, rp[1] - 511, rp[2] - 511);
+const want = shortestTurn([(511 - rp[0]) / gRp, (511 - rp[1]) / gRp, (rp[2] - 511) / gRp]);
+const got = nunchukAt(rp);
+ok("... rolled 30 and pitched 20 degrees at once: turned, sheared and moved as the shortest rotation onto up",
+   ["a", "b", "c", "d"].every(e => near(got[e], want[e])) && near(got.x, want.x, 0.1) && near(got.y, want.y, 0.1) &&
+   Math.abs(want.b) > 0.05 && got.top === true, JSON.stringify({ got, want }));
+const over = nunchukAt([511, 511, 511 - G]);
+ok("... upside down: the plain underside, not the top", over.top === false, JSON.stringify(over));
+const r120 = nunchukAt(rolled(120));
+ok("... rolled 120 degrees: the underside, its head still up the screen",
+   r120.top === false && r120.d > 0.5, JSON.stringify(r120));
+const r89 = nunchukAt(rolled(89)), r91 = nunchukAt(rolled(91));
+ok("... rolled 89 then 91 degrees: it does not turn end for end",
+   r89.d > 0.5 && r91.d > 0.5, `d ${r89.d} then ${r91.d}`);
 
 console.log(`\n${pass} passed, ${fail} failed, ${skip} skipped\n`);
 if (fail) process.exit(1);

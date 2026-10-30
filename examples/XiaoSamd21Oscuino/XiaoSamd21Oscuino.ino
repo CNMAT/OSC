@@ -224,15 +224,15 @@
  * identically.
  *
  * WII EXTENSIONS, through NintendoExtensionCtrl (Library Manager "Nintendo
- * Extension Ctrl" 0.8.3, by David Madison, LGPL-3.0, used as installed). The
- * library finds, initialises, identifies and reads the extension, with
- * ExtensionPort::connect(), getControllerType() and update() as its
- * MultipleTypes example uses them; this sketch has no protocol code of its
- * own. WiiExtension.h binds the library's getters to /wii: each field is one
- * getter, named as the library names it, in the order its header declares
- * it. ADDRESSES.md's "wii fields" lists them, and the page draws each kind.
- * A type the library does not know is sent as "Unknown", with the six bytes
- * the library read for it.
+ * Extension Ctrl" 0.8.3, by David Madison, LGPL-3.0-or-later, used as
+ * installed). The library finds, initialises, identifies and reads the
+ * extension, with ExtensionPort::connect(), getControllerType() and update()
+ * as its MultipleTypes example uses them; this sketch has no protocol code of
+ * its own. WiiExtension.h binds the library's getters to /wii: each field is
+ * one getter, named as the library names it, in the order its header
+ * declares it (which getters, WiiExtension.h says). ADDRESSES.md's "wii
+ * fields" lists them, and the page draws each kind. A type the library does
+ * not know is sent as "Unknown", with the six bytes the library read for it.
  *
  * Wiring, from Adafruit's guide to its Wii Nunchuck Breakout Adapter (product
  * 4836) and the adapter's schematic (adafruit/Adafruit-Wii-Nunchuck-Breakout-
@@ -240,29 +240,40 @@
  * 3V3, not 5V: the adapter pulls the microcontroller side of SCL and SDA up
  * to VIN through 10K, and Seeed's wiki says of the XIAO SAMD21's pins
  * "Voltage input connected to general I/O pins may cause chip damage if it'
- * higher than 3.3V." SCL goes to D5 and SDA to D4, the variant's
+ * higher than 3.3V". SCL goes to D5 and SDA to D4, the variant's
  * PIN_WIRE_SCL and PIN_WIRE_SDA, on SERCOM2.
  *
  * The bus runs at 100 kHz, the core's TWI_CLOCK. Measured on this board with
  * a Nunchuk through that adapter, VIN on 3V3, 2026-10-29, by
- * test/hardware/WiiLibProbe (the library alone, no OSC): at 100 kHz,
- * connect() succeeded and update() succeeded 90 times of 90 a second, over
- * 8 s; at 400 kHz, connect() 7..18 of 9..23 and update() 1..56 of 19..62 a
- * second; back at 100 kHz, 90 of 90 again.
+ * test/hardware/WiiLibProbe (the library alone, no OSC; its output is
+ * test/hardware/WiiLibProbe/wiilibprobe-2026-10-29.log): at 100 kHz, update()
+ * succeeded 90 times of 90 a second, over 8 s; at 400 kHz, over the seven
+ * whole seconds after the switch, connect() 15..18 times of 19..23 and
+ * update() 1..9 of 19..26 a second, and the library once named the Nunchuk
+ * UnknownController; back at 100 kHz, 90 of 90 again. (The second a switch
+ * falls in counts calls at both clocks.)
  *
  * The scan, /i2c/scan, is not the library's: a one-byte read of each address
- * from 0x08 to 0x77, 1 ms apart. Same board, Nunchuk and 100 kHz, ten probes
- * of 0x52 alone, each 1 ms apart: an empty write (what most scanners send)
- * was answered 9 times of 10, a one-byte read 10 of 10. In scans that went
- * from address to address with no gap it answered neither (how many such
- * scans ran was not recorded).
+ * from 0x08 to 0x77, 1 ms apart. A read writes nothing to whatever is there.
+ * Same board, Nunchuk and 100 kHz, four runs of the probe's 'q': a scan from
+ * address to address with no gap found nothing, by empty write (what most
+ * scanners send) or by one-byte read, in every run; then 0x52 alone, ten
+ * rounds of an empty write, a one-byte read and a pointer write, each 1 ms
+ * after the one before, answered 9, 10 and 10 of 10 in every run. The first
+ * empty write of each run came straight after the scan, with no gap; whether
+ * that is the one missed was not separated. Two more runs, at 400 kHz: the
+ * scan with no gap found nothing in one and 0x52 both ways in the other, and
+ * 0x52 alone answered 4 and 5 empty writes, 5 and 5 one-byte reads and 3 and
+ * 3 pointer writes of 10.
  *
- * Every transaction is followed by 1 ms of idle bus (I2C_GAP_MS), the
- * library's included. Same board and Nunchuk, three runs of ten connects
- * each: a requestIdentity() straight after connect() returned succeeded 0
- * times of 30, and the update() straight after that 0 of 30; 1 ms after each,
- * 30 of 30 both, and 2 ms after, 30 of 30 both. Why the extension needs the
- * gap was not looked into.
+ * Every call of the library's connect(), requestIdentity() and update(), and
+ * every probe of the scan, is followed by 1 ms of idle bus (I2C_GAP_MS).
+ * Inside a call the library keeps its own timing: an update() writes the
+ * read pointer, waits 175 us and reads (its NXC_Comms.h). Same board and
+ * Nunchuk, three runs of ten connects each: a requestIdentity() straight
+ * after connect() returned succeeded 0 times of 30, and the update() straight
+ * after that 0 of 30; 1 ms after each, 30 of 30 both, and 2 ms after, 30 of
+ * 30 both. Why the extension needs the gap was not looked into.
  *
  * STATUS, 2026-10-29: this build (63,908 bytes; arduino-cli 1.5.1, Seeeduino
  * SAMD core 1.8.6, NintendoExtensionCtrl 0.8.3) on one XIAO SAMD21 with touch
@@ -296,7 +307,12 @@
  * user's check); observed, not recorded.
  * Not verified: D9 as pad 5 in a recorded isolated touch; CapacitiveSensor
  * with resistors fitted; noise, under any setting; wiiprobe.py on the
- * Classic; any Wii type but these two.
+ * Classic; any Wii type but these two; a touch on D4 or D5 after /i2c 0
+ * (wiiprobe.py checks the echo, /enq/cap and one /cap of the right length);
+ * the page's Nunchuk drawing as it now is (up from accelX..accelZ), on the
+ * board at all. For a roll or a pitch alone under 90 degrees its formulas
+ * reduce to the earlier drawing's, and the contract test checks it in a stub
+ * page: flat, rolled, pitched, both at once, upside down and past 90 degrees.
  */
 
 #include <Adafruit_FreeTouch.h>
@@ -404,10 +420,11 @@ static bool wiiPresent = false;            // NintendoExtensionCtrl connected to
 static uint8_t wiiId[6];
 static uint32_t lastProbe = 0;
 static const uint16_t WII_PROBE_MS = 250;  // how often an empty bus is asked again: a choice
-// The bus is left idle this long after every transaction: between the scan's
-// addresses, and after each of the library's connect(), requestIdentity() and
-// update(). Measured on this board (2026-10-29, Wire at 100 kHz, a Nunchuk on
-// Adafruit's adapter, test/hardware/WiiLibProbe): 0x52 probed 1 ms apart
+// The bus is left idle this long after each of the scan's probes and after
+// each call of the library's connect(), requestIdentity() and update(); inside
+// a call the library keeps its own timing. Measured on this board (2026-10-29,
+// Wire at 100 kHz, a Nunchuk on Adafruit's adapter, test/hardware/WiiLibProbe,
+// the log beside it): 0x52 probed 1 ms apart
 // answered 10 of 10 one-byte reads, and inside a scan with no gap, none; a
 // requestIdentity() 0 ms after connect() returned succeeded 0 times of 30, and
 // the update() straight after it 0 of 30, while 1 ms after, both succeeded 30
@@ -652,7 +669,9 @@ static bool wiiRead() {
 }
 
 // A fresh report. When it fails, connect() again, as the library's
-// MultipleTypes example does; false only if that fails too.
+// MultipleTypes example does; where the example keeps trying a second apart,
+// this tries once, then forgets the extension, and i2cTick() asks the empty
+// bus every WII_PROBE_MS. False only if that one try fails too.
 static bool wiiUpdate(bool &changed) {
   changed = false;
   if (wiiRead()) return true;
@@ -801,8 +820,9 @@ static const char *busState() {            // SERCOM2's STATUS.BUSSTATE
 
 // Every 7-bit address from 0x08 to 0x77 that answers a one-byte read, probed
 // I2C_GAP_MS apart. A read writes nothing to whatever is there, and on this
-// board a Wii extension answered neither empty writes nor reads sent back to
-// back, but reads spaced 1 ms apart every time. A /diag line gives the
+// board at 100 kHz a Nunchuk answered neither empty writes nor reads sent
+// back to back, but reads spaced 1 ms apart every time (the header has the
+// runs). A /diag line gives the
 // count, the controller's bus state and both lines' levels, to tell an empty
 // bus from one that cannot run. 0x08..0x77 is the range outside the I2C
 // specification's two reserved groups of eight (from memory of the

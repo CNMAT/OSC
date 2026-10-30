@@ -2,8 +2,9 @@
 // library's own port, connect() and update(), as its MultipleTypes example
 // uses them, on whatever board Wire is. It prints, once a second, how many
 // connect() and update() calls succeeded, the controller type the library
-// identified and its identity bytes, so a bus problem can be told apart from
-// a problem in the code that sits on top of the library.
+// identified and the six bytes of control data it holds (getControlData()),
+// so a bus problem can be told apart from a problem in the code that sits on
+// top of the library.
 //
 // Plain text at 115200. Send 's' for Wire at 100 kHz (the default here),
 // 'f' for 400 kHz, 'q' to scan 0x08..0x77 two ways: an empty write (what

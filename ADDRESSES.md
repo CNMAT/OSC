@@ -145,11 +145,15 @@ two pads.
 in the order below: an int, or a float where the table says so. On
 `XiaoSamd21Oscuino` the extension is read by NintendoExtensionCtrl 0.8.3, and
 each field is one of that library's getters, named as the library names it:
-every public, const, no-argument getter the kind's class declares, in its
-header's order, and for the turntable then those of its `left` and `right`
-platters. A range is the library's comment on that getter, or its type's; a
-boolean reads 1 while pressed, or while true. A type the library does not know
-is `Unknown`, and its `/wii` is the six bytes the library read for it.
+every public, const, no-argument getter the kind's class declares that
+returns a number or a boolean, in its header's order, and for the turntable
+then those of its `left` and `right` platters, from the class both are made
+from. Not `getExpectedType()`, which every class declares and which returns
+the library's `ExtensionType`, nor the getters every class inherits from
+`ExtensionController`. A range is the library's comment on that getter, or
+its type's; a boolean reads 1 while pressed, or while true. A type the
+library does not know is `Unknown`, and its `/wii` is the six bytes the
+library read for it.
 
 On `XiaoSamd21Oscuino` the bus is D4 (SDA) and D5 (SCL), which are also touch
 pins: while `/i2c` is 1 the board measures no pads and announces no
@@ -167,7 +171,10 @@ pins: while `/i2c` is 1 the board measures no pads and announces no
 
 The turntable's ranges are from the library's code, not its comment: each
 platter's `turntable()` is five bits and a sign, and the combined one is their
-sum, where the comment on it says "6 bits, -30-29". How the board uses the
+sum, where the comment on it says "6 bits, -30-29". A platter's `connected`
+reads 1 only while it turns or one of its buttons is held: the library
+remembers a platter only in `getTurntableConfig()`, which `/wii` does not call
+(its DJTurntable.cpp; no turntable was tried). How the board uses the
 library, and what was measured, is in
 `examples/XiaoSamd21Oscuino/XiaoSamd21Oscuino.ino` under "WII EXTENSIONS".
 

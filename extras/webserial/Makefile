@@ -16,9 +16,11 @@
 # at all because they are not generated from boards.json. The first checks that
 # CircuitPlaygroundSensors and its page agree about the shape of the stream; the
 # second that XiaoSamd21Oscuino, its page and ADDRESSES.md name the same touch
-# libraries and /cap set-up parameters, and that the page decodes bytes
-# captured from the board through all three libraries.
-# test/mutants-xiaosamd21.mjs grades the second by mutation; run it by hand.
+# libraries, /cap set-up parameters and Wii fields, and checks the page's codec
+# on bytes captured from the board, its framing, what it asks back and its
+# Nunchuk drawing. test/mutants-xiaosamd21.mjs grades that one by mutation,
+# and test/quotes-xiaosamd21.mjs checks the quotations in the page's I2C tab
+# against their sources; run both by hand (the quotations need the network).
 
 NODE = node
 

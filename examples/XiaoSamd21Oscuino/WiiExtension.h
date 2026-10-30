@@ -1,15 +1,21 @@
 /*
  * WiiExtension.h -- XiaoSamd21Oscuino's binding of NintendoExtensionCtrl
  * (Library Manager "Nintendo Extension Ctrl" 0.8.3, by David Madison,
- * LGPL-3.0, used as installed): the library's port on Wire, a view of that
- * port for every controller type the library knows, and for each type every
- * reading the library offers. /wii carries, for the type plugged in, each
- * public, const, no-argument getter its class declares, in the order its
- * header declares them (for the turntable, then those of its left and right
- * platters), named as the library names it: WII_GET stringizes the call, so
- * the name cannot differ from the getter. Each field's range is the one the
- * library's comment on that getter states, or its type's where none does.
- * Buttons are the library's booleans, 1 while pressed.
+ * LGPL-3.0-or-later, used as installed): the library's port on Wire, a view
+ * of that port for every controller type the library knows, and for each
+ * type every reading the library offers. /wii carries, for the type plugged
+ * in, each public, const, no-argument getter its class declares that returns
+ * a number or a boolean (an integer type, float, boolean, or the drums'
+ * VelocityID), in the order its header declares them, and for the turntable
+ * then those of its left and right platters, which come from the class both
+ * are made from (TurntableExpansion, connected() included). Left out:
+ * getExpectedType(), which every class declares and which returns the
+ * library's ExtensionType, and the getters every class inherits from
+ * ExtensionController (getControllerType(), getRequestSize() and the like).
+ * Each field is named as the library names it: WII_GET stringizes the call,
+ * so the name cannot differ from the getter. Each field's range is the one
+ * the library's comment on that getter states, or its type's where none
+ * does. Buttons are the library's booleans, 1 while pressed.
  *
  * The page XiaoSamd21Oscuino.html lists the same kinds and fields, and
  * extras/webserial/test/test-xiaosamd21-contract.mjs holds the two, and

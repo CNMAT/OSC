@@ -95,6 +95,15 @@ const MUTANTS = [
    "WII_GETF(wiiNunchuk, rollAngle, -180, 180),", "WII_GET(wiiNunchuk, rollAngle, -180, 180),",
    [[HTML, '["rollAngle", -180, 180, "f"]', '["rollAngle", -180, 180]'],
     ["ADDRESSES.md", "`rollAngle` -180..180 float", "`rollAngle` -180..180"]]],
+  // 9. the Nunchuk drawing
+  ["the Nunchuk drawing rolls the other way", HTML,
+   "const NUNCHUK_ROLL_SIGN = 1;", "const NUNCHUK_ROLL_SIGN = -1;"],
+  ["the Nunchuk drawing pitches the other way", HTML, "gy = 511 - f.accelY", "gy = f.accelY - 511"],
+  ["the Nunchuk drawing never hides its top face", HTML,
+   'top.setAttribute("opacity", up ? 1 : 0);', 'top.setAttribute("opacity", 1);'],
+  ["the Nunchuk drawing shortens by the roll as well", HTML,
+   "r11 = q ? uz + ux * ux * q : 1", "r11 = q ? uz : 1"],
+  ["the Nunchuk drawing shears the other way", HTML, "s = ux * uy * q;", "s = -ux * uy * q;"],
 ];
 
 function copyTree(dir) {

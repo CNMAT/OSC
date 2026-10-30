@@ -670,7 +670,7 @@
         output from the voltage regulator</q>; SCL and SDA are level shifted, each with a 10K pull-up. The
         adapter's schematic pulls the microcontroller's side of both up to VIN, which is why VIN is not the
         XIAO's 5V: Seeed's wiki says of its pins <q>Voltage input connected to general I/O pins may cause
-        chip damage if it' higher than 3.3V.</q> SCL goes to D5 and SDA to D4, the XIAO variant's Wire pins
+        chip damage if it' higher than 3.3V</q>. SCL goes to D5 and SDA to D4, the XIAO variant's Wire pins
         (<code>PIN_WIRE_SCL</code> 5, <code>PIN_WIRE_SDA</code> 4, on SERCOM2). While the bus is on they
         are not touch pads: the board measures no pads, and a touch tab gives them back.</p>
       <p>Pull-ups. Before Wire takes the pins the board reads each line with the SAMD21's own pull-down on,
@@ -686,29 +686,43 @@
         <code>ExtensionPort::connect()</code>, which initialises whatever answers at 0x52, reads its
         identity and runs the matching type's own start-up; <code>getControllerType()</code> then names it,
         and the library's <code>requestIdentity()</code> gives the six bytes shown beside the name. From
-        then on each tick is one <code>update()</code>. When an update fails the board connects again, as
-        the library's MultipleTypes example does, and forgets the extension if that fails too. A type the
-        library does not know is shown as Unknown, with the six bytes the library read for it as bits. The
+        then on each tick is one <code>update()</code>. When an update fails the board calls
+        <code>connect()</code> again, as the library's MultipleTypes example does; where the example then
+        keeps trying a second apart, the board tries once, and if that fails it forgets the extension and
+        asks the empty bus every 250 ms. A type the library does not know is shown as Unknown, with the six bytes the library read for it as bits. The
         sketch has no protocol code of its own.</p>
       <p>Measured on this board with a Nunchuk through the adapter, VIN on 3V3, 2026-10-29, by the library
-        alone (<code>test/hardware/WiiLibProbe</code>): at 100 kHz, the core's default, <code>update()</code>
-        succeeded 90 times of 90 a second, over 8 s; at 400 kHz, 1..56 times of 19..62. The bus stays at
-        100 kHz.</p>
+        alone (<code>test/hardware/WiiLibProbe</code>, its output in <code>wiilibprobe-2026-10-29.log</code>
+        beside it): at 100 kHz, the core's default, <code>update()</code> succeeded 90 times of 90 a second,
+        over 8 s; at 400 kHz, over the seven whole seconds after the switch, 1..9 times of 19..26. The bus
+        stays at 100 kHz.</p>
       <p>The scan, <code>/i2c/scan</code>, is not the library's: a one-byte read of each address from 0x08
-        to 0x77, 1 ms apart. Probed alone ten times, 1 ms apart, the Nunchuk answered an empty write (what
-        most scanners send) 9 times and a one-byte read 10 times; in scans that went from address to
-        address with no gap it answered neither.</p>
+        to 0x77, 1 ms apart, since a read writes nothing to whatever is there. In four runs of the probe at
+        100 kHz, a scan that went from address to address with no gap found nothing, by empty write (what
+        most scanners send) or by one-byte read; probed alone in ten rounds, each probe 1 ms after the last,
+        the Nunchuk answered 9 empty writes, 10 one-byte reads and 10 pointer writes of 10, every run. The
+        first empty write of each run followed the scan with no gap; whether it was the one missed was not
+        separated. In two runs at 400 kHz the scan with no gap found nothing in one and 0x52 both ways in
+        the other, and alone the Nunchuk answered 4 and 5 empty writes, 5 and 5 one-byte reads and 3 and 3
+        pointer writes of 10.</p>
     </div>
 
     <div class="param">
       <h3>The fields<span><code>/wii</code>, in this order</span></h3>
       <p>Each field is one of the library's getters, named as the library names it, in the order its
-        header declares them: every public, const getter that takes no argument, and for the turntable
-        then those of its <code>left</code> and <code>right</code> platters. Ranges are the library's
+        header declares them: every public, const getter that takes no argument and returns a number or a
+        boolean, of the type's own class, and for the turntable then those of its <code>left</code> and
+        <code>right</code> platters, from the class both are made from. Left out are
+        <code>getExpectedType()</code>, which every class declares and which returns the library's
+        <code>ExtensionType</code>, and the getters every class inherits from
+        <code>ExtensionController</code>, such as <code>getControllerType()</code>. Ranges are the library's
         comments on those getters, or the getter's type where it gives none; buttons are the library's
         booleans, 1 while pressed. The turntable's differ from its comment: by the library's code each
         platter's <code>turntable()</code> is five bits and a sign, -32..31, and the combined one their
-        sum, where the comment on it says <q>6 bits, -30-29</q>.</p>
+        sum, where the comment on it says <q>6 bits, -30-29</q>. A platter's <code>connected</code> reads 1
+        only while it turns or one of its buttons is held: the library remembers a platter only in
+        <code>getTurntableConfig()</code>, which <code>/wii</code> does not call (its DJTurntable.cpp; no
+        turntable was tried here).</p>
       <div id="wiiFields"></div>
     </div>
 
@@ -716,9 +730,10 @@
       <h3>Sources, opened 2026-10-29</h3>
       <ul class="src">
         <li><a href="https://github.com/dmadison/NintendoExtensionCtrl">NintendoExtensionCtrl</a> 0.8.3, by
-          David Madison, LGPL-3.0 by the LICENSE file it ships with: its <code>src/</code> and the
-          MultipleTypes example, as the Library Manager installed them. The sketch builds against that
-          install.</li>
+          David Madison: LGPL-3.0-or-later, by the notice in each of its source files (<q>either version 3
+          of the License, or (at your option) any later version</q>; the LICENSE file it ships is the LGPL,
+          version 3). Its <code>src/</code> and the MultipleTypes example, as the Library Manager installed
+          them; the sketch builds against that install.</li>
         <li>Adafruit, <a href="https://learn.adafruit.com/adafruit-wii-nunchuck-breakout-adapter">Adafruit Wii
           Nunchuck Breakout Adapter</a>, and the adapter's schematic in
           <a href="https://github.com/adafruit/Adafruit-Wii-Nunchuck-Breakout-Adapter-PCB">Adafruit-Wii-Nunchuck-Breakout-Adapter-PCB</a>.</li>
@@ -1402,7 +1417,7 @@ function buildBus() {
   busLeds = {};
 
   // The pull-up lamps.
-  engrave(g, GRID.x, 196, "PULL-UPS OUTSIDE THE BOARD", 10, "start", 700, true);
+  engrave(g, GRID.x, 196, "HELD HIGH AGAINST THE PULL-DOWN", 10, "start", 700, true);
   pullLamps = ["SDA", "SCL"].map((name, i) => {
     const x = GRID.x + 14 + i * 150, y = 228;
     const lamp = el("circle", { cx: x, cy: y, r: 10, fill: "url(#lampOff)" }, g);
@@ -1639,28 +1654,44 @@ const wiiUnit = (kind, name, v) => {
 };
 
 // Nunchuk, from above: the stick in its well on the head, C and Z on the
-// front edge, drawn as a slab NUNCHUK_THICK thick that turns as the
-// controller does, seen from straight above. The library's rollAngle() turns
-// it about its long axis and pitchAngle() about its width, about the end the
-// cable leaves from: each face's width goes as cos(roll) and its length as
-// cos(pitch), the face nearer the eye moves toward the side that dips, and
-// the wall between the two faces shows on the side that rises. Seen from
-// below (the two cosines of opposite sign) that face is the plain underside.
-// No perspective, and no shear for a roll and a pitch together. Turning it
-// flat on a table changes neither angle: an accelerometer cannot see that.
+// front edge, drawn as a slab NUNCHUK_THICK thick, turned as the controller
+// is and seen from straight above, with no perspective. Up is the direction
+// the accelerometer reads, around the 511 the library's angles take as zero
+// (Nunchuk.cpp), and the slab turns by the smallest rotation that brings its
+// top face's normal onto it, about the point the cable leaves from. A roll
+// alone narrows each face as cos(roll), a pitch alone shortens it as
+// cos(pitch), and the two together shear it; the face nearer the eye moves
+// toward the side that dips, and the wall between the faces shows on the
+// side that rises. Past 90 degrees the nearer face is the plain underside. An
+// accelerometer cannot see a turn flat on a table, so the drawing never turns
+// about the vertical; held near upside down, where accelX and accelY are
+// within their noise of 511, which way it has turned over follows that noise.
 //
-// Which way the angles lean: pitchAngle() is "Inverted so pulling back is a
-// positive pitch" (the library's Nunchuk.cpp), taken here as the head rising.
-// For rollAngle() the library says nothing: NUNCHUK_ROLL_SIGN 1 draws a
-// positive roll as the right side dipping. Checked by hand on one genuine
-// Nunchuk, 2026-10-29: rolling it right dips the drawing on the right, and
-// tipping its head up shows the front wall (the user's check, not recorded).
+// Which way it leans: the library's rollAngle() is atan2(accelX - 511,
+// accelZ - 511) and pitchAngle() is -atan2(accelY - 511, accelZ - 511),
+// "Inverted so pulling back is a positive pitch" (Nunchuk.cpp), taken here as
+// the head rising. For rollAngle() the library says nothing: NUNCHUK_ROLL_SIGN
+// 1 draws a positive roll as the right side dipping. Up, in the drawing's
+// frame (x to the right, y toward the head, z out of the top face), is then
+// 511 - accelX (times NUNCHUK_ROLL_SIGN), 511 - accelY and accelZ - 511.
+// Checked by hand on one genuine Nunchuk, 2026-10-29, on the drawing before
+// this one, which turned the slab by rollAngle() and pitchAngle() themselves
+// and which this one matches for a roll or a pitch alone under 90 degrees:
+// rolling it right dips the drawing on the right, and tipping its head up
+// shows the front wall (the user's check, not recorded). That accelZ - 511
+// is positive with the top face up is inferred from that check, not read:
+// with it negative, that drawing would have drawn the Nunchuk head down. That
+// drawing never showed the underside, because both its cosines take the sign
+// of accelZ - 511, and it turned end for end at a roll of 90 degrees, where
+// pitchAngle() jumps to 180 or -180. This one has not been seen on the board.
 const NUNCHUK_THICK = 56;      // drawing units, against a width of 192: a choice
 const NUNCHUK_ROLL_SIGN = 1;   // as checked above
 const NUNCHUK_WALL_STEPS = 8;  // copies of the outline that fill the wall: a choice
 WII_ART.Nunchuk = slot => {
   wiiCable(slot, 160, 400);
-  const PIVOT = 170;                       // the body's back end, where the cable leaves
+  // The pivot: where the cable leaves (wiiCable's start, y 230 + 170 = 400),
+  // 11.5 units behind the outline's back end, the curve's lowest point, y 158.5.
+  const PIVOT = 170;
   const at = el("g", { transform: `translate(160,${230 + PIVOT})` }, slot);
   const body = "M0,-180 C70,-180 96,-118 96,-64 C96,8 72,64 54,124 C42,170 -42,170 -54,124 " +
                "C-72,64 -96,8 -96,-64 C-96,-118 -70,-180 0,-180 Z";
@@ -1687,14 +1718,24 @@ WII_ART.Nunchuk = slot => {
       const nx = 2 * wiiUnit(kind, "joyX", f.joyX) - 1, ny = 2 * wiiUnit(kind, "joyY", f.joyY) - 1;
       cap.setAttribute("transform", `translate(${(nx * 24).toFixed(1)},${(-ny * 24).toFixed(1)})`);
       pressC(f.buttonC); pressZ(f.buttonZ);
-      const r = NUNCHUK_ROLL_SIGN * f.rollAngle * Math.PI / 180, p = f.pitchAngle * Math.PI / 180;
-      const cr = Math.cos(r), cp = Math.cos(p), up = cr * cp >= 0;
+      // Up, in the drawing's frame; none at all (all three at 511) is drawn flat.
+      const gx = NUNCHUK_ROLL_SIGN * (511 - f.accelX), gy = 511 - f.accelY, gz = f.accelZ - 511;
+      const g = Math.hypot(gx, gy, gz);
+      const [ux, uy, uz] = g ? [gx / g, gy / g, gz / g] : [0, 0, 1];
+      // The rotation that turns the body the shortest way until up points at
+      // the eye (Rodrigues', about up x eye). Its top left is r00 and r11 on
+      // the diagonal and -s off it; with the screen's y down, the face's turn
+      // and shear on the screen is matrix(r00, s, s, r11). Exactly upside down
+      // every way is as short; it is taken as turned over about its length.
+      const q = uz > -1 + 1e-9 ? 1 / (1 + uz) : 0;
+      const r00 = q ? uz + uy * uy * q : -1, r11 = q ? uz + ux * ux * q : 1, s = ux * uy * q;
+      const up = uz >= 0;
       // The top face's offset from the body's middle plane; the underside's
       // is the opposite. A dipping right side moves the top face right; a
       // rising head moves it back, toward the cable (down the screen).
-      const ox = NUNCHUK_THICK / 2 * Math.sin(r), oy = NUNCHUK_THICK / 2 * Math.sin(p);
-      const scale = `matrix(${cr.toFixed(3)},0,0,${cp.toFixed(3)},0,0) translate(0,${-PIVOT})`;
-      const placed = k => `translate(${(k * ox).toFixed(1)},${(k * oy).toFixed(1)}) ${scale}`;
+      const ox = -ux * NUNCHUK_THICK / 2, oy = uy * NUNCHUK_THICK / 2;
+      const turn = `matrix(${r00.toFixed(3)},${s.toFixed(3)},${s.toFixed(3)},${r11.toFixed(3)},0,0) translate(0,${-PIVOT})`;
+      const placed = k => `translate(${(k * ox).toFixed(1)},${(k * oy).toFixed(1)}) ${turn}`;
       const near = up ? 1 : -1;            // +1: the top face is the one nearer the eye
       shadow.setAttribute("transform", `translate(5,9) ${placed(-near)}`);
       wall.forEach((w, i) => w.setAttribute("transform", placed(-near + 2 * near * i / NUNCHUK_WALL_STEPS)));

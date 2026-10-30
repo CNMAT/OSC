@@ -1465,7 +1465,7 @@ const RENDER = {
   i2c(m) {
     const on = m.values.i2c, pull = m.sub["/i2c/pull"], scan = m.sub["/i2c/scan"];
     $("i2cV").textContent = (on ? (on[0] ? "on" : "off") : "–") +
-      (pull && pull.length === 2 ? `  pull-ups outside: SDA ${pull[0] ? "yes" : "no"}, SCL ${pull[1] ? "yes" : "no"}` : "") +
+      (pull && pull.length === 2 ? `  held high against the pull-down: SDA ${pull[0] ? "yes" : "no"}, SCL ${pull[1] ? "yes" : "no"}` : "") +
       (scan ? "  answered: " + (scan.map(a => "0x" + a.toString(16)).join(" ") || "none") : "");
   },
   wii(m) {
