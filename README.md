@@ -92,7 +92,15 @@ below, which started it):
 Both are hand-written rather than generated from `extras/webserial`, so `make
 check` does not see them. The Circuit Playground pair has its own test instead,
 pinning the sketch and the page to the same capability messages; `make test` in
-`extras/webserial` runs it.
+`extras/webserial` runs it. So does `XiaoSamd21Oscuino`, the XIAO SAMD21's pins
+as touch pads measured by Adafruit FreeTouch, FastTouch or CapacitiveSensor,
+chosen live with `/cap/lib`, each library's set-up under `/cap/<param>`
+([ADDRESSES.md](ADDRESSES.md), "cap set-up"), drawn on a skeuomorphic panel
+over a photograph of the board with a tab per library, and an I2C tab that
+gives D4 and D5 to the bus and draws a Wii extension controller read by
+NintendoExtensionCtrl (`/i2c`, `/wii`; "wii fields"). Besides FreeTouch it
+needs CapacitiveSensor and Nintendo Extension Ctrl from the Library Manager
+and FastTouch from github.com/adrianfreed/FastTouch.
 
 ## One address space
 

@@ -1,0 +1,76 @@
+test/hardware/WiiLibProbe on a Seeed XIAO SAMD21 (Seeeduino SAMD core 1.8.6,
+arduino-cli 1.5.1), NintendoExtensionCtrl 0.8.3, a genuine Nunchuk on
+Adafruit's Wii Nunchuck Breakout Adapter with VIN on the XIAO's 3V3,
+2026-10-29. The probe's serial output at 115200, read for set times by a short
+Python script (the capture) and copied here from the record of the session
+that ran it, its CR LF line ends made LF. The capture added the "---" lines,
+the "run N:", "s |" and "f |" prefixes and the "status lines before the
+test:" line, and in the scan section kept only the probe's lines that start
+"scan" or "0x52", joined by " || ". The "==" headings and the lines marked
+[the capture] are added here. Times are UTC, when each section's output came
+back.
+
+The probe grew between sections: the clock section ran on its first build,
+the scan section once 'q' and its 0x52 rounds were added, the identity
+section once 'i' was. Each build only added code and comments to the one
+before, so what ran in each section is unchanged in WiiLibProbe.ino as
+committed, whose code is the build the identity section ran.
+
+A status line comes once a second and counts the calls since the line before:
+connect() and update() that succeeded / were made, the type the library names
+and the six bytes of control data it holds (getControlData(); connect()
+zeroes them). Its clock is the one in force when it prints, so the line
+printed in the second a clock change falls in counts calls at both clocks.
+
+== clock, 22:15: 8 s at 100 kHz, then 'f' and 8 s, then 's' and 5 s
+--- 100 kHz, 8 s
+clock 100000 connect 0/0 update 90/90 type Nunchuk data 1C 1 0 2 8E 9F
+clock 100000 connect 0/0 update 90/90 type Nunchuk data 1C 1 0 2 8E DF
+clock 100000 connect 0/0 update 90/90 type Nunchuk data 1C 1 0 2 8E 9F
+clock 100000 connect 0/0 update 90/90 type Nunchuk data 1C 1 0 2 8E 9F
+clock 100000 connect 0/0 update 90/90 type Nunchuk data 1C 1 0 2 8E 9F
+clock 100000 connect 0/0 update 90/90 type Nunchuk data 1C 1 0 2 8E 8F
+clock 100000 connect 0/0 update 90/90 type Nunchuk data 19 1 0 2 8E DF
+clock 100000 connect 0/0 update 90/90 type Nunchuk data 1C 1 0 2 8E 9F
+--- 400 kHz, 8 s
+clock 400000
+clock 400000 connect 7/9 update 56/62 type Nunchuk data 0 0 0 0 0 0
+clock 400000 connect 15/23 update 4/19 type Nunchuk data 0 0 0 0 0 0
+clock 400000 connect 18/20 update 5/23 type UnknownController data 0 0 0 0 0 0
+clock 400000 connect 17/21 update 5/22 type Nunchuk data 0 0 0 0 0 0
+clock 400000 connect 18/22 update 1/19 type Nunchuk data 0 0 0 0 0 0
+clock 400000 connect 17/19 update 9/26 type Nunchuk data 0 0 0 0 0 0
+clock 400000 connect 17/21 update 4/21 type Nunchuk data 0 0 0 0 0 0
+clock 400000 connect 17/21 update 3/21 type Nunchuk data 1C 1 FF FF FF FF
+--- back to 100 kHz, 5 s
+clock 100000
+clock 100000 connect 10/15 update 36/44 type Nunchuk data 1C 1 0 2 8E 8F
+clock 100000 connect 0/0 update 90/90 type Nunchuk data 19 1 0 2 8E 8F
+clock 100000 connect 0/0 update 90/90 type Nunchuk data 1C 1 0 2 8E 8F
+clock 100000 connect 0/0 update 90/90 type Nunchuk data 1C 1 0 2 8E 8F
+clock 100000 connect 0/0 update 90/90 type Nunchuk data 19 1 0 2 8E 8F
+
+== scan, 22:17: 's' then 'q' twice, 'f' then 'q' twice, 's' then 'q' twice
+[the capture] Each line: the clock command in force, then that 'q''s lines;
+[the capture] the last line is the status line that followed.
+s | scan by empty write: || scan by one-byte read: || 0x52 of 10: empty write 9, one-byte read 10, pointer write 10
+s | scan by empty write: || scan by one-byte read: || 0x52 of 10: empty write 9, one-byte read 10, pointer write 10
+f | scan by empty write: || scan by one-byte read: || 0x52 of 10: empty write 4, one-byte read 5, pointer write 3
+f | scan by empty write: 0x52 || scan by one-byte read: 0x52 || 0x52 of 10: empty write 5, one-byte read 5, pointer write 3
+s | scan by empty write: || scan by one-byte read: || 0x52 of 10: empty write 9, one-byte read 10, pointer write 10
+s | scan by empty write: || scan by one-byte read: || 0x52 of 10: empty write 9, one-byte read 10, pointer write 10
+clock 100000 connect 0/0 update 90/90 type Nunchuk data 19 1 0 2 8E 4F
+
+== identity gap, 22:58: 'i' three times (each: ten connect() calls for each gap)
+status lines before the test:
+  clock 100000 connect 0/0 update 90/90 type Nunchuk data 1C 1 0 0 8C A7
+  clock 100000 connect 0/0 update 90/90 type Nunchuk data 1C 1 0 0 8C A3
+run 1: gap 0 ms: connect 10/10, then requestIdentity 0, then update 0; last id 0 0 0 0 0 0
+run 1: gap 1 ms: connect 10/10, then requestIdentity 10, then update 10; last id 0 0 A4 20 0 0
+run 1: gap 2 ms: connect 10/10, then requestIdentity 10, then update 10; last id 0 0 A4 20 0 0
+run 2: gap 0 ms: connect 10/10, then requestIdentity 0, then update 0; last id 0 0 0 0 0 0
+run 2: gap 1 ms: connect 10/10, then requestIdentity 10, then update 10; last id 0 0 A4 20 0 0
+run 2: gap 2 ms: connect 10/10, then requestIdentity 10, then update 10; last id 0 0 A4 20 0 0
+run 3: gap 0 ms: connect 10/10, then requestIdentity 0, then update 0; last id 0 0 0 0 0 0
+run 3: gap 1 ms: connect 10/10, then requestIdentity 10, then update 10; last id 0 0 A4 20 0 0
+run 3: gap 2 ms: connect 10/10, then requestIdentity 10, then update 10; last id 0 0 A4 20 0 0
