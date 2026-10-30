@@ -350,7 +350,7 @@ async function disconnect() {
   try { if (pipeClosed) await pipeClosed; } catch {}
   try { if (pipeDone) await pipeDone; } catch {}
   try { if (writer) writer.releaseLock(); } catch {}
-  try { if (port) await port.close(); } catch {}
+  try { if (port) await port.close(); } catch (e) { logLine("warn", "port close failed: " + e.message); }
   port = writer = reader = pipeDone = pipeClosed = null;
   setConnected(false);
   logLine("", "disconnected");

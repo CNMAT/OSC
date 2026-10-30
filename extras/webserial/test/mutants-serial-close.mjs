@@ -34,6 +34,10 @@ const MUTANTS = [
    "if (port && e.target === port) disconnect();", "if (port) disconnect();"],
   ["the page ignores its own port's unplug", "this port unplugged lets it go",
    "if (port && e.target === port) disconnect();", "if (port && e.target === port) return;"],
+  ["the page forgets its own port on unplug without closing it", "this port unplugged lets it go",
+   "if (port && e.target === port) disconnect();", "if (port && e.target === port) port = null;"],
+  ["the page hides a close() that fails", "a failed close() is reported",
+   '} catch (e) { logLine("warn", "port close failed: " + e.message); }', "} catch {}"],
 ];
 
 function copyTree(dir) {
@@ -42,8 +46,11 @@ function copyTree(dir) {
     copyFileSync(join(ROOT, f), join(dir, f));
   }
 }
-// The whole test takes under half a second here; a mutant that leaves
-// disconnect() waiting forever fails at 30 s instead of stopping the grader.
+// The whole test takes under half a second here (node 25.3.0). A mutant whose
+// disconnect() waits on a promise that never settles ends the test as soon as
+// nothing else is pending, Node exiting 13 for an unsettled top-level await;
+// one that keeps a timer alive is stopped at 30 s. Either way the test prints
+// no FAIL for the check, so the mutant counts as not caught.
 const run = dir => spawnSync(process.execPath, [join(dir, TEST)], { encoding: "utf8", timeout: 30000 });
 // What the test printed for this page: from its name to the next blank line.
 const section = out => (out.split(`\n${PAGE}\n`)[1] || "").split("\n\n")[0];

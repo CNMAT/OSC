@@ -1,6 +1,8 @@
 /* The Web Serial pages let go of the port, and only of their own.
 
-   Two defects, found on the XIAO SAMD21 page on 2026-10-28:
+   Two defects, both in the XIAO SAMD21 page as first written (7208137) and
+   fixed there in dd9792a, before that page reached master; the first was
+   seen on 2026-10-28:
 
    1. port.readable.pipeThrough(...) pipes inside the stream, where the page
       cannot wait for it. After reader.cancel() that hidden pipe can still hold
@@ -15,11 +17,16 @@
 
    Each page's whole script runs here against a stub document (every element
    a Proxy that takes any property, call or iteration and does nothing) and a
-   fake Web Serial. Its port, like Chrome's, refuses close() while its
-   readable or writable is locked, and its readable's cancel completes a few
-   milliseconds later, as an operating system's close does. The board-less
-   generated page, whose transport already closed correctly, is the control:
-   it shows the fake port can be closed at all.
+   fake Web Serial. Its port refuses close() while its readable or writable
+   is locked, as Chromium's SerialPort::close() does by calling the
+   lock-checking cancel() and abort() (serial_port.cc, Chromium main on
+   2026-10-30). Its readable's cancel settles 5 ms after it is asked,
+   standing in for the operating system's discard of the port's receive
+   buffers, which Web Serial runs in parallel; how long a real one takes is
+   not measured. A port that refuses every close() checks that a page
+   reports the failure in its log, where a bare catch hid it before. The
+   board-less generated page, whose transport already closed correctly, is
+   the control: it shows the fake port can be closed at all.
 
    Run: node test/test-serial-close.mjs   (or `make test`). No dependencies. */
 
@@ -58,8 +65,10 @@ const documentStub = () => {
 };
 
 // A serial port as Chrome behaves: no streams until open(), and close()
-// refused while either stream is locked.
-function fakePort({ opens = true } = {}) {
+// refused while either stream is locked. One made with closes: false refuses
+// every close(), for the check that a page reports it.
+const LOST = "The device has been lost.";
+function fakePort({ opens = true, closes = true } = {}) {
   return {
     readable: null, writable: null, closed: false, refused: null,
     async open() {
@@ -71,6 +80,7 @@ function fakePort({ opens = true } = {}) {
       this.writable = new WritableStream({ write() {} });
     },
     async close() {
+      if (!closes) throw new DOMException(LOST, "NetworkError");
       if (!this.readable) throw new DOMException("The port is already closed.", "InvalidStateError");
       if (this.readable.locked || this.writable.locked) {
         this.refused = `readable locked ${this.readable.locked}, writable locked ${this.writable.locked}`;
@@ -107,13 +117,13 @@ function load(file, ret) {
 const tick = () => new Promise(r => setTimeout(r, 20));
 
 // The six hand-written pages share one shape: top-level connect(),
-// disconnect() and `port`.
+// disconnect(), `port` and logLine(), which `spy` swaps for a recorder.
 const HAND = ["CircuitPlaygroundSensors", "PyBadgeOscuino", "HallowingOscuino",
               "EsploraOscuino", "XiaoS3SenseOscuino", "XiaoSamd21Oscuino"];
 for (const name of HAND) {
   console.log(`\n${name}`);
   const { page, listeners, offer } = load(`examples/${name}/${name}.html`,
-    "connect, disconnect, held: () => port");
+    "connect, disconnect, held: () => port, spy: f => { logLine = f; }");
 
   let p = fakePort();
   offer(p);
@@ -133,7 +143,15 @@ for (const name of HAND) {
   ok("another device unplugged leaves this port open", page.held() === p && !p.closed);
   listeners.disconnect({ target: p });
   await tick();
-  ok("this port unplugged lets it go", page.held() === null);
+  ok("this port unplugged lets it go", page.held() === null && p.closed,
+     p.refused ? "close() refused: " + p.refused : "");
+
+  const logged = [];
+  page.spy((cls, text) => logged.push(String(text)));
+  offer(fakePort({ closes: false }));
+  await page.connect();
+  await page.disconnect();
+  ok("a failed close() is reported", logged.some(s => s.includes(LOST)));
 }
 
 // The pages generated from template.html, through the board-less one (make
@@ -141,7 +159,8 @@ for (const name of HAND) {
 console.log("\noscuino.html (generated from template.html)");
 {
   const { page, listeners, offer } = load("extras/webserial/oscuino.html",
-    "serialTransport, current: () => transport, use: t => { transport = t; }");
+    "serialTransport, current: () => transport, use: t => { transport = t; }, " +
+    "spy: f => { logLine = f; }");
   const t = page.serialTransport;
 
   let p = fakePort();
@@ -160,6 +179,13 @@ console.log("\noscuino.html (generated from template.html)");
   listeners.disconnect({ target: p });
   await tick();
   ok("this port unplugged ends the connection", page.current() === null && p.closed);
+
+  const logged = [];
+  page.spy((cls, text) => logged.push(String(text)));
+  offer(fakePort({ closes: false }));
+  await t.connect();
+  await t.disconnect();
+  ok("a failed close() is reported", logged.some(s => s.includes(LOST)));
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

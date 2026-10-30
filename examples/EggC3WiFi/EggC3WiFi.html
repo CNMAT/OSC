@@ -903,7 +903,7 @@ const serialTransport = {
     try { await this.reader?.cancel(); } catch {}
     try { await this.pipeDone; } catch {}
     try { this.writer?.releaseLock(); } catch {}
-    try { await this.port?.close(); } catch {}
+    try { await this.port?.close(); } catch (e) { logLine("err", "port close failed: " + e.message); }
     this.port = this.writer = this.reader = this.pipeDone = null;
   },
 
