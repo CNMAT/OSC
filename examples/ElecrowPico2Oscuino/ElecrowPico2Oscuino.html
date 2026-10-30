@@ -917,7 +917,7 @@ const serialTransport = {
     try { await this.reader?.cancel(); } catch {}
     try { await this.pipeDone; } catch {}
     try { this.writer?.releaseLock(); } catch {}
-    try { await this.port?.close(); } catch {}
+    try { await this.port?.close(); } catch (e) { logLine("err", "port close failed: " + e.message); }
     this.port = this.writer = this.reader = this.pipeDone = null;
   },
 
@@ -1724,8 +1724,10 @@ $("disconnect").onclick = async () => {
   logLine("sys", "disconnected");
 };
 
-navigator.serial?.addEventListener("disconnect", () => {
-  if (transport === serialTransport) lost("device unplugged");
+// Fired at the port that went, bubbling here (Web Serial, "ondisconnect"):
+// another serial device unplugged is not this board.
+navigator.serial?.addEventListener("disconnect", e => {
+  if (transport === serialTransport && e.target === serialTransport.port) lost("device unplugged");
 });
 
 setInterval(() => { $("pps").textContent = frames; frames = 0; }, 1000);

@@ -420,14 +420,19 @@ class SlipDecoder {
    3. Web Serial
    ============================================================ */
 const FILTERS=[{usbVendorId:0x239a}];        // Adafruit
-let port=null, writer=null, reader=null, pipeDone=null;
+let port=null, writer=null, reader=null, pipeDone=null, pipeClosed=null;
 
 async function connect(){
   const opts = $("allPorts").checked ? {} : {filters:FILTERS};
-  port = await navigator.serial.requestPort(opts);
-  await port.open({baudRate:115200});
+  const chosen = await navigator.serial.requestPort(opts);
+  await chosen.open({baudRate:115200});
+  port = chosen;                          // a port that would not open is never held
   writer = port.writable.getWriter();
-  reader = port.readable.pipeThrough(new TransformStream(new SlipDecoder())).getReader();
+  // pipeTo rather than pipeThrough, so disconnect() can wait for the pipe to
+  // let go of port.readable: Chrome will not close a port whose stream is locked.
+  const slip = new TransformStream(new SlipDecoder());
+  pipeClosed = port.readable.pipeTo(slip.writable).catch(()=>{});
+  reader = slip.readable.getReader();
   pipeDone = readLoop();
   setConnected(true);
   logLine("", "connected");
@@ -443,10 +448,11 @@ async function readLoop(){
 
 async function disconnect(){
   try{ if(reader){ await reader.cancel(); reader.releaseLock(); } }catch{}
+  try{ if(pipeClosed) await pipeClosed; }catch{}
   try{ if(pipeDone) await pipeDone; }catch{}
   try{ if(writer) writer.releaseLock(); }catch{}
-  try{ if(port) await port.close(); }catch{}
-  port=writer=reader=null;
+  try{ if(port) await port.close(); }catch(e){ logLine("warn","port close failed: "+e.message); }
+  port=writer=reader=pipeDone=pipeClosed=null;
   setConnected(false);
   logLine("","disconnected");
 }

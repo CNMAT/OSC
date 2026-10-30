@@ -7,8 +7,9 @@
 #   make check      fail if any generated file drifted from the template,
 #                   oscuino.html included
 #   make test       codec bytes, the capability model, per-board page wiring,
-#                   the CircuitPlayground and XIAO SAMD21 pairs, and the
-#                   address-space contract
+#                   the CircuitPlayground and XIAO SAMD21 pairs, the
+#                   address-space contract, and that the Web Serial pages let
+#                   go of their port
 #   make all        check + test, the set worth running before a commit
 #
 # test-cpx-contract.mjs and test-xiaosamd21-contract.mjs are the odd ones out:
@@ -21,6 +22,11 @@
 # Nunchuk drawing. test/mutants-xiaosamd21.mjs grades that one by mutation,
 # and test/quotes-xiaosamd21.mjs checks the quotations in the page's I2C tab
 # against their sources; run both by hand (the quotations need the network).
+# test-serial-close.mjs also reaches past the template: it runs six
+# hand-written pages, and the board-less generated one, against a fake port
+# that will not close while its stream is locked, and one that will not close
+# at all; test/mutants-serial-close.mjs grades its checks of the XIAO SAMD21
+# page by mutation (run it by hand).
 
 NODE = node
 
@@ -38,6 +44,7 @@ test:
 	$(NODE) test/test-xiaosamd21-contract.mjs
 	$(NODE) test/test-namespace.mjs
 	$(NODE) test/test-announce.mjs
+	$(NODE) test/test-serial-close.mjs
 
 all: check test
 
