@@ -22,9 +22,10 @@
 # Nunchuk drawing. test/mutants-xiaosamd21.mjs grades that one by mutation,
 # and test/quotes-xiaosamd21.mjs checks the quotations in the page's I2C tab
 # against their sources; run both by hand (the quotations need the network).
-# test-serial-close.mjs also reaches past the template: it runs five
+# test-serial-close.mjs also reaches past the template: it runs six
 # hand-written pages, and the board-less generated one, against a fake port
-# that will not close while its stream is locked.
+# that will not close while its stream is locked; test/mutants-serial-close.mjs
+# grades its checks of the XIAO SAMD21 page by mutation (run it by hand).
 
 NODE = node
 

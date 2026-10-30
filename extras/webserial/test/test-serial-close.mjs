@@ -106,10 +106,10 @@ function load(file, ret) {
 
 const tick = () => new Promise(r => setTimeout(r, 20));
 
-// The five hand-written pages share one shape: top-level connect(),
+// The six hand-written pages share one shape: top-level connect(),
 // disconnect() and `port`.
 const HAND = ["CircuitPlaygroundSensors", "PyBadgeOscuino", "HallowingOscuino",
-              "EsploraOscuino", "XiaoS3SenseOscuino"];
+              "EsploraOscuino", "XiaoS3SenseOscuino", "XiaoSamd21Oscuino"];
 for (const name of HAND) {
   console.log(`\n${name}`);
   const { page, listeners, offer } = load(`examples/${name}/${name}.html`,
