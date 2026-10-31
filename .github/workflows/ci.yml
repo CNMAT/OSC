@@ -106,6 +106,13 @@ jobs:
             url: https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
             libs: '"Adafruit NeoPXL8" "Adafruit GFX Library" "Adafruit BusIO" "Adafruit TLV320 I2S" "Adafruit DVI HSTX"'
             sketches: FruitJamOscuino
+          - name: rp2040 kb2040 (wii)
+            fqbn: rp2040:rp2040:adafruit_kb2040
+            core: rp2040:rp2040
+            url: https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
+            # pinned: WiiExtension.h binds the getters of this release
+            libs: '"Nintendo Extension Ctrl@0.8.3"'
+            sketches: KB2040Oscuino
     steps:
       - uses: actions/checkout@v4
       - uses: arduino/setup-arduino-cli@v1

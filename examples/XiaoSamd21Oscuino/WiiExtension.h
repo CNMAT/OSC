@@ -1,7 +1,8 @@
 /*
- * WiiExtension.h -- XiaoSamd21Oscuino's binding of NintendoExtensionCtrl
- * (Library Manager "Nintendo Extension Ctrl" 0.8.3, by David Madison,
- * LGPL-3.0-or-later, used as installed): the library's port on Wire, a view
+ * WiiExtension.h -- the binding of NintendoExtensionCtrl (Library Manager
+ * "Nintendo Extension Ctrl" 0.8.3, by David Madison, LGPL-3.0-or-later, used
+ * as installed) that XiaoSamd21Oscuino and KB2040Oscuino share, one copy
+ * beside each sketch: the library's port on Wire, a view
  * of that port for every controller type the library knows, and for each
  * type every reading the library offers. /wii carries, for the type plugged
  * in, each public, const, no-argument getter its class declares that returns
@@ -21,6 +22,8 @@
  * extras/webserial/test/test-xiaosamd21-contract.mjs holds the two, and
  * ADDRESSES.md's "wii fields", to one list, and, where the library is
  * installed, that list to the library's headers.
+ * extras/webserial/test/test-kb2040-contract.mjs holds the two copies of
+ * this file, byte for byte, and the two pages' lists, equal.
  */
 #ifndef WII_EXTENSION_H
 #define WII_EXTENSION_H

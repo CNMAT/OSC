@@ -95,7 +95,7 @@ after the name tell the page the shape.
 | **dist** — a rangefinder | — | `/dist` | `/dist <f>` centimetres; absent from a stream tick that got no echo |
 | **gas** — a gas or smoke sensor | — | `/gas` | `/gas <i>` raw counts. Raw or nothing: an MQ-series cell is uncalibrated |
 | **ir** — an infrared remote receiver | — | `/ir` the last code | `/ir <i>` the raw 32-bit code, sent once when a code arrives |
-| **i2c** — an I2C bus a client can switch on and test | — | `/i2c [<i>]` ask, or 1 on and 0 off; `/i2c/scan`; `/i2c/pull` | `/i2c <i>` echoed, with `/i2c/pull`; `/i2c/scan <i>…` each 7-bit address from 0x08 to 0x77 that answered a one-byte read; `/i2c/pull <i> <i>` SDA then SCL, 1 where something outside the board held the line high against the board's own pull-down, read when the bus was switched on. A board whose bus shares pins with something else says what stops while it is on (below) |
+| **i2c** — an I2C bus a client can switch on and test | — | `/i2c [<i>]` ask, or 1 on and 0 off; `/i2c/scan`; `/i2c/pull` | `/i2c <i>` echoed, with `/i2c/pull`; `/i2c/scan <i>…` each 7-bit address from 0x08 to 0x77 that answered a one-byte read; `/i2c/pull <i> <i>` SDA then SCL, 1 where something outside the board held the line high against the board's own pull-down, read when the bus was switched on; a board sends `/i2c/pull` with nothing after the address before its bus was first switched on, and always if its own pull-ups are on both lines, where that reading could tell nothing. A board whose bus shares pins with something else says what stops while it is on (below) |
 | **wii** — a Wii extension controller on that bus | `<s>` its kind | `/wii`; `/wii/raw`; `/wii/id` | `/wii <i|f>…` its fields, in its kind's order (below); `/wii/raw <i>…` the bytes the board read, sent with the `/wii` from that same read; `/wii/id <s> <i>×6` the kind and the six identity bytes it reported, nothing after the address when none is there. Announced only while one is plugged in; the board sends its `/enq` bundle again when one comes or goes |
 | **net** — a network transport | `<s> <i> <i> [<s> <s>]` ip, rssi, port, then name and mac on a board that has a name (the WiFi twins send the first three). Sent in the enq bundle, so `/enq` to the network's broadcast address finds every board | `/display/net` show the network panel on the display; `/net/dest <s> [<i>]` where the stream goes, ip and port, `"0.0.0.0"` = whoever last spoke; `/net/name <s>`; `/net/save` write the settings; `/net/join <s> [<s>]` ssid, password: save and restart onto that network; `/net/setup` restart onto the board's own setup network; `/net/forget` factory settings | `/net/dest <s> <i>` and `/net/name <s>` echoed |
 | **diag** — a board's own diagnostics | — | — | `/diag <s>…` free text, never parsed. Announced by `/enq/diag` like anything else |
@@ -143,8 +143,8 @@ two pads.
 
 `/wii` sends, for the kind `/wii/id` and `/enq/wii` name, one value per field
 in the order below: an int, or a float where the table says so. On
-`XiaoSamd21Oscuino` the extension is read by NintendoExtensionCtrl 0.8.3, and
-each field is one of that library's getters, named as the library names it:
+`XiaoSamd21Oscuino` and `KB2040Oscuino`, NintendoExtensionCtrl 0.8.3 reads the
+extension, and each field is one of its getters, named as the library names it:
 every public, const, no-argument getter the kind's class declares that
 returns a number or a boolean, in its header's order, and for the turntable
 then those of its `left` and `right` platters, from the class both are made
@@ -158,6 +158,10 @@ library read for it.
 On `XiaoSamd21Oscuino` the bus is D4 (SDA) and D5 (SCL), which are also touch
 pins: while `/i2c` is 1 the board measures no pads and announces no
 `/enq/cap`, and `/i2c 0` gives the pins back to the library `/cap/lib` names.
+
+On `KB2040Oscuino` the bus is the STEMMA QT port, GPIO12 (SDA) and GPIO13
+(SCL), the RP2040's I2C0, which nothing else on the board uses: `/i2c 0` only
+stops the bus, and the stream then carries `/state` alone.
 
 | kind | library class | `/wii` fields, in order, with ranges |
 |---|---|---|
@@ -177,6 +181,9 @@ remembers a platter only in `getTurntableConfig()`, which `/wii` does not call
 (its DJTurntable.cpp; no turntable was tried). How the board uses the
 library, and what was measured, is in
 `examples/XiaoSamd21Oscuino/XiaoSamd21Oscuino.ino` under "WII EXTENSIONS".
+`examples/KB2040Oscuino/KB2040Oscuino.ino` uses it the same way, and its
+"WII EXTENSIONS" says what it carries from that board without measuring it
+on its own.
 
 ## What moved
 

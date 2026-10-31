@@ -39,7 +39,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # --------------------------------------------------------------- the contract
 # One row per capability, transcribed from the table in ADDRESSES.md. `ask` is
 # the read request; `reply` the address it must answer on; `tag` the OSC type
-# every argument must have; `n` how many arguments are expected:
+# every argument must have ('i|f': each an int or a float, as the contract's
+# `<i|f>` says, where a per-kind table decides which); `n` how many arguments
+# are expected:
 #   an int   -- exactly that many
 #   'enq'    -- as many as the /enq line's first parameter said
 #   'enq1'   -- same, defaulting to 1 when the /enq line carries no shape
@@ -62,7 +64,7 @@ CAPS = {
     'dist':  dict(ask='/dist',  reply='/dist',  tag='f', n=1),
     'gas':   dict(ask='/gas',   reply='/gas',   tag='i', n=1),
     'i2c':   dict(ask='/i2c',   reply='/i2c',   tag='i', n=1),
-    'wii':   dict(ask='/wii',   reply='/wii',   tag='i', n=('min', 1)),
+    'wii':   dict(ask='/wii',   reply='/wii',   tag='i|f', n=('min', 1)),
 }
 
 # Actuators: written with a value chosen to be harmless, then checked for the
@@ -275,7 +277,7 @@ def main():
                 check(f"  {spec['reply']} carries {want} value(s) as announced",
                       len(a) == want, a)
             tag = spec['tag']
-            typ = {'i': int, 'f': float, 's': str}[tag]
+            typ = {'i': int, 'f': float, 's': str, 'i|f': (int, float)}[tag]
             # An int where a float belongs is the classic contract slip: the
             # contract says /imu is g, and 0 is not the same as 0.0 on the wire.
             check(f"  every value is a {'float' if tag == 'f' else tag}",
