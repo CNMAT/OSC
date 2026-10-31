@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 """Hardware check of the I2C bus and a Wii extension on it (ADDRESSES.md:
-"i2c", "wii", "wii fields"), written against XiaoSamd21Oscuino.
+"i2c", "wii", "wii fields"), on XiaoSamd21Oscuino or KB2040Oscuino: the
+board's hello names which, and the checks that differ follow it.
 
     python3 test/hardware/wiiprobe.py PORT [--watch=SECONDS] [--none]
 
-Plug an extension into the adapter on D4 (SDA), D5 (SCL), 3V3 and GND first,
-or pass --none to check the bus with nothing on it. The checks:
+Plug an extension into the adapter first: on the XIAO, the adapter wired to
+D4 (SDA), D5 (SCL), 3V3 and GND; on the KB2040, a STEMMA QT cable from its
+port to the adapter's. Or pass --none to check the bus with nothing on it.
+The extension's kinds and fields are read from the WiiExtension.h beside the
+sketch the board names. The checks:
 
-  - /i2c 1 is echoed with /i2c/pull, the hello comes again with /enq/i2c and
-    no /enq/cap, and a /cap ask goes unanswered: the pads have stopped
+  - /i2c 1 is echoed with /i2c/pull, and the hello comes again with /enq/i2c
+    and no /enq/cap. On the XIAO /i2c/pull carries two values, 0 or 1, and a
+    /cap ask goes unanswered: the pads have stopped. On the KB2040, whose own
+    pull-ups are always on both lines, /i2c/pull is bare
   - /i2c/scan lists 0x52; /wii/id names a kind WiiExtension.h binds, with six
     identity bytes that are not all zero; /enq/wii names the same kind
   - /wii/raw, 50 times: the board's /wii has one value per field of that kind,
@@ -16,8 +22,10 @@ or pass --none to check the bus with nothing on it. The checks:
     /wii/raw has 6..21 bytes (the library's MinRequestSize and
     ControlDataSize), each 0..255
   - with the stream at /rate 20, at least 10 bundles in 1 s carry /wii
-  - /i2c 0 gives the pins back: echoed 0, /enq/cap in the hello again, /cap
-    answered
+  - /i2c 0 is echoed 0 and the hello comes again. On the XIAO it gives the
+    pins back: /enq/cap in the hello, /cap answered. On the KB2040 the hello
+    has /enq/i2c and no /enq/wii, and the stream at /rate 20 carries /state
+    and no /wii
 
 With --watch=S it then records the stream for S seconds while a person
 presses buttons and moves the sticks, and prints each field's range and the
@@ -35,7 +43,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from oscprobe import Port, slip_encode, slip_frames, msg, decode  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-HEADER = os.path.join(HERE, '..', '..', 'examples', 'XiaoSamd21Oscuino', 'WiiExtension.h')
+SKETCHES = {'XiaoSamd21Oscuino': True, 'KB2040Oscuino': False}   # the sketches this knows: has touch pads
 FAILED, PASSED = [], []
 
 
@@ -103,11 +111,16 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     watch = next((float(a.split('=', 1)[1]) for a in sys.argv[1:] if a.startswith('--watch=')), 0)
     nothing = '--none' in sys.argv
-    kinds = load_kinds(HEADER)
-    print(f'WiiExtension.h: {len(kinds)} kinds')
     b = Board(args[0])
     try:
         b.ask('/rate', 0, wait=0.5)
+        name = next((v[0] for a, v in b.ask('/enq', wait=0.6) if a == '/enq' and v), None)
+        check('the hello names a sketch this probe knows', name in SKETCHES, name)
+        if name not in SKETCHES:
+            return 1
+        pads = SKETCHES[name]
+        kinds = load_kinds(os.path.join(HERE, '..', '..', 'examples', name, 'WiiExtension.h'))
+        print(f'{name}: WiiExtension.h beside it binds {len(kinds)} kinds')
         b.ask('/i2c', 0, wait=0.8)
         print('the bus on:')
         got = b.ask('/i2c', 1, wait=1.0)
@@ -116,10 +129,14 @@ def main():
             d.setdefault(a, v)
         check('/i2c 1 echoed', d.get('/i2c') == [1], d.get('/i2c'))
         pull = d.get('/i2c/pull')
-        check('/i2c/pull read: two values, 0 or 1', bool(pull) and len(pull) == 2 and all(x in (0, 1) for x in pull), pull)
+        if pads:
+            check('/i2c/pull read: two values, 0 or 1', bool(pull) and len(pull) == 2 and all(x in (0, 1) for x in pull), pull)
+        else:
+            check("/i2c/pull bare: the board's own pull-ups are on both lines", pull == [], pull)
         check('the hello again, with /enq/i2c and no /enq/cap', '/enq' in d and '/enq/i2c' in d and '/enq/cap' not in d,
               [a for a, _ in got if a.startswith('/enq')])
-        check('a /cap ask goes unanswered while the bus has the pins', b.reply('/cap') is None)
+        if pads:
+            check('a /cap ask goes unanswered while the bus has the pins', b.reply('/cap') is None)
 
         scan = b.reply('/i2c/scan', wait=0.6)
         print(f'    /i2c/scan: {[hex(x) for x in scan or []]}')
@@ -197,9 +214,18 @@ def main():
         for a, v in got:
             d.setdefault(a, v)
         check('/i2c 0 echoed', d.get('/i2c') == [0], d.get('/i2c'))
-        check('the hello again, with /enq/cap', '/enq/cap' in d, d.get('/enq/cap'))
-        cap = b.reply('/cap')
-        check('a /cap ask answered again', cap is not None and len(cap) == (d.get('/enq/cap') or [0])[0], cap)
+        if pads:
+            check('the hello again, with /enq/cap', '/enq/cap' in d, d.get('/enq/cap'))
+            cap = b.reply('/cap')
+            check('a /cap ask answered again', cap is not None and len(cap) == (d.get('/enq/cap') or [0])[0], cap)
+        else:
+            check('the hello again, with /enq/i2c and no /enq/wii', '/enq' in d and '/enq/i2c' in d and '/enq/wii' not in d,
+                  [a for a, _ in got if a.startswith('/enq')])
+            b.ask('/rate', 20, wait=0.05)
+            frames = [a for a, _ in b.collect(1.0)]
+            b.ask('/rate', 0, wait=0.3)
+            check(f'the stream at /rate 20 with the bus off: {frames.count("/state")} /state in 1 s, no /wii',
+                  frames.count('/state') >= 10 and '/wii' not in frames)
         b.ask('/rate', 20, wait=0.2)
     finally:
         b.close()

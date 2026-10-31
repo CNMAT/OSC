@@ -1,0 +1,1730 @@
+<!DOCTYPE html>
+<!--
+  KB2040Oscuino.html: the companion page for KB2040Oscuino.ino.
+
+  Running it. Web Serial needs Chrome or Edge and a real origin, so serve the
+  folder rather than opening the file (Chrome refuses Web Serial on file://):
+
+      cd examples/KB2040Oscuino && python3 -m http.server 8765
+      open -a "Google Chrome" http://localhost:8765/KB2040Oscuino.html
+
+  python3 -m http.server sends no Cache-Control: hard-reload (Cmd-Shift-R)
+  after editing. Connect lists the KB2040's sketch id 0x239A/0x8105 (the
+  core's boards.txt, build.usbpid); the RP2040's BOOTSEL bootloader is a
+  drive, not a serial port. Tick "show all ports" for anything else.
+
+  XiaoSamd21Oscuino's I2C tab on a board of its own: the bus, the addresses
+  the scan finds, and the Wii extension on Adafruit's adapter, drawn as it
+  moves. The drawing of the boards is new: the KB2040 and the adapter, drawn
+  from their own board files, and the STEMMA QT cable between them; no
+  breadboard. ?demo animates synthetic fields with no board, &wii=<kind>
+  choosing the kind.
+
+  The codec, the SLIP framing, WII_KINDS, the extensions' drawings (WII_ART)
+  and the functions that draw and tabulate them are XiaoSamd21Oscuino's
+  page's, character for character, and so is most of the transport;
+  extras/webserial/test/test-kb2040-contract.mjs holds them so, and holds
+  this page to its sketch.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KB2040 Wii Extensions</title>
+<style>
+  :root {
+    --bg: #15171c; --panel: #1d2027; --panel-2: #262a33; --line: #343945;
+    --text: #e3e6ec; --dim: #8e96a6; --accent: #ff8a2a; --ok: #7dffb0;
+    --err: #ff9c9c;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 20px 16px; background: var(--bg); color: var(--text);
+         font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  h1 { font-size: 18px; margin: 0 0 2px; font-weight: 600; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 14px; }
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  label { color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  input, select, button { font: inherit; color: var(--text); background: var(--panel-2);
+           border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: #2a1300; border-color: var(--accent); font-weight: 600; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #555e6e; display: inline-block; }
+  .dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  #rig { width: 100%; height: auto; display: block; border-radius: 14px;
+         box-shadow: 0 10px 30px rgba(0,0,0,.55); }
+  #rig.stale #wiiSlotLayer { opacity: .35; }
+  #log { font-family: var(--mono); font-size: 12.5px; height: 140px; overflow-y: auto;
+         background: #0f1115; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  .warn { color: var(--err); }
+  .note { color: var(--dim); font-size: 12px; }
+  a { color: var(--accent); }
+  .params h2 { font-size: 15px; margin: 0 0 4px; font-weight: 600; }
+  .params .param { border-top: 1px solid var(--line); padding: 10px 0 8px; }
+  .params .param h3 { font-size: 14px; margin: 0 0 4px; font-weight: 600; }
+  .params .param h3 code { color: var(--accent); }
+  .params .param h3 span { color: var(--dim); font-weight: 400; font-size: 12.5px; margin-left: 8px; }
+  .params p { margin: 4px 0; max-width: 78ch; }
+  .params q { font-style: italic; }
+  .params ul.src { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+  .params ul.src li { margin: 3px 0; }
+  #wiiShelf { width: 100%; height: auto; display: block; margin: 8px 0 4px; }
+  .wiitab { border-collapse: collapse; font-size: 12.5px; margin: 4px 0 14px; }
+  .wiitab caption { text-align: left; color: var(--dim); padding: 4px 0; }
+  .wiitab th, .wiitab td { border-bottom: 1px solid var(--line); padding: 2px 14px 2px 0; text-align: left; }
+  .wiitab th { color: var(--dim); font-weight: 500; }
+  .wiitab code { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>KB2040 · Wii extensions</h1>
+  <div class="sub">
+    A Wii extension controller on an Adafruit KB2040's STEMMA QT port, through Adafruit's Wii Nunchuck
+    Breakout Adapter: found, identified and read by NintendoExtensionCtrl, and streamed as
+    <code>/wii</code>. Chrome or Edge, over Web Serial.
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <button id="connect" class="primary">Connect</button>
+      <button id="disconnect" disabled>Disconnect</button>
+      <span class="dot" id="led"></span>
+      <span id="status" style="color:var(--dim)">not connected</span>
+      <span style="flex:1"></span>
+      <label style="text-transform:none">
+        <input type="checkbox" id="allPorts" style="vertical-align:-2px"> show all ports
+      </label>
+    </div>
+  </div>
+
+  <!-- The instrument. The two boards are drawn at MM units to the millimetre
+       from their own board files (the script's GEOMETRY note), on a bench
+       that runs past them to hold the address grid and the extension. -->
+  <svg id="rig" class="stale" viewBox="-330 55 1160 765" role="img"
+       aria-label="An Adafruit KB2040 with a STEMMA QT cable to Adafruit's Wii Nunchuck Breakout Adapter, and the Wii extension plugged into it">
+    <defs>
+      <!-- the bench: a dark mat with a faint grain -->
+      <filter id="grain" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .05 0"/>
+        <feComposite in2="SourceGraphic" operator="in"/>
+      </filter>
+      <filter id="drop" x="-20%" y="-20%" width="140%" height="150%">
+        <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity=".45"/>
+      </filter>
+      <!-- the KB2040's solder mask: the magenta of Adafruit's photograph of it -->
+      <linearGradient id="kbMask" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#9a3a8a"/>
+        <stop offset="1" stop-color="#7a2069"/>
+      </linearGradient>
+      <!-- the adapter's black solder mask -->
+      <linearGradient id="adMask" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#34363b"/>
+        <stop offset="1" stop-color="#202226"/>
+      </linearGradient>
+      <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#f3e2b8"/>
+        <stop offset=".5" stop-color="#d9bf7f"/>
+        <stop offset="1" stop-color="#a88c4a"/>
+      </linearGradient>
+      <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#f4f5f7"/>
+        <stop offset=".5" stop-color="#c3c7cd"/>
+        <stop offset="1" stop-color="#8d939b"/>
+      </linearGradient>
+      <linearGradient id="chip" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#5a5d63"/>
+        <stop offset="1" stop-color="#36383d"/>
+      </linearGradient>
+      <!-- the USB-C plug's overmould and strain relief: dark, lit from above -->
+      <linearGradient id="plugGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#3a3e45"/>
+        <stop offset=".35" stop-color="#2a2d33"/>
+        <stop offset="1" stop-color="#16181b"/>
+      </linearGradient>
+      <linearGradient id="bootGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#33363c"/>
+        <stop offset="1" stop-color="#15171a"/>
+      </linearGradient>
+      <!-- a JST SH housing: natural nylon, the cable's plugs and the adapter's sockets -->
+      <linearGradient id="nylon" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#f6f2e6"/>
+        <stop offset="1" stop-color="#cfc8b4"/>
+      </linearGradient>
+      <!-- Wii extension plastics: gloss white, a dark stick well, a grey cap -->
+      <linearGradient id="wiiWhite" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#ffffff"/>
+        <stop offset=".55" stop-color="#e9ebee"/>
+        <stop offset="1" stop-color="#c3c7ce"/>
+      </linearGradient>
+      <linearGradient id="wiiGrey" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#d9dce1"/>
+        <stop offset="1" stop-color="#9da2aa"/>
+      </linearGradient>
+      <radialGradient id="wiiWell" cx=".5" cy=".42" r=".6">
+        <stop offset="0" stop-color="#4a4e55"/>
+        <stop offset=".8" stop-color="#2a2d32"/>
+        <stop offset="1" stop-color="#17191c"/>
+      </radialGradient>
+      <radialGradient id="wiiStick" cx=".38" cy=".32" r=".75">
+        <stop offset="0" stop-color="#f2f3f5"/>
+        <stop offset=".6" stop-color="#b9bdc4"/>
+        <stop offset="1" stop-color="#80858d"/>
+      </radialGradient>
+      <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#b9bec5"/>
+        <stop offset="1" stop-color="#a2a8b0"/>
+      </linearGradient>
+      <radialGradient id="lampOff" cx=".4" cy=".35" r=".7">
+        <stop offset="0" stop-color="#6b3a2a"/>
+        <stop offset="1" stop-color="#2a120b"/>
+      </radialGradient>
+      <radialGradient id="lampOn" cx=".4" cy=".35" r=".7">
+        <stop offset="0" stop-color="#fff2c8"/>
+        <stop offset=".45" stop-color="#ffab3d"/>
+        <stop offset="1" stop-color="#d1500d"/>
+      </radialGradient>
+    </defs>
+
+    <!-- the bench -->
+    <rect x="-330" y="55" width="1160" height="765" fill="#22262d"/>
+    <rect x="-330" y="55" width="1160" height="765" fill="#fff" filter="url(#grain)"/>
+
+    <!-- legends -->
+    <g font-family="system-ui,-apple-system,sans-serif" font-weight="600" letter-spacing=".08em">
+      <text x="-310" y="91" font-size="12" fill="#000" fill-opacity=".6">ADAFRUIT KB2040</text>
+      <text x="-310" y="90" font-size="12" fill="#cfd4da">ADAFRUIT KB2040</text>
+      <text x="-310" y="109" font-size="10.5" fill="#000" fill-opacity=".6">I2C0 · GPIO12 SDA · GPIO13 SCL · STEMMA QT</text>
+      <text x="-310" y="108" font-size="10.5" fill="#9aa3af">I2C0 · GPIO12 SDA · GPIO13 SCL · STEMMA QT</text>
+      <text x="810" y="91" font-size="11" fill="#000" fill-opacity=".6" text-anchor="end">/wii · FIELDS</text>
+      <text x="810" y="90" font-size="11" fill="#cfd4da" text-anchor="end">/wii · FIELDS</text>
+    </g>
+
+    <!-- the boards and their cables, then the bus and the extension, filled by script -->
+    <g id="boards"></g>
+    <g id="bus"></g>
+
+    <text x="-310" y="810" font-size="8.5" fill="#7d8592"
+          font-family="system-ui,sans-serif">boards drawn from Adafruit's KB2040 and Wii Nunchuck Breakout Adapter board files, CC BY-SA 3.0</text>
+  </svg>
+
+  <div class="panel" style="margin-top:14px">
+    <div class="row">
+      <button id="busToggle" disabled title="/i2c 0 stops the bus, /i2c 1 starts it">stop the bus</button>
+      <button id="i2cScan" title="/i2c/scan: every address that answers a one-byte read">scan the bus</button>
+      <button id="wiiId" title="/wii/id: what is at 0x52">identify</button>
+      <span id="wiiIdOut" style="color:var(--dim); font-family:var(--mono); font-size:12px">–</span>
+      <span style="flex:1"></span>
+      <label>rate</label>
+      <select id="rate" title="/rate: stream period in ms; 0 stops the stream">
+        <option value="0">stop</option><option value="10">10 ms</option>
+        <option value="20" selected>20 ms</option><option value="50">50 ms</option>
+        <option value="100">100 ms</option><option value="200">200 ms</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- What the board does and how it is wired. Kept apart: quoted from a
+       source listed below (in quotation marks), read in a library's or a
+       core's source, or a board file (said so), and measured (only on
+       XiaoSamd21Oscuino's SAMD21; nothing here was measured on a KB2040). -->
+  <div class="panel params" id="wiiPane">
+    <h2>I2C · Wii extensions</h2>
+    <p>The KB2040's I2C bus on its STEMMA QT port, and any Wii extension controller on the adapter at
+      the far end of the cable, found, identified and read by
+      <a href="https://github.com/dmadison/NintendoExtensionCtrl">NintendoExtensionCtrl</a> every
+      <code>/rate</code> tick, and drawn above as it moves. Every kind the library reads is on the shelf
+      below, labelled with the library class that reads it.</p>
+    <svg id="wiiShelf" viewBox="0 0 1360 600" role="img"
+         aria-label="Every Wii extension the library reads, drawn, with the library class for each"></svg>
+
+    <div class="param">
+      <h3>Wiring<span>one STEMMA QT cable · GPIO12 SDA · GPIO13 SCL · 3.3 V</span></h3>
+      <p>One STEMMA QT (Qwiic) cable, a four-pin JST SH plug at each end, from the KB2040's STEMMA QT
+        port to either of the two on Adafruit's Wii Nunchuck Breakout Adapter, and the extension's plug
+        onto the adapter's tongue, its <q>notched side of the connector U goes on the side that says Notch
+        Up</q>. Nothing else: no breadboard, no jumpers, nothing on the adapter's header.</p>
+      <p>Both boards' schematics put GND, the supply, SDA and SCL on their connectors' pads 1 to 4, and the
+        cable joins each pad to the same one at the far end. The KB2040's supply pad is its 3.3 V and the
+        adapter's is its VIN, so the adapter runs from the KB2040's 3.3 V, as its guide asks of VIN:
+        <q>give it the same power as the logic level of your microcontroller</q>. SDA is GPIO12 and SCL
+        GPIO13, the RP2040's I2C0 (the KB2040's guide and its schematic), which arduino-pico's
+        <code>adafruit_kb2040</code> variant gives <code>Wire</code>. Drawn face up, the two sockets hold
+        their pads in mirror order along the cable, so the cable turns over once between its plugs.</p>
+      <p>Pull-ups. The KB2040 pulls SDA and SCL up to its 3.3 V through 5.1K (R10 and R12), always, and the
+        adapter pulls its microcontroller side of each up to VIN through 10K (its extension side, past its
+        level shifter, to its own 3.3 V through 10K). So there are no pull-up lamps here:
+        XiaoSamd21Oscuino reads each line against the chip's pull-down to find a pull-up outside the
+        board, and on this board that reading could not tell whether the adapter is there at all. Before
+        the bus starts the board reads each line as a plain input, and a line held LOW against those
+        pull-ups stops the bus starting; <code>/diag</code> says so.</p>
+    </div>
+
+    <div class="param">
+      <h3>How an extension is found<span>NintendoExtensionCtrl 0.8.3 · 100 kHz</span></h3>
+      <p>While the stream runs and nothing is plugged in, the board tries the bus on the first tick 250 ms
+        or more after its last try: it calls the library's <code>ExtensionPort::connect()</code>, which
+        initialises whatever answers at 0x52, reads its identity and runs the matching type's own start-up;
+        <code>getControllerType()</code> then names it, and the library's <code>requestIdentity()</code>
+        gives the six bytes shown beside the name. From then on each tick is one <code>update()</code>.
+        When an update fails the board calls <code>connect()</code> again, as the library's MultipleTypes
+        example does; where the example then keeps trying a second apart, the board tries once, and if
+        that fails it forgets the extension and goes back to trying the empty bus. A type the library does
+        not know is shown as Unknown, with the six bytes the library read for it as bits. All of this is
+        XiaoSamd21Oscuino's code, line for line; the sketch has no protocol code of its own.</p>
+      <p>The bus runs at 100 kHz, arduino-pico's default (<code>TWI_CLOCK</code>), and each call of the
+        library and each probe of the scan is followed by 1 ms of idle bus. On XiaoSamd21Oscuino's SAMD21,
+        with a Nunchuk through this adapter, an identity read straight after <code>connect()</code> failed
+        30 times of 30, and 1 ms later succeeded 30 times of 30 (that sketch's header has the runs).
+        Neither the gap nor the clock has been measured on a KB2040.</p>
+      <p>The scan, <code>/i2c/scan</code>, is not the library's: a one-byte read of each address from 0x08
+        to 0x77, 1 ms apart, since a read writes nothing to whatever is there.</p>
+    </div>
+
+    <div class="param">
+      <h3>The fields<span><code>/wii</code>, in this order</span></h3>
+      <p>Each field is one of the library's getters, named as the library names it, in the order its
+        header declares them: every public, const getter that takes no argument and returns a number or a
+        boolean, of the type's own class, and for the turntable then those of its <code>left</code> and
+        <code>right</code> platters, from the class both are made from. Left out are
+        <code>getExpectedType()</code>, which every class declares and which returns the library's
+        <code>ExtensionType</code>, and the getters every class inherits from
+        <code>ExtensionController</code>, such as <code>getControllerType()</code>. Ranges are the library's
+        comments on those getters, or the getter's type where it gives none; buttons are the library's
+        booleans, 1 while pressed. The turntable's differ from its comment: by the library's code each
+        platter's <code>turntable()</code> is five bits and a sign, -32..31, and the combined one their
+        sum, where the comment on it says <q>6 bits, -30-29</q>. A platter's <code>connected</code> reads 1
+        only while it turns or one of its buttons is held: the library remembers a platter only in
+        <code>getTurntableConfig()</code>, which <code>/wii</code> does not call (its DJTurntable.cpp; no
+        turntable was tried here).</p>
+      <div id="wiiFields"></div>
+    </div>
+
+    <div class="param">
+      <h3>Sources, opened 2026-10-29 and 2026-10-30</h3>
+      <ul class="src">
+        <li><a href="https://github.com/dmadison/NintendoExtensionCtrl">NintendoExtensionCtrl</a> 0.8.3, by
+          David Madison: LGPL-3.0-or-later, by the notice in each of its source files (<q>either version 3
+          of the License, or (at your option) any later version</q>; the LICENSE file it ships is the LGPL,
+          version 3). Its <code>src/</code> and the MultipleTypes example, as the Library Manager installed
+          them; the sketch builds against that install.</li>
+        <li>Adafruit, <a href="https://learn.adafruit.com/adafruit-wii-nunchuck-breakout-adapter">Adafruit Wii
+          Nunchuck Breakout Adapter</a>, its Pinouts page, and the adapter's board files in
+          <a href="https://github.com/adafruit/Adafruit-Wii-Nunchuck-Breakout-Adapter-PCB">Adafruit-Wii-Nunchuck-Breakout-Adapter-PCB</a>
+          at d3f2e25, whose README gives them under Creative Commons Attribution/Share-Alike and whose
+          license.txt is Attribution-ShareAlike 3.0 Unported.</li>
+        <li>Adafruit, <a href="https://learn.adafruit.com/adafruit-kb2040">Adafruit KB2040</a>, its Pinouts page
+          (the STEMMA QT port's SDA/D12 and SCL/D13, I2C0), and the board files in
+          <a href="https://github.com/adafruit/Adafruit-KB2040-PCB">Adafruit-KB2040-PCB</a> at b4160dc, whose
+          README gives them under Creative Commons Attribution/Share-Alike and whose license.txt is
+          Attribution-ShareAlike 3.0 Unported.</li>
+        <li>Adafruit, <a href="https://www.adafruit.com/product/4399">STEMMA QT / Qwiic JST SH 4-Pin Cable</a>
+          (product 4399): its wires' colours, black GND, red V+, blue SDA, yellow SCL.</li>
+        <li>arduino-pico 6.1.1, as installed: the <code>adafruit_kb2040</code> variant's Wire pins, Wire's
+          100 kHz default and boards.txt's USB ids.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row" style="margin-bottom:8px">
+      <label>log</label><span style="flex:1"></span>
+      <span id="rateOut" style="color:var(--dim); font-family:var(--mono); font-size:12px">–</span>
+      <button id="clearLog">clear</button>
+    </div>
+    <div id="log"></div>
+  </div>
+  <div class="note">
+    The two boards are drawn, not photographed: their outlines, their parts' places and their pads' nets
+    are read from Adafruit's board files (Adafruit-KB2040-PCB at b4160dc and
+    Adafruit-Wii-Nunchuck-Breakout-Adapter-PCB at d3f2e25, by Limor Fried/Ladyada for Adafruit
+    Industries, CC BY-SA 3.0 by their READMEs and license.txt files); the cables, the plugs and the parts'
+    faces are drawn by eye. The numbers read from those files keep the files' licence, not the library's:
+    see CREDITS.md beside this page.
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   1. OSC: decode messages and bundles, encode int and string messages
+      (the CircuitPlaygroundSensors page's codec, plus strings)
+   ============================================================ */
+const dec = new TextDecoder(), enc = new TextEncoder();
+
+class Reader {
+  constructor(b) { this.b = b; this.pos = 0; this.dv = new DataView(b.buffer, b.byteOffset, b.byteLength); }
+  get left() { return this.b.length - this.pos; }
+  int32() { const v = this.dv.getInt32(this.pos); this.pos += 4; return v; }
+  float32() { const v = this.dv.getFloat32(this.pos); this.pos += 4; return v; }
+  string() {
+    let e = this.pos; while (e < this.b.length && this.b[e] !== 0) e++;
+    const s = dec.decode(this.b.subarray(this.pos, e));
+    this.pos = (e + 4) & ~3;
+    return s;
+  }
+  raw(n) { const v = this.b.subarray(this.pos, this.pos + n); this.pos += n; return v; }
+  blob() { const n = this.int32(); const v = this.raw(n); this.pos = (this.pos + 3) & ~3; return v; }
+}
+
+function decodeMessage(bytes) {
+  const r = new Reader(bytes);
+  const address = r.string();
+  const args = [];
+  let tags = "";
+  if (r.left > 0) {
+    const t = r.string();
+    if (t.startsWith(",")) {
+      tags = t.slice(1);
+      for (const c of tags) {
+        if (c === "i") args.push(r.int32());
+        else if (c === "f") args.push(r.float32());
+        else if (c === "s") args.push(r.string());
+        else if (c === "b") args.push(r.blob());
+        else if (c === "T") args.push(true);
+        else if (c === "F") args.push(false);
+        else break;                       // unknown tag: payload size unknown
+      }
+    }
+  }
+  return { address, tags, args };
+}
+
+function decodePacket(bytes) {
+  if (bytes.length >= 16 && bytes[0] === 0x23) {
+    const r = new Reader(bytes);
+    r.string();                           // "#bundle"
+    const timetag = r.raw(8);
+    const packets = [];
+    while (r.left >= 4) {
+      const size = r.int32();
+      if (size <= 0 || size > r.left) break;
+      packets.push(decodePacket(r.raw(size)));
+    }
+    return { bundle: true, timetag, packets };
+  }
+  return decodeMessage(bytes);
+}
+
+function messagesOf(pkt) { return pkt.bundle ? pkt.packets.flatMap(messagesOf) : [pkt]; }
+
+// Integers for every setting, a string for /cap/lib, nothing for an ask.
+function encodeMessage(address, args) {
+  const parts = [];
+  const ostr = s => { const b = enc.encode(s + "\0"); const p = (4 - b.length % 4) % 4;
+                      return new Uint8Array([...b, ...new Uint8Array(p)]); };
+  parts.push(ostr(address), ostr("," + args.map(v => typeof v === "string" ? "s" : "i").join("")));
+  for (const v of args) {
+    if (typeof v === "string") { parts.push(ostr(v)); continue; }
+    const b = new Uint8Array(4); new DataView(b.buffer).setInt32(0, v | 0); parts.push(b);
+  }
+  const n = parts.reduce((a, p) => a + p.length, 0);
+  const out = new Uint8Array(n); let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+
+/* ============================================================
+   2. SLIP framing (RFC 1055)
+   ============================================================ */
+const END = 0xC0, ESC = 0xDB, ESC_END = 0xDC, ESC_ESC = 0xDD;
+
+// END, the message with END and ESC escaped, END: the frame the OSC library's
+// own sender makes (beginPacket() and endPacket() each put an END) and
+// test/hardware/oscprobe.py makes. The leading END is needed. The library's
+// decoder takes an END followed straight by data for the opening END of the
+// next frame and reads on, so with the closing END alone a message sent right
+// behind another was read into it and lost: /wii/id behind /i2c/scan, which is
+// why the extension was never drawn (replayed on the host, 2026-10-29).
+function slipEncode(data) {
+  const out = new Uint8Array(data.length * 2 + 2); let n = 0;
+  out[n++] = END;
+  for (const b of data) {
+    if (b === END)      { out[n++] = ESC; out[n++] = ESC_END; }
+    else if (b === ESC) { out[n++] = ESC; out[n++] = ESC_ESC; }
+    else                { out[n++] = b; }
+  }
+  out[n++] = END;
+  return out.slice(0, n);
+}
+
+class SlipDecoder {
+  constructor() { this.acc = []; this.esc = false; }
+  transform(chunk, controller) {
+    for (const b of chunk) {
+      if (this.esc) { this.acc.push(b === ESC_END ? END : b === ESC_ESC ? ESC : b); this.esc = false; }
+      else if (b === ESC) { this.esc = true; }
+      else if (b === END) {
+        if (this.acc.length) { controller.enqueue(Uint8Array.from(this.acc)); this.acc.length = 0; }
+      } else this.acc.push(b);
+    }
+  }
+  flush() { this.acc.length = 0; }
+}
+
+/* ============================================================
+   3. Web Serial transport
+   ============================================================ */
+const KB2040_FILTERS = [{ usbVendorId: 0x239A, usbProductId: 0x8105 }];   // the sketch: the core's build.usbpid
+let port = null, writer = null, reader = null, pipeDone = null, pipeClosed = null, closing = false;
+
+async function connect() {
+  const opts = $("allPorts").checked ? {} : { filters: KB2040_FILTERS };
+  const chosen = await navigator.serial.requestPort(opts);
+  await chosen.open({ baudRate: 115200, bufferSize: 8192 });   // a port that will not open is never ours
+  port = chosen;
+  writer = port.writable.getWriter();
+  // pipeTo rather than pipeThrough, so disconnect() can wait for the pipe to
+  // let go of port.readable: port.close() refuses while it is still locked.
+  const slip = new TransformStream(new SlipDecoder());
+  pipeClosed = port.readable.pipeTo(slip.writable).catch(() => {});
+  reader = slip.readable.getReader();
+  pipeDone = readLoop();
+  setConnected(true);
+  logLine("", "connected");
+  // The boot hello went out long before Connect was clicked: ask again. The
+  // hello's answer asks for /i2c, which asks for the scan and the identity.
+  send("/enq", []);
+  send("/rate", [+$("rate").value]);
+}
+
+async function readLoop() {
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      onFrame(value);
+    }
+  } catch (e) {
+    logLine("warn", "read error: " + e.message);
+  }
+  if (port) disconnect();
+}
+// The order Web Serial needs: cancel the reader, wait for the pipe to release
+// port.readable, release the writer, then close. A close that still fails is
+// logged: a port left open blocks the next upload with "Resource busy".
+async function disconnect() {
+  if (closing) return;                    // readLoop() ends by calling this too
+  closing = true;
+  try { if (reader) await reader.cancel(); } catch {}
+  try { if (pipeClosed) await pipeClosed; } catch {}
+  try { if (pipeDone) await pipeDone; } catch {}
+  try { if (writer) writer.releaseLock(); } catch {}
+  try { if (port) await port.close(); } catch (e) { logLine("warn", "port close failed: " + e.message); }
+  port = writer = reader = pipeDone = pipeClosed = null;
+  closing = false;
+  setConnected(false);
+  markStale();
+  logLine("", "disconnected");
+}
+
+// One extra END keeps a write off an exact multiple of the 64-byte USB
+// endpoint; a no-op in SLIP, kept from the CPX page for the 32U4's sake.
+const USB_ENDPOINT = 64;
+function padAwayZLP(frame) {
+  if (frame.length % USB_ENDPOINT !== 0) return frame;
+  const out = new Uint8Array(frame.length + 1);
+  out.set(frame);
+  out[frame.length] = END;
+  return out;
+}
+
+async function send(address, args) {
+  if (!writer) return;
+  try {
+    await writer.write(padAwayZLP(slipEncode(encodeMessage(address, args))));
+  } catch (e) {
+    if (port) disconnect();
+  }
+}
+/* ============================================================
+   4. GEOMETRY, read from the two boards' own files
+   ============================================================
+   Millimetres from Adafruit's Eagle board files: "Adafruit KB2040.brd"
+   (github.com/adafruit/Adafruit-KB2040-PCB at b4160dc) and "Adafruit Wii
+   Nunchuck Breakout Adapter.brd" (github.com/adafruit/Adafruit-Wii-Nunchuck-
+   Breakout-Adapter-PCB at d3f2e25), both by Limor Fried/Ladyada for
+   Adafruit Industries, Creative Commons Attribution-ShareAlike 3.0
+   Unported by their READMEs and license.txt files; KB and AD below keep
+   that licence, not the library's, as CREDITS.md beside this page says.
+   Each board's outline is its layer 20; a part's box is the extent of its
+   package's wire ends and rectangle corners in tDocu (layer 51), turned as
+   the part is placed, or in tPlace (21) where the entry says 21: where it
+   draws nothing in 51, or, for the KB2040's two diodes, only their leads,
+   2.4 x 0.4. A pad's net is the board file's own signal. brdgeom.py beside
+   the sketch prints every one of these from those files, and
+   test-kb2040-contract.mjs holds these to it. Eagle's y runs up, the
+   drawing's down. Both boards are drawn face up at MM units to the
+   millimetre, the KB2040 as it lies and the adapter a quarter turn
+   clockwise, its tongue to the right, toward the extension. The cables, the
+   plugs and the parts' faces are drawn by eye, to no drawing.
+*/
+const MM = 10;                            // drawing units to the millimetre: a choice, for legibility
+
+// The KB2040: origin its bottom left corner, a plain 33.02 x 17.78 rectangle.
+const KB = {
+  w: 33.02, h: 17.78,
+  // The castellated pins, left to right, by net: JP1 along the top edge, JP2
+  // along the bottom, at x 1.27 + 2.54 k. Each is a round pad 1.778 across
+  // with a 1.0 hole, 1.27 in from its edge, and a long pad from it out over
+  // the edge to a 1.397 hole 0.254 outside it, which the edge cuts through.
+  top: ["D-", "RAW", "GND", "!RESET", "3.3V", "A3", "A2", "A1", "A0", "SCLK", "MISO", "MOSI", "D10"],
+  bottom: ["D+", "D0", "D1", "GND", "GND", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9"],
+  castel: { x0: 1.27, pitch: 2.54, inset: 1.27, dia: 1.778, drill: 1.0, out: 0.254, edgeDrill: 1.397 },
+  // parts: [x0, y0, x1, y1, what], and 21 where the box is tPlace's
+  parts: {
+    usb:    [-1.21, 4.42, 6.14, 13.36, "X6 · USB-C socket"],
+    qt:     [28.32, 5.89, 32.57, 11.99, "CONN1 · STEMMA QT socket, JST SH 4-pin; it opens to the board's edge"],
+    rp2040: [15.87, 5.68, 22.87, 12.68, "IC2 · RP2040"],
+    flash:  [10.32, 3.65, 14.32, 7.65, "U5 · 8MB QSPI Flash", 21],
+    xtal:   [23.90, 6.68, 26.40, 8.68, "Y1 · 12MHZ"],
+    reset:  [28.13, 12.44, 32.33, 15.24, "SW2 · !RESET"],
+    boot:   [28.13, 2.47, 32.33, 5.27, "SW3 · USBBOOT"],
+    pixel:  [23.23, 12.60, 24.73, 14.10, "LED1 · NeoPixel, SK6805 1515"],
+    reg:    [7.28, 9.43, 10.12, 12.43, "U2 · AP2112K-3.3"],
+    d1:     [7.91, 7.67, 9.61, 8.97, "D1 · NSR0320", 21],
+    d3:     [25.08, 3.20, 26.78, 4.50, "D3 · NSR0320", 21],
+    fuse:   [7.27, 4.88, 8.72, 7.07, "R8 · FUSE"],
+    c6:     [7.66, 13.15, 9.66, 14.45, "C6 · 10µF"],
+    c8:     [10.59, 8.84, 11.89, 10.84, "C8 · 10µF"],
+    c10:    [11.38, 13.30, 12.98, 14.10, "C10 · 1uF"],
+    c12:    [11.38, 11.77, 12.98, 12.57, "C12 · 1uF"],
+    c15:    [9.12, 5.20, 10.07, 6.87, "C15 · 1uF"],
+  },
+  // CONN1's pads 1 to 4, all at x 27.966, each 1.55 x 0.5: the y of each, and its net
+  qtPadX: 27.966, qtPadSize: [1.55, 0.5],
+  qtPads: [[7.39, "GND"], [8.39, "3.3V"], [9.39, "SDA"], [10.39, "SCL"]],
+  // Its two fiducials, U$34 and U$35, fall inside SW2's and X6's boxes,
+  // under those parts as drawn, so they are left out.
+};
+
+// The adapter: origin its centre, x -12.7..12.7, y -12.573..5.207. The
+// cut-out runs in from the +y edge around the tongue, with a notch each side
+// for the plug's grabbers.
+const AD = {
+  x0: -12.7, x1: 12.7, y0: -12.573, y1: 5.207,
+  // the outline (layer 20) wire by wire, in the board file's order: where
+  // each wire starts, and its curve in degrees (counter-clockwise on the
+  // board's axes; 90 rounds a corner)
+  outline: [[-12.7, 2.667, 0], [-12.7, -10.033, 90], [-10.16, -12.573, 0], [10.16, -12.573, 90],
+            [12.7, -10.033, 0], [12.7, 2.667, 90], [10.16, 5.207, 0], [6.223, 5.207, 0],
+            [6.223, 1.27, 0], [7.239, 1.27, 0], [7.239, -1.27, 0], [6.223, -1.27, 0],
+            [6.223, -3.302, 0], [3.175, -3.302, 0], [3.175, 4.064, 0], [-3.175, 4.064, 0],
+            [-3.175, -3.175, 0], [-6.223, -3.175, 0], [-6.223, -1.27, 0], [-7.239, -1.27, 0],
+            [-7.239, 1.27, 0], [-6.223, 1.27, 0], [-6.223, 5.207, 0], [-10.16, 5.207, 90]],
+  // the tongue's two top-side contacts, U1's pads 1 and 3: box, net, pad
+  contacts: [[[1.35, -3.8, 2.65, 3.8], "GND", "1"], [[-2.65, -3.8, -1.35, 3.8], "SCL_3V", "3"]],
+  // the two STEMMA QT sockets, CONN4 on the -x edge and CONN3 on the +x, each
+  // opening to its edge; pads 1 to 4 at x -7.646 and 7.646, by y, each
+  // socketPad across
+  socketPad: [1.55, 0.6],
+  sockets: {
+    near: { name: "CONN4", box: [-12.25, -6.78, -8.00, -0.68], x: -7.646,
+            pads: [[-2.183, "GND"], [-3.183, "VCC"], [-4.183, "SDA"], [-5.183, "SCL"]] },
+    far:  { name: "CONN3", box: [8.00, -6.68, 12.25, -0.58], x: 7.646,
+            pads: [[-5.183, "GND"], [-4.183, "VCC"], [-3.183, "SDA"], [-2.183, "SCL"]] },
+  },
+  // JP2, the header, its pads 1 to 5 at y -9.906: x, net, and the name the
+  // silkscreen gives it
+  headerY: -9.906, headerPad: { dia: 1.778, drill: 1.0 },
+  header: [[-5.334, "VCC", "VIN"], [-2.794, "3.3V", "3V"], [-0.254, "GND", "GND"],
+           [2.286, "SCL", "SCL"], [4.826, "SDA", "SDA"]],
+  // the four plated mounting holes: drill 2.5 in a pad 3.2 across, each in a
+  // silkscreen ring of radius 2 drawn 0.2032 wide
+  hole: { drill: 2.5, pad: 3.2, ring: 2, line: 0.2032 },
+  holes: [[-10.16, 2.667], [10.16, 2.667], [-10.16, -10.033], [10.16, -10.033]],
+  // FID3 and FID4: round copper 1 across, the mask cleared round each out to
+  // radius 0.985, the package's tStop ring (radius 0.75, drawn 0.4699 wide)
+  fiducial: { dia: 1, clear: 0.985 },
+  fiducials: [[-7.303, 4.064], [7.303, 4.128]],
+  // its top silkscreen's texts (layer 21), all silkSize high: x, y, text,
+  // centred, turned R90
+  silkSize: 1.016,
+  silk: [[-6.096, -11.4935, "VIN", true, false], [-3.048, -11.4935, "3V", true, false],
+         [-0.127, -11.4935, "GND", true, false], [3.048, -11.4935, "SCL", true, false],
+         [6.096, -11.4935, "SDA", true, false], [-12.319, -0.127, "on", false, false],
+         [0, 0, "Notch Up", true, true]],
+  parts: {
+    led: [-9.99, -0.45, -8.29, 0.45, "D1 · GREEN, ON"],
+    reg: [-4.17, -8.03, -1.17, -5.18, "U2 · AP2112K-3.3"],
+    fet: [1.49, -7.86, 3.59, -5.86, "Q2 · BSS138, the level shifter"],
+    pullups: [4.53, -8.33, 6.13, -5.13, "R3 · 10K x4"],
+    c2: [-6.38, -8.08, -4.93, -5.88, "C2 · 10uF"],
+    c3: [-0.47, -7.84, 0.98, -5.64, "C3 · 10uF"],
+    r1: [-8.96, -7.78, -7.29, -6.83, "R1 · 10K"],
+  },
+};
+
+// The STEMMA QT cable's wires by net, its colours Adafruit's (product 4399).
+const QT_WIRE = { GND: "#1b1b1d", "3.3V": "#d8362b", VCC: "#d8362b", SDA: "#2f6fd6", SCL: "#e9c21c" };
+
+// Where each board's top left corner sits on the bench, the device's corner,
+// and the address grid's: choices, for the layout. The tongue's middle sets
+// the height the device's cable comes in at.
+const KB_AT = { x: -120, y: 150 };
+const AD_AT = { x: 272, y: 478 };
+const SLOT = { x: 500, y: 150 };          // the device's corner on the right bench
+const GRID = { x: -318, y: 470, cell: 20 };
+
+// Board millimetres to the drawing: the KB2040 as it lies, y turned down; the
+// adapter turned a quarter clockwise, so +y, the tongue's edge, faces right
+// and +x faces down.
+const kb = (x, y) => [KB_AT.x + x * MM, KB_AT.y + (KB.h - y) * MM];
+const ad = (x, y) => [AD_AT.x + (y - AD.y0) * MM, AD_AT.y + (x - AD.x0) * MM];
+// A box [x0, y0, x1, y1] in board millimetres, as a rect in the drawing.
+function boxOf(at, [x0, y0, x1, y1]) {
+  const [ax, ay] = at(x0, y0), [bx, by] = at(x1, y1);
+  return { x: Math.min(ax, bx), y: Math.min(ay, by), width: Math.abs(bx - ax), height: Math.abs(by - ay) };
+}
+
+/* ============================================================
+   5. Drawing
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+const SVGNS = "http://www.w3.org/2000/svg";
+const el = (name, attrs, parent) => {
+  const n = document.createElementNS(SVGNS, name);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+};
+// Engraved text on a light plate: a light copy a pixel low, dark glyphs over
+// it. On the dark bench (onDark) the same thing inverted.
+function engrave(parent, x, y, s, size, anchor, weight = 600, onDark = false) {
+  const common = { x, "font-size": size, "text-anchor": anchor, "font-weight": weight,
+                   "font-family": "system-ui,-apple-system,sans-serif", "letter-spacing": ".04em" };
+  el("text", { ...common, y: y + 1, fill: onDark ? "#000" : "#fff", "fill-opacity": onDark ? ".6" : ".65" }, parent).textContent = s;
+  el("text", { ...common, y, fill: onDark ? "#c3c9d1" : "#3a3e45" }, parent).textContent = s;
+}
+// A part: its box, a fill, a tooltip with its name from the board file and what it is.
+function part(parent, at, box, fill, stroke = "#000", rx = 1.5) {
+  const g = el("g", {}, parent);
+  el("title", {}, g).textContent = box[4];
+  el("rect", { ...boxOf(at, box), rx, fill, stroke, "stroke-width": .7, "stroke-opacity": .6 }, g);
+  return g;
+}
+
+// The KB2040, face up: magenta mask, the castellated pins along both long
+// edges, USB-C at the left end and the STEMMA QT socket at the right.
+function buildKB2040(g) {
+  const [x0, y0] = kb(0, KB.h), w = KB.w * MM, h = KB.h * MM;
+  el("rect", { x: x0 + 2, y: y0 + 5, width: w, height: h, fill: "#000", "fill-opacity": ".45" }, g);
+  el("rect", { x: x0, y: y0, width: w, height: h, fill: "url(#kbMask)", stroke: "#4a1240", "stroke-width": 1 }, g);
+  // castellations: the copper of the round pad and of the long one, which
+  // reaches from it past the edge and is cut square there; the round pad's
+  // hole; and what the edge leaves of the long pad's hole: the part of a
+  // circle 1.397 across, centred 0.254 outside the edge, inside it
+  const C = KB.castel, r = C.dia / 2 * MM, R = C.edgeDrill / 2 * MM;
+  const chord = Math.sqrt(R * R - (C.out * MM) ** 2);   // half of what the edge cuts
+  for (const [nets, yPad, yEdge] of [[KB.top, KB.h - C.inset, KB.h], [KB.bottom, C.inset, 0]]) {
+    const sweep = yEdge ? 0 : 1;          // round the side away from the edge
+    nets.forEach((net, k) => {
+      const x = C.x0 + C.pitch * k, pin = el("g", {}, g);
+      el("title", {}, pin).textContent = net;
+      const [px, py] = kb(x, yPad), [, ey] = kb(x, yEdge);
+      el("path", { d: `M${px - r},${ey} L${px - r},${py} A${r},${r} 0 0 ${sweep} ${px + r},${py} L${px + r},${ey} Z`,
+                   fill: "url(#gold)" }, pin);
+      el("circle", { cx: px, cy: py, r: C.drill / 2 * MM, fill: "#2a1d26" }, pin);
+      el("path", { d: `M${px - chord},${ey} A${R},${R} 0 0 ${sweep} ${px + chord},${ey} Z`, fill: "#22262d" }, pin);
+    });
+  }
+  const P = KB.parts;
+  part(g, kb, P.usb, "url(#silver)", "#6f757d", 4);   // USB-C, its steel shell from above
+  for (const k of ["rp2040", "flash", "reg", "d1", "d3", "fuse"]) part(g, kb, P[k], "url(#chip)", "#1d1e21", k === "rp2040" ? 3 : 1);
+  for (const k of ["c6", "c8", "c10", "c12", "c15"]) part(g, kb, P[k], "#c9a46a", "#7a6237", 1);
+  part(g, kb, P.xtal, "url(#silver)", "#6f757d", 1.5);
+  part(g, kb, P.pixel, "#f4f2ea", "#8d8a80", 1.5);
+  for (const k of ["reset", "boot"]) {
+    const b = part(g, kb, P[k], "url(#silver)", "#6f757d", 2), r = boxOf(kb, P[k]);
+    el("rect", { x: r.x + r.width * .28, y: r.y + r.height * .2, width: r.width * .44, height: r.height * .6,
+                 rx: 4, fill: "#f2f2ee", stroke: "#a8aaa8", "stroke-width": .7 }, b);
+  }
+  const chip = boxOf(kb, P.rp2040);
+  engrave(g, chip.x + chip.width / 2, chip.y + chip.height / 2 + 3, "RP2040", 9, "middle", 600, true);
+  // The STEMMA QT socket, black, over its four pads, which show on the board
+  // side of it.
+  const [pw, ph] = KB.qtPadSize, px = KB.qtPadX;
+  KB.qtPads.forEach(([y, net], i) => {
+    const pin = el("g", {}, g);
+    el("title", {}, pin).textContent = `CONN1 pad ${i + 1} · ${net}`;
+    el("rect", { ...boxOf(kb, [px - pw / 2, y - ph / 2, px + pw / 2, y + ph / 2]), fill: "#c8ccd2" }, pin);
+  });
+  part(g, kb, P.qt, "#26282c", "#0c0d0f", 1.5);
+}
+
+// The adapter, face up and turned: black mask, the tongue in its cut-out with
+// its two contacts and "Notch Up" between them, a white STEMMA QT socket on
+// either side, five header holes along the far edge, four plated holes, two
+// fiducials.
+function buildAdapter(g) {
+  const pt = (x, y) => ad(x, y).join(",");
+  // A curve turns counter-clockwise on the board's axes; turned onto the
+  // drawing's, whose y runs down, that is SVG's sweep 0. Its radius is the
+  // chord's over twice the sine of half the curve.
+  const n = AD.outline.length;
+  const d = `M${pt(AD.outline[0][0], AD.outline[0][1])} ` + AD.outline.map(([x0, y0, c], i) => {
+    const [x, y] = AD.outline[(i + 1) % n];
+    if (!c) return "L" + pt(x, y);
+    const R = Math.hypot(x - x0, y - y0) / (2 * Math.sin(Math.abs(c) * Math.PI / 360)) * MM;
+    return `A${R},${R} 0 0 ${c > 0 ? 0 : 1} ${pt(x, y)}`;
+  }).join(" ") + " Z";
+  el("path", { d, fill: "#000", "fill-opacity": ".45", transform: "translate(2,5)" }, g);
+  el("path", { d, fill: "url(#adMask)", stroke: "#0c0d0f", "stroke-width": 1.2 }, g);
+  const H = AD.hole, F = AD.fiducial;
+  for (const [x, y] of AD.holes) {
+    const [cx, cy] = ad(x, y);
+    el("circle", { cx, cy, r: H.ring * MM, fill: "none", stroke: "#e8eaee", "stroke-width": H.line * MM }, g);
+    el("circle", { cx, cy, r: H.pad / 2 * MM, fill: "url(#gold)" }, g);
+    el("circle", { cx, cy, r: H.drill / 2 * MM, fill: "#22262d" }, g);
+  }
+  for (const [x, y] of AD.fiducials) {
+    const [cx, cy] = ad(x, y);
+    el("circle", { cx, cy, r: F.clear * MM, fill: "#6d6648" }, g);
+    el("circle", { cx, cy, r: F.dia / 2 * MM, fill: "url(#gold)" }, g);
+  }
+  for (const [box, net, pad] of AD.contacts) {
+    const c = el("g", {}, g);
+    el("title", {}, c).textContent = `tongue contact, U1 pad ${pad} · ${net}`;
+    el("rect", { ...boxOf(ad, box), rx: 1, fill: "url(#gold)" }, c);
+  }
+  // the board file's top silkscreen texts, where it puts them
+  for (const t of AD.silk) silk(g, t);
+  const P = AD.parts;
+  for (const k of ["reg", "fet", "pullups", "r1"]) part(g, ad, P[k], "#1a1b1e", "#000", 1);
+  for (const k of ["c2", "c3"]) part(g, ad, P[k], "#c9a46a", "#7a6237", 1);
+  part(g, ad, P.led, "#f4f2ea", "#8d8a80", 1);
+  // each socket over its four pads, which show on the board side of it
+  const [pw, ph] = AD.socketPad;
+  for (const s of Object.values(AD.sockets)) {
+    s.pads.forEach(([y, net], i) => {
+      const pin = el("g", {}, g);
+      el("title", {}, pin).textContent = `${s.name} pad ${i + 1} · ${net}`;
+      el("rect", { ...boxOf(ad, [s.x - pw / 2, y - ph / 2, s.x + pw / 2, y + ph / 2]), fill: "#c8ccd2" }, pin);
+    });
+    const sock = el("g", {}, g);
+    el("title", {}, sock).textContent = `${s.name} · STEMMA QT socket, JST SH 4-pin`;
+    el("rect", { ...boxOf(ad, s.box), rx: 1.5, fill: "url(#nylon)", stroke: "#8f8a7c", "stroke-width": .8 }, sock);
+  }
+  for (const [x, net, name] of AD.header) {
+    const [cx, cy] = ad(x, AD.headerY), h = el("g", {}, g);
+    el("title", {}, h).textContent = `${name} · ${net}`;
+    el("circle", { cx, cy, r: AD.headerPad.dia / 2 * MM, fill: "url(#gold)" }, h);
+    el("circle", { cx, cy, r: AD.headerPad.drill / 2 * MM, fill: "#22262d" }, h);
+  }
+}
+
+// A silkscreen text [x, y, text, centred, turned]: Eagle's text size, 1.016
+// mm, as the font size, which draws the letters a little smaller than the
+// board's (a choice: the page's face is wider than Eagle's vector font, and
+// at the board's height the header's names would run together). Unturned
+// text reads along the board's +x, down the drawing; "turned" (R90) reads
+// along +y, across it.
+function silk(parent, [x, y, s, centred, turned]) {
+  const [px, py] = ad(x, y), size = AD.silkSize * MM;
+  const t = el("text", { x: px, y: py, "font-size": size, "font-weight": 600, fill: "#eceee8",
+                         "font-family": "system-ui,sans-serif", "text-anchor": centred ? "middle" : "start",
+                         "dominant-baseline": centred ? "central" : "alphabetic",
+                         transform: turned ? "" : `rotate(90,${px},${py})` }, parent);
+  t.textContent = s;
+}
+
+// A JST SH plug in a socket that opens toward `dir` ([1, 0] right, [0, -1]
+// up), its mouth's middle at (x, y): as wide as the socket's box, 6.1 mm on
+// both boards, its back 4 mm out of the mouth (by eye), and the wires leaving
+// it at the pads' pitch, 1 mm. Returns where each wire leaves, in the order
+// given.
+function qtPlug(parent, x, y, dir, nets) {
+  const [dx, dy] = dir, len = 4 * MM, half = 3.05 * MM;
+  const bx = x + dx * len, by = y + dy * len;
+  const r = dx ? { x: Math.min(x, bx), y: y - half, width: len, height: 2 * half }
+               : { x: x - half, y: Math.min(y, by), width: 2 * half, height: len };
+  el("rect", { ...r, rx: 3, fill: "url(#nylon)", stroke: "#8f8a7c", "stroke-width": .8 }, parent);
+  return nets.map((_, i) => {
+    const o = (i - (nets.length - 1) / 2) * MM;
+    return dx ? [bx, y + o] : [x + o, by];
+  });
+}
+
+// The STEMMA QT cable: four wires from the KB2040's socket to the adapter's
+// near one. Both sockets put GND, the supply, SDA and SCL on pads 1 to 4 and
+// the cable joins pad to pad, but drawn face up the two hold them in mirror
+// order along the cable: leaving the KB2040 to the right, SCL is uppermost;
+// coming down into the adapter, SCL is leftmost, the cable's other side. So
+// the wires turn over once, a ribbon given half a twist: each wire's offset
+// from the cable's middle goes as cos(pi t) along it, crossing at its middle.
+// The wire that starts uppermost is drawn last, over the others where they
+// cross: which way the twist turns is a choice.
+function qtCable(parent) {
+  const kbPads = KB.qtPads.slice().reverse();          // top to bottom: SCL, SDA, 3.3V, GND
+  const [mx, my] = kb(32.57, (KB.qtPads[0][0] + KB.qtPads[3][0]) / 2);
+  const from = qtPlug(parent, mx, my, [1, 0], kbPads.map(p => p[1]));
+  const near = AD.sockets.near, adPads = near.pads.slice().reverse();   // left to right: SCL .. GND
+  const [ax, ay] = ad(near.box[0], (near.pads[0][0] + near.pads[3][0]) / 2);
+  const to = qtPlug(parent, ax, ay, [0, -1], adPads.map(p => p[1]));
+  // the cable's middle: a cubic from leaving right to arriving downward
+  const p0 = [(from[0][0] + from[3][0]) / 2, (from[0][1] + from[3][1]) / 2];
+  const p3 = [(to[0][0] + to[3][0]) / 2, (to[0][1] + to[3][1]) / 2];
+  const L = .55 * Math.hypot(p3[0] - p0[0], p3[1] - p0[1]);
+  const p1 = [p0[0] + L, p0[1]], p2 = [p3[0], p3[1] - L];
+  const at = t => { const s = 1 - t;
+    return [0, 1].map(i => s * s * s * p0[i] + 3 * s * s * t * p1[i] + 3 * s * t * t * p2[i] + t * t * t * p3[i]); };
+  const tangent = t => { const s = 1 - t;
+    return [0, 1].map(i => 3 * s * s * (p1[i] - p0[i]) + 6 * s * t * (p2[i] - p1[i]) + 3 * t * t * (p3[i] - p2[i])); };
+  const wires = kbPads.map(([, net], i) => {
+    const off = (1.5 - i) * MM;                          // + is the cable's left, leaving the KB2040
+    const pts = [];
+    for (let k = 0; k <= 48; k++) {
+      const t = k / 48, [x, y] = at(t), [tx, ty] = tangent(t), n = Math.hypot(tx, ty) || 1;
+      const o = off * Math.cos(Math.PI * t);
+      pts.push([x + ty / n * o, y - tx / n * o]);
+    }
+    return { net, d: "M" + pts.map(p => p.map(v => v.toFixed(1)).join(",")).join(" L") };
+  });
+  for (const w of wires.slice().reverse()) {
+    const g = el("g", {}, parent);
+    el("title", {}, g).textContent = `${w.net} · ${{ SCL: "yellow", SDA: "blue", "3.3V": "red", GND: "black" }[w.net]}`;
+    el("path", { d: w.d, fill: "none", stroke: "#000", "stroke-opacity": ".5", "stroke-width": 8.5, "stroke-linecap": "round" }, g);
+    el("path", { d: w.d, fill: "none", stroke: QT_WIRE[w.net], "stroke-width": 6.5, "stroke-linecap": "round" }, g);
+    el("path", { d: w.d, fill: "none", stroke: "#fff", "stroke-opacity": ".3", "stroke-width": 1.4,
+                 "stroke-linecap": "round", transform: "translate(-.8,-.8)" }, g);
+  }
+}
+
+// A USB-C cable into the KB2040's socket, leaving off the bench to the left.
+function usbCable(parent) {
+  const u = boxOf(kb, KB.parts.usb), cy = u.y + u.height / 2;
+  const g = el("g", { filter: "url(#drop)" }, parent);
+  el("path", { d: `M${u.x - 150},${cy} C${u.x - 190},${cy} ${u.x - 200},${cy + 40} ${-340},${cy + 60}`,
+               fill: "none", stroke: "#17191c", "stroke-width": 40, "stroke-linecap": "round" }, g);
+  el("rect", { x: u.x - 160, y: cy - 22, width: 50, height: 44, rx: 9, fill: "url(#bootGrad)" }, g);
+  el("rect", { x: u.x - 118, y: cy - 52, width: 112, height: 104, rx: 14, fill: "url(#plugGrad)", stroke: "#0e0f11" }, g);
+  el("rect", { x: u.x - 10, y: cy - 38, width: 12, height: 76, rx: 3, fill: "#9ea4ac", stroke: "#5b6168", "stroke-width": .8 }, g);
+}
+
+function buildBoards() {
+  const g = $("boards");
+  g.textContent = "";
+  usbCable(g);
+  const kbG = el("g", { filter: "url(#drop)" }, g);
+  buildKB2040(kbG);
+  const adG = el("g", { filter: "url(#drop)" }, g);
+  buildAdapter(adG);
+  qtCable(el("g", { filter: "url(#drop)" }, g));
+  // legends on the bench: the board file has no silkscreen texts of the
+  // KB2040's to place, so its buttons are named off the board
+  const u = boxOf(kb, KB.parts.usb), rs = boxOf(kb, KB.parts.reset), bt = boxOf(kb, KB.parts.boot);
+  engrave(g, u.x - 160, u.y - 22, "USB · TO THE COMPUTER", 9.5, "start", 600, true);
+  engrave(g, KB_AT.x + KB.w * MM + 8, rs.y + rs.height / 2 + 4, "RESET", 9, "start", 700, true);
+  engrave(g, KB_AT.x + KB.w * MM + 8, bt.y + bt.height / 2 + 4, "BOOT", 9, "start", 700, true);
+  engrave(g, 238, 310, "STEMMA QT CABLE", 9.5, "start", 700, true);
+  [["SCL", "yellow"], ["SDA", "blue"], ["3.3V", "red"], ["GND", "black"]].forEach(([net, c], i) => {
+    el("rect", { x: 238, y: 320 + i * 16, width: 16, height: 6, rx: 3, fill: QT_WIRE[net], stroke: "#000", "stroke-opacity": .5 }, g);
+    engrave(g, 260, 326 + i * 16, `${net} · ${c}`, 9, "start", 500, true);
+  });
+  const [ax, ay] = ad(12.7, -12.573);
+  engrave(g, ax, ay + 22, "WII NUNCHUCK BREAKOUT ADAPTER", 9.5, "start", 700, true);
+  // the pull-ups, which no lamp can show on this board
+  engrave(g, GRID.x, 380, "PULL-UPS ON THE BUS", 10, "start", 700, true);
+  engrave(g, GRID.x, 398, "5.1K to 3.3 V on the KB2040 (R10, R12), always", 9.5, "start", 500, true);
+  engrave(g, GRID.x, 413, "10K to VIN on the adapter's microcontroller side", 9.5, "start", 500, true);
+}
+
+/* ============================================================
+   6. The bus, and the Wii extension on it
+   ============================================================ */
+// WiiExtension.h's binding of NintendoExtensionCtrl, field for field: each
+// field is one of the library's getters, [name, lo, hi], with "f" after a
+// float one; lib is the library's class. The board reads the library; the
+// page needs the names, their order and their ranges. XiaoSamd21Oscuino's
+// page's list, character for character (test-kb2040-contract.mjs).
+const WII_KINDS = [
+  { name: "Nunchuk", lib: "Nunchuk", fields: [
+      ["joyX", 0, 255], ["joyY", 0, 255], ["accelX", 0, 1023], ["accelY", 0, 1023], ["accelZ", 0, 1023],
+      ["buttonC", 0, 1], ["buttonZ", 0, 1], ["rollAngle", -180, 180, "f"], ["pitchAngle", -180, 180, "f"],
+  ] },
+  { name: "Classic", lib: "ClassicController", fields: [
+      ["getHighRes", 0, 1], ["leftJoyX", 0, 255], ["leftJoyY", 0, 255], ["rightJoyX", 0, 255],
+      ["rightJoyY", 0, 255], ["dpadUp", 0, 1], ["dpadDown", 0, 1], ["dpadLeft", 0, 1], ["dpadRight", 0, 1],
+      ["buttonA", 0, 1], ["buttonB", 0, 1], ["buttonX", 0, 1], ["buttonY", 0, 1], ["triggerL", 0, 255],
+      ["triggerR", 0, 255], ["buttonL", 0, 1], ["buttonR", 0, 1], ["buttonZL", 0, 1], ["buttonZR", 0, 1],
+      ["buttonStart", 0, 1], ["buttonSelect", 0, 1], ["buttonPlus", 0, 1], ["buttonMinus", 0, 1],
+      ["buttonHome", 0, 1],
+  ] },
+  { name: "Guitar", lib: "GuitarController", fields: [
+      ["joyX", 0, 63], ["joyY", 0, 63], ["strum", 0, 1], ["strumUp", 0, 1], ["strumDown", 0, 1],
+      ["fretGreen", 0, 1], ["fretRed", 0, 1], ["fretYellow", 0, 1], ["fretBlue", 0, 1], ["fretOrange", 0, 1],
+      ["whammyBar", 0, 31], ["touchbar", 0, 31], ["touchGreen", 0, 1], ["touchRed", 0, 1],
+      ["touchYellow", 0, 1], ["touchBlue", 0, 1], ["touchOrange", 0, 1], ["buttonPlus", 0, 1],
+      ["buttonMinus", 0, 1],
+  ] },
+  { name: "Drums", lib: "DrumController", fields: [
+      ["joyX", 0, 63], ["joyY", 0, 63], ["drumRed", 0, 1], ["drumBlue", 0, 1], ["drumGreen", 0, 1],
+      ["cymbalYellow", 0, 1], ["cymbalOrange", 0, 1], ["bassPedal", 0, 1], ["buttonPlus", 0, 1],
+      ["buttonMinus", 0, 1], ["velocityAvailable", 0, 1], ["velocityID", 0, 31], ["velocity", 0, 7],
+      ["velocityRed", 0, 7], ["velocityBlue", 0, 7], ["velocityGreen", 0, 7], ["velocityYellow", 0, 7],
+      ["velocityOrange", 0, 7], ["velocityPedal", 0, 7],
+  ] },
+  { name: "Turntable", lib: "DJTurntableController", fields: [
+      ["turntable", -64, 62], ["buttonGreen", 0, 1], ["buttonRed", 0, 1], ["buttonBlue", 0, 1],
+      ["effectDial", 0, 31], ["crossfadeSlider", 0, 15], ["buttonEuphoria", 0, 1], ["joyX", 0, 63],
+      ["joyY", 0, 63], ["buttonPlus", 0, 1], ["buttonMinus", 0, 1], ["left.connected", 0, 1],
+      ["left.turntable", -32, 31], ["left.buttonGreen", 0, 1], ["left.buttonRed", 0, 1],
+      ["left.buttonBlue", 0, 1], ["right.connected", 0, 1], ["right.turntable", -32, 31],
+      ["right.buttonGreen", 0, 1], ["right.buttonRed", 0, 1], ["right.buttonBlue", 0, 1],
+  ] },
+  { name: "uDraw", lib: "uDrawTablet", fields: [
+      ["penX", 0, 4095], ["penY", 0, 4095], ["penPressure", 0, 511], ["buttonLower", 0, 1],
+      ["buttonUpper", 0, 1], ["penDetected", 0, 1],
+  ] },
+  { name: "Drawsome", lib: "DrawsomeTablet", fields: [
+      ["penX", 0, 65535], ["penY", 0, 65535], ["penPressure", 0, 4095], ["penDetected", 0, 1],
+  ] },
+];
+const wiiKindByName = n => WII_KINDS.find(k => k.name === n) || null;
+const wiiRange = f => [f[1], f[2]];
+
+let busOn = null;                         // the board's /i2c, once it has said
+const bus = { scan: null };               // /i2c/scan addresses
+const wii = { kind: null, id: null, view: null };   // /enq/wii, /wii/id, the drawn device
+
+let busLeds = {}, busLamp = null, wiiSlot = null;   // wiiSlot: the device's group, once drawn
+
+function buildBus() {
+  const g = $("bus");
+  g.textContent = "";
+  busLeds = {};
+
+  // The address grid, i2cdetect's layout: rows of sixteen, 0x00 to 0x70.
+  engrave(g, GRID.x, GRID.y - 30, "ADDRESSES THAT ANSWER · /i2c/scan", 10, "start", 700, true);
+  busLamp = el("circle", { cx: GRID.x + 300, cy: GRID.y - 34, r: 6, fill: "url(#lampOff)" }, g);
+  busLamp.on = el("circle", { cx: GRID.x + 300, cy: GRID.y - 34, r: 6, fill: "url(#lampOn)", opacity: 0 }, g);
+  busLamp.note = el("text", { x: GRID.x + 312, y: GRID.y - 30, "font-size": 9.5, fill: "#8e96a6",
+                              "font-family": "system-ui,sans-serif" }, g);
+  for (let c = 0; c < 16; c++)
+    engrave(g, GRID.x + 34 + c * GRID.cell, GRID.y - 10, c.toString(16), 9, "middle", 600, true);
+  for (let r = 0; r < 8; r++) {
+    engrave(g, GRID.x + 12, GRID.y + 4 + r * GRID.cell, (r * 16).toString(16).padStart(2, "0"), 9, "middle", 600, true);
+    for (let c = 0; c < 16; c++) {
+      const a = r * 16 + c, x = GRID.x + 34 + c * GRID.cell, y = GRID.y + r * GRID.cell;
+      const reserved = a < 0x08 || a > 0x77;
+      el("circle", { cx: x, cy: y, r: 7, fill: "#0b0d10", stroke: "#3a3f48", "stroke-width": 1 }, g);
+      const led = el("circle", { cx: x, cy: y, r: 5.5, fill: reserved ? "#191b20" : "url(#lampOff)" }, g);
+      const lit = el("circle", { cx: x, cy: y, r: 5.5, fill: "#7dffb0", opacity: 0 }, g);
+      if (!reserved) busLeds[a] = { led, lit };
+    }
+  }
+  const scanBtn = el("g", { cursor: "pointer" }, g);
+  el("rect", { x: GRID.x, y: GRID.y + 8 * GRID.cell, width: 92, height: 24, rx: 5, fill: "url(#plate)",
+               stroke: "#878d95", "stroke-width": .8 }, scanBtn);
+  engrave(scanBtn, GRID.x + 46, GRID.y + 8 * GRID.cell + 16, "SCAN", 11, "middle");
+  scanBtn.onclick = () => send("/i2c/scan", []);
+  engrave(g, GRID.x + 102, GRID.y + 8 * GRID.cell + 16, "lit: answered a one-byte read · dark: reserved", 9.5, "start", 500, true);
+
+  // The device's own place on the right bench.
+  wiiSlot = el("g", { id: "wiiSlotLayer", transform: `translate(${SLOT.x},${SLOT.y})` }, g);
+  drawWiiSlot();
+  renderBus();
+}
+
+// The grid, lit where the last scan was answered, and the bus's lamp: lit
+// while the board says the bus runs. The buttons follow it.
+function renderBus() {
+  const found = new Set(busOn ? bus.scan || [] : []);
+  for (const [a, l] of Object.entries(busLeds)) l.lit.setAttribute("opacity", found.has(+a) ? 1 : 0);
+  if (busLamp) {
+    busLamp.on.setAttribute("opacity", busOn ? 1 : 0);
+    busLamp.note.textContent = busOn === null ? "bus: not heard" : busOn ? "bus on" : "bus off";
+  }
+  $("busToggle").textContent = busOn === false ? "start the bus" : "stop the bus";
+  $("busToggle").disabled = !writer || busOn === null;
+}
+
+// The connected extension, drawn by its kind's art; or what is known of an
+// unknown one; or an empty plug.
+function drawWiiSlot() {
+  const slot = wiiSlot;
+  if (!slot) return;
+  slot.textContent = "";
+  wii.view = null;
+  const kind = wii.kind && wiiKindByName(wii.kind);
+  const art = kind ? WII_ART[kind.name] : wii.kind ? WII_ART.Unknown : null;
+  if (art) {
+    wii.view = art(slot);
+  } else {
+    el("rect", { x: 20, y: 120, width: 280, height: 220, rx: 18, fill: "#1b1e24", stroke: "#3a3f48",
+                 "stroke-dasharray": "6 5" }, slot);
+    engrave(slot, 160, 220, "NO EXTENSION", 13, "middle", 700, true);
+    engrave(slot, 160, 244, "plug one into the adapter", 11, "middle", 500, true);
+  }
+  wii.readout = el("text", { x: 60, y: 490, "font-size": 10.5, fill: "#9aa3af",
+                             "font-family": "ui-monospace,Menlo,monospace" }, slot);
+  markShelf();
+}
+
+// /wii's arguments, by name, to the drawing and the numbers under it, as many
+// to a line as fit in 44 characters; floats to one decimal.
+function renderWii(args) {
+  const kind = wii.kind && wiiKindByName(wii.kind);
+  const names = kind ? kind.fields.map(f => f[0]) : args.map((_, i) => "b" + i);
+  const f = {};
+  names.forEach((n, i) => { f[n] = args[i]; });
+  if (wii.view) wii.view.update(f, kind);
+  if (!wii.readout) return;
+  wii.readout.textContent = "";
+  const lines = [];
+  let line = "";
+  names.forEach((n, i) => {
+    const v = args[i];
+    const item = `${n} ${v === undefined ? "–" : Number.isInteger(v) ? v : v.toFixed(1)}`;
+    if (line && line.length + 2 + item.length > 44) { lines.push(line); line = ""; }
+    line += (line ? "  " : "") + item;
+  });
+  if (line) lines.push(line);
+  lines.forEach((t, i) => { el("tspan", { x: 40, dy: i ? 15 : 0 }, wii.readout).textContent = t; });
+}
+
+// Every kind the library reads, on a shelf in the I2C pane, drawn by the same
+// art and labelled with the library class that reads it. The one plugged in
+// is ringed.
+const SHELF = { cols: 4, w: 340, h: 300, scale: .55 };
+let shelfCells = {};
+function buildShelf() {
+  const svg = $("wiiShelf");
+  if (!svg) return;
+  svg.textContent = "";
+  shelfCells = {};
+  WII_KINDS.forEach((k, i) => {
+    const x = (i % SHELF.cols) * SHELF.w, y = Math.floor(i / SHELF.cols) * SHELF.h;
+    const cell = el("g", { transform: `translate(${x},${y})`, cursor: "pointer" }, svg);
+    const ring = el("rect", { x: 6, y: 6, width: SHELF.w - 12, height: SHELF.h - 12, rx: 14, fill: "#1b1e24",
+                              stroke: "#343945", "stroke-width": 2 }, cell);
+    WII_ART[k.name](el("g", { transform: `translate(${SHELF.w / 2 - 160 * SHELF.scale},14) scale(${SHELF.scale})` }, cell));
+    engrave(cell, SHELF.w / 2, SHELF.h - 34, k.name, 12, "middle", 700, true);
+    engrave(cell, SHELF.w / 2, SHELF.h - 17, k.lib, 10, "middle", 500, true);
+    cell.onclick = () => { if (demoTimer) startWiiDemo(k.name); };
+    shelfCells[k.name] = ring;
+  });
+  markShelf();
+}
+
+// The I2C pane's field tables, written out from WII_KINDS so they cannot
+// drift from it: each field, the getter it is, its range and its type.
+function buildFieldTable() {
+  const host = $("wiiFields");
+  if (!host) return;
+  host.textContent = "";
+  for (const k of WII_KINDS) {
+    const t = document.createElement("table");
+    t.className = "wiitab";
+    t.innerHTML = `<caption><b>${k.name}</b> · NintendoExtensionCtrl's <code>${k.lib}</code> · ` +
+      `${k.fields.length} fields</caption>` +
+      "<tr><th>field, the getter</th><th>range</th><th>type</th></tr>" +
+      k.fields.map(f => `<tr><td><code>${f[0]}()</code></td><td>${f[1]}..${f[2]}</td>` +
+        `<td>${f[3] === "f" ? "float" : f[1] === 0 && f[2] === 1 ? "boolean, 1 = pressed or true" : "int"}</td></tr>`).join("");
+    host.appendChild(t);
+  }
+}
+
+function markShelf() {
+  for (const [name, ring] of Object.entries(shelfCells))
+    ring.setAttribute("stroke", name === wii.kind ? "#ff8a2a" : "#343945");
+}
+function onWiiKind(name, id) {
+  wii.kind = name || null;
+  wii.id = id || null;
+  drawWiiSlot();
+}
+
+/* ---- the extensions' own drawings: each takes its slot (320 x 460) and
+   returns update(fields, kind), fields by the library's getter names ---- */
+const WII_ART = {};
+// The extension's cable, from where it leaves the body (x, y) to its plug.
+// In the rig the plug is on the adapter's tongue at the boards' scale: its U
+// fills the cut-out over the tongue, and its grip stands off the board's
+// edge (both drawn by eye). The grip is 6 mm long, so it ends 9.8 units into
+// the slot, short of every kind's drawing at rest: the nearest, the Classic,
+// starts 14 units in (each drawing's box, read in Chrome). A Nunchuk turned
+// over can still swing across it. On the shelf the plug is the stub
+// XiaoSamd21Oscuino's page draws, in the slot's bottom left corner. The cable
+// comes into the plug's back as that page's does.
+const TONGUE_MID = ad(0, 0)[1] - SLOT.y;               // the tongue's middle, in the slot's units
+const U_FROM = ad(0, -3.302)[0] - SLOT.x, EDGE = ad(0, AD.y1)[0] - SLOT.x;   // the cut-out's floor, the board's edge
+const GRIP = 6 * MM, U_HALF = 6.223 * MM;
+function wiiCable(slot, x, y) {
+  const rig = slot === wiiSlot, py = rig ? TONGUE_MID : 455, back = rig ? EDGE + GRIP : 42;
+  const d = `M${x},${y} C${x},${y + 60} ${back + 50},${py} ${back - 4},${py}`;
+  el("path", { d, fill: "none", stroke: "#000", "stroke-opacity": ".4", "stroke-width": 11, "stroke-linecap": "round" }, slot);
+  el("path", { d, fill: "none", stroke: "#d6d9de", "stroke-width": 8, "stroke-linecap": "round" }, slot);
+  if (!rig) {
+    el("rect", { x: back - 36, y: py - 26, width: 36, height: 52, rx: 6, fill: "url(#wiiGrey)", stroke: "#7d828a" }, slot);
+    return;
+  }
+  el("rect", { x: U_FROM, y: py - U_HALF, width: EDGE - U_FROM + 6, height: 2 * U_HALF, rx: 3,
+               fill: "url(#wiiGrey)", stroke: "#7d828a" }, slot);
+  el("rect", { x: U_FROM + 6, y: py - U_HALF + 8, width: 14, height: 2 * U_HALF - 16, rx: 2,
+               fill: "#000", "fill-opacity": ".12" }, slot);   // the notch, toward Notch Up
+  el("rect", { x: EDGE, y: py - U_HALF - 10, width: GRIP, height: 2 * U_HALF + 20, rx: 10,
+               fill: "url(#wiiGrey)", stroke: "#7d828a" }, slot);
+}
+
+// A press button: shape drawn at rest, a lit copy shown while pressed.
+function wiiKey(parent, shape, label, colour = "#ffb23e") {
+  const g = el("g", {}, parent);
+  const base = el(shape.tag, { ...shape.attrs, fill: shape.fill || "url(#wiiGrey)", stroke: "#7d828a", "stroke-width": 1 }, g);
+  const lit = el(shape.tag, { ...shape.attrs, fill: colour, opacity: 0 }, g);
+  if (label) {
+    const [x, y] = shape.labelAt;
+    el("text", { x, y, "font-size": shape.labelSize || 11, "text-anchor": "middle", "font-weight": 700,
+                 fill: "#3a3e45", "font-family": "system-ui,sans-serif" }, g).textContent = label;
+  }
+  return on => {
+    lit.setAttribute("opacity", on ? .85 : 0);
+    g.setAttribute("transform", on ? "translate(0,1.5)" : "");
+    base.setAttribute("stroke", on ? colour : "#7d828a");
+  };
+}
+
+// Three bars, for an accelerometer's axes, around the 511 that the library's
+// rollAngle() and pitchAngle() take as level (Nunchuk.cpp).
+function wiiAccelBars(parent, x, y, names) {
+  const bars = names.map((n, i) => {
+    const bx = x + i * 26;
+    el("rect", { x: bx, y, width: 14, height: 90, rx: 3, fill: "#0b0d10", stroke: "#3a3f48" }, parent);
+    el("line", { x1: bx - 2, x2: bx + 16, y1: y + 45, y2: y + 45, stroke: "#555b65" }, parent);
+    engrave(parent, bx + 7, y + 106, n, 9, "middle", 600, true);
+    return el("rect", { x: bx + 2, y: y + 45, width: 10, height: 0, fill: "#7dffb0" }, parent);
+  });
+  return vals => bars.forEach((b, i) => {
+    const h = clamp((vals[i] - 511) / 512, -1, 1) * 43;
+    b.setAttribute("y", y + 45 - Math.max(h, 0));
+    b.setAttribute("height", Math.abs(h));
+  });
+}
+
+// A field's value as 0..1 of its range.
+const wiiUnit = (kind, name, v) => {
+  const [lo, hi] = wiiRange(kind.fields.find(x => x[0] === name));
+  return clamp((v - lo) / (hi - lo), 0, 1);
+};
+
+// Nunchuk, from above: the stick in its well on the head, C and Z on the
+// front edge, drawn as a slab NUNCHUK_THICK thick, turned as the controller
+// is and seen from straight above, with no perspective. Up is the direction
+// the accelerometer reads, around the 511 the library's angles take as zero
+// (Nunchuk.cpp), and the slab turns by the smallest rotation that brings its
+// top face's normal onto it, about the point the cable leaves from. A roll
+// alone narrows each face as cos(roll), a pitch alone shortens it as
+// cos(pitch), and the two together shear it; the face nearer the eye moves
+// toward the side that dips, and the wall between the faces shows on the
+// side that rises. Past 90 degrees the nearer face is the plain underside. An
+// accelerometer cannot see a turn flat on a table, so the drawing never turns
+// about the vertical; held near upside down, where accelX and accelY are
+// within their noise of 511, which way it has turned over follows that noise.
+//
+// Which way it leans: the library's rollAngle() is atan2(accelX - 511,
+// accelZ - 511) and pitchAngle() is -atan2(accelY - 511, accelZ - 511),
+// "Inverted so pulling back is a positive pitch" (Nunchuk.cpp), taken here as
+// the head rising. For rollAngle() the library says nothing: NUNCHUK_ROLL_SIGN
+// 1 draws a positive roll as the right side dipping. Up, in the drawing's
+// frame (x to the right, y toward the head, z out of the top face), is then
+// 511 - accelX (times NUNCHUK_ROLL_SIGN), 511 - accelY and accelZ - 511.
+// Checked by hand on one genuine Nunchuk, 2026-10-29, on the drawing before
+// this one, which turned the slab by rollAngle() and pitchAngle() themselves
+// and which this one matches for a roll or a pitch alone under 90 degrees:
+// rolling it right dips the drawing on the right, and tipping its head up
+// shows the front wall (the user's check, not recorded). That accelZ - 511
+// is positive with the top face up is inferred from that check, not read:
+// with it negative, that drawing would have drawn the Nunchuk head down. That
+// drawing never showed the underside, because both its cosines take the sign
+// of accelZ - 511, and it turned end for end at a roll of 90 degrees, where
+// pitchAngle() jumps to 180 or -180. This one has not been seen on the board.
+const NUNCHUK_THICK = 56;      // drawing units, against a width of 192: a choice
+const NUNCHUK_ROLL_SIGN = 1;   // as checked above
+const NUNCHUK_WALL_STEPS = 8;  // copies of the outline that fill the wall: a choice
+WII_ART.Nunchuk = slot => {
+  wiiCable(slot, 160, 400);
+  // The pivot: where the cable leaves (wiiCable's start, y 230 + 170 = 400),
+  // 11.5 units behind the outline's back end, the curve's lowest point, y 158.5.
+  const PIVOT = 170;
+  const at = el("g", { transform: `translate(160,${230 + PIVOT})` }, slot);
+  const body = "M0,-180 C70,-180 96,-118 96,-64 C96,8 72,64 54,124 C42,170 -42,170 -54,124 " +
+               "C-72,64 -96,8 -96,-64 C-96,-118 -70,-180 0,-180 Z";
+  const shadow = el("path", { d: body, fill: "#000", "fill-opacity": ".4" }, at);
+  const wall = [];
+  for (let i = 0; i < NUNCHUK_WALL_STEPS; i++)
+    wall.push(el("path", { d: body, fill: "#b4b8bf", stroke: "#8e939b", "stroke-width": .8 }, at));
+  const face = el("g", {}, at);
+  const pressZ = wiiKey(face, { tag: "rect", attrs: { x: -40, y: -196, width: 80, height: 22, rx: 9 },
+                                labelAt: [0, -180], labelSize: 12 }, "Z");
+  const pressC = wiiKey(face, { tag: "ellipse", attrs: { cx: 0, cy: -210, rx: 22, ry: 11 },
+                                labelAt: [0, -206], labelSize: 11 }, "C");
+  el("path", { d: body, fill: "url(#wiiWhite)", stroke: "#a9adb5", "stroke-width": 1.2 }, face);
+  const top = el("g", {}, face);
+  el("path", { d: "M-70,-60 C-60,-150 60,-150 70,-60", fill: "none", stroke: "#fff", "stroke-width": 3, "stroke-opacity": ".7" }, top);
+  el("circle", { cx: 0, cy: -92, r: 46, fill: "url(#wiiWell)" }, top);
+  const cap = el("g", {}, top);
+  el("circle", { cx: 0, cy: -92, r: 28, fill: "url(#wiiStick)", stroke: "#6f747c" }, cap);
+  el("circle", { cx: 0, cy: -92, r: 17, fill: "none", stroke: "#8b9098", "stroke-width": 2 }, cap);
+  engrave(top, 0, 60, "Nunchuk", 13, "middle");
+  const bars = wiiAccelBars(slot, 236, 300, ["X", "Y", "Z"]);
+  return {
+    update(f, kind) {
+      const nx = 2 * wiiUnit(kind, "joyX", f.joyX) - 1, ny = 2 * wiiUnit(kind, "joyY", f.joyY) - 1;
+      cap.setAttribute("transform", `translate(${(nx * 24).toFixed(1)},${(-ny * 24).toFixed(1)})`);
+      pressC(f.buttonC); pressZ(f.buttonZ);
+      // Up, in the drawing's frame; none at all (all three at 511) is drawn flat.
+      const gx = NUNCHUK_ROLL_SIGN * (511 - f.accelX), gy = 511 - f.accelY, gz = f.accelZ - 511;
+      const g = Math.hypot(gx, gy, gz);
+      const [ux, uy, uz] = g ? [gx / g, gy / g, gz / g] : [0, 0, 1];
+      // The rotation that turns the body the shortest way until up points at
+      // the eye (Rodrigues', about up x eye). Its top left is r00 and r11 on
+      // the diagonal and -s off it; with the screen's y down, the face's turn
+      // and shear on the screen is matrix(r00, s, s, r11). Exactly upside down
+      // every way is as short; it is taken as turned over about its length.
+      const q = uz > -1 + 1e-9 ? 1 / (1 + uz) : 0;
+      const r00 = q ? uz + uy * uy * q : -1, r11 = q ? uz + ux * ux * q : 1, s = ux * uy * q;
+      const up = uz >= 0;
+      // The top face's offset from the body's middle plane; the underside's
+      // is the opposite. A dipping right side moves the top face right; a
+      // rising head moves it back, toward the cable (down the screen).
+      const ox = -ux * NUNCHUK_THICK / 2, oy = uy * NUNCHUK_THICK / 2;
+      const turn = `matrix(${r00.toFixed(3)},${s.toFixed(3)},${s.toFixed(3)},${r11.toFixed(3)},0,0) translate(0,${-PIVOT})`;
+      const placed = k => `translate(${(k * ox).toFixed(1)},${(k * oy).toFixed(1)}) ${turn}`;
+      const near = up ? 1 : -1;            // +1: the top face is the one nearer the eye
+      shadow.setAttribute("transform", `translate(5,9) ${placed(-near)}`);
+      wall.forEach((w, i) => w.setAttribute("transform", placed(-near + 2 * near * i / NUNCHUK_WALL_STEPS)));
+      face.setAttribute("transform", placed(near));
+      top.setAttribute("opacity", up ? 1 : 0);
+      bars([f.accelX, f.accelY, f.accelZ]);
+    },
+  };
+};
+
+function wiiShape(parent, d, fill = "url(#wiiWhite)") {
+  el("path", { d, fill: "#000", "fill-opacity": ".4", transform: "translate(5,9)" }, parent);
+  return el("path", { d, fill, stroke: "#a9adb5", "stroke-width": 1.2 }, parent);
+}
+
+// A thumbstick: well and cap; set(nx, ny), each -1..1, up positive.
+function wiiThumb(parent, cx, cy, r) {
+  el("circle", { cx, cy, r: r + 6, fill: "url(#wiiWell)" }, parent);
+  const cap = el("g", {}, parent);
+  el("circle", { cx, cy, r, fill: "url(#wiiStick)", stroke: "#6f747c" }, cap);
+  el("circle", { cx, cy, r: r * .6, fill: "none", stroke: "#8b9098", "stroke-width": 1.5 }, cap);
+  return (nx, ny) => cap.setAttribute("transform", `translate(${(nx * r * .8).toFixed(1)},${(-ny * r * .8).toFixed(1)})`);
+}
+// The library's joyX() and joyY() for a stick drawn by wiiThumb.
+const wiiStickOf = (stick, f, kind) =>
+  stick(2 * wiiUnit(kind, "joyX", f.joyX) - 1, 2 * wiiUnit(kind, "joyY", f.joyY) - 1);
+
+const wiiDisc = (parent, cx, cy, r, label, colour, fill) =>
+  wiiKey(parent, { tag: "circle", attrs: { cx, cy, r }, fill, labelAt: [cx, cy + 4], labelSize: r > 11 ? 12 : 9 }, label, colour);
+
+// A row of eight lamps per byte: a report shown as bits, for a type the
+// library does not know.
+function wiiBits(parent, x, y, rows) {
+  const lamps = [];
+  for (let r = 0; r < rows; r++) {
+    engrave(parent, x - 8, y + 4 + r * 22, "b" + r, 9, "end", 600, true);
+    for (let b = 0; b < 8; b++) {
+      const cx = x + 8 + (7 - b) * 22;
+      el("circle", { cx, cy: y + r * 22, r: 7, fill: "#0b0d10", stroke: "#3a3f48" }, parent);
+      lamps.push(el("circle", { cx, cy: y + r * 22, r: 5.5, fill: "#ffb23e", opacity: 0 }, parent));
+    }
+  }
+  for (let b = 0; b < 8; b++) engrave(parent, x + 8 + (7 - b) * 22, y - 14, String(b), 8.5, "middle", 600, true);
+  return bytes => bytes.forEach((v, r) => {
+    for (let b = 0; b < 8; b++) if (lamps[r * 8 + b]) lamps[r * 8 + b].setAttribute("opacity", (v >> b) & 1 ? .9 : 0);
+  });
+}
+
+// Classic Controller: shoulders with the analog triggers' travel shown as
+// fill, d-pad, the four face buttons, -, home, +, and the two sticks.
+WII_ART.Classic = slot => {
+  wiiCable(slot, 160, 128);
+  const shoulder = (x, w, label) => {
+    const g = el("g", {}, slot);
+    el("rect", { x, y: 126, width: w, height: 24, rx: 9, fill: "url(#wiiGrey)", stroke: "#7d828a" }, g);
+    const fill = el("rect", { x: x + 3, y: 129, width: 0, height: 18, rx: 7, fill: "#ffb23e", opacity: .8 }, g);
+    engrave(g, x + w / 2, 142, label, 10, "middle");
+    return { g, fill, w };
+  };
+  const L = shoulder(22, 82, "L"), ZL = shoulder(108, 40, "ZL"), ZR = shoulder(172, 40, "ZR"), R = shoulder(216, 82, "R");
+  wiiShape(slot, "M76,146 C34,146 14,186 14,232 C14,288 48,326 96,326 C124,326 138,304 160,304 " +
+                 "C182,304 196,326 224,326 C272,326 306,288 306,232 C306,186 286,146 244,146 Z");
+  // d-pad
+  const pad = {};
+  el("rect", { x: 56, y: 222, width: 44, height: 20, rx: 3, fill: "#2b2e34" }, slot);
+  el("rect", { x: 68, y: 210, width: 20, height: 44, rx: 3, fill: "#2b2e34" }, slot);
+  for (const [dir, x, y, w, h] of [["Up", 68, 208, 20, 18], ["Down", 68, 238, 20, 18],
+                                    ["Left", 54, 222, 18, 20], ["Right", 84, 222, 18, 20]])
+    pad[dir] = el("rect", { x, y, width: w, height: h, rx: 3, fill: "#ffb23e", opacity: 0 }, slot);
+  // face buttons, Nintendo's diamond: x top, a right, b bottom, y left
+  const face = {
+    X: wiiDisc(slot, 244, 206, 13, "x"), A: wiiDisc(slot, 270, 232, 13, "a"),
+    B: wiiDisc(slot, 244, 258, 13, "b"), Y: wiiDisc(slot, 218, 232, 13, "y"),
+  };
+  const centre = { Minus: wiiDisc(slot, 128, 214, 8, "−"), Home: wiiDisc(slot, 160, 214, 10, "⌂"),
+                   Plus: wiiDisc(slot, 192, 214, 8, "+") };
+  const left = wiiThumb(slot, 116, 282, 16), right = wiiThumb(slot, 204, 282, 16);
+  engrave(slot, 160, 186, "Classic Controller", 11, "middle");
+  return {
+    update(f, kind) {
+      const u = n => wiiUnit(kind, n, f[n]);
+      left(2 * u("leftJoyX") - 1, 2 * u("leftJoyY") - 1);
+      right(2 * u("rightJoyX") - 1, 2 * u("rightJoyY") - 1);
+      L.fill.setAttribute("width", (L.w - 6) * Math.max(u("triggerL"), f.buttonL ? 1 : 0));
+      R.fill.setAttribute("width", (R.w - 6) * Math.max(u("triggerR"), f.buttonR ? 1 : 0));
+      ZL.fill.setAttribute("width", f.buttonZL ? ZL.w - 6 : 0);
+      ZR.fill.setAttribute("width", f.buttonZR ? ZR.w - 6 : 0);
+      for (const d of ["Up", "Down", "Left", "Right"]) pad[d].setAttribute("opacity", f["dpad" + d] ? .9 : 0);
+      for (const k of ["A", "B", "X", "Y", "Minus", "Home", "Plus"]) (face[k] || centre[k])(f["button" + k]);
+    },
+  };
+};
+
+// Guitar Hero guitar: the five frets up the neck, the World Tour touch bar
+// below them as the library's five zones (touchGreen() .. touchOrange()),
+// strum bar, whammy, + and −, the small stick.
+const WII_FRETS = ["Green", "Red", "Yellow", "Blue", "Orange"];
+const WII_FRET_COLOUR = { Green: "#36c45a", Red: "#e8423a", Yellow: "#f2cf2e", Blue: "#3a7ee8", Orange: "#f08a24" };
+WII_ART.Guitar = slot => {
+  wiiCable(slot, 70, 404);
+  el("path", { d: "M146,18 L174,18 L180,62 L140,62 Z", fill: "#2b2e34", stroke: "#15171a" }, slot);
+  el("rect", { x: 144, y: 60, width: 32, height: 206, rx: 3, fill: "#3b2a1f", stroke: "#1e140e" }, slot);
+  const press = {}, touch = {};
+  WII_FRETS.forEach((c, i) => {
+    press[c] = wiiKey(slot, { tag: "rect", attrs: { x: 148, y: 74 + i * 26, width: 24, height: 20, rx: 4 },
+                              fill: WII_FRET_COLOUR[c], labelAt: [160, 0] }, null, "#ffffff");
+  });
+  el("rect", { x: 150, y: 210, width: 20, height: 50, rx: 3, fill: "#1c1d21", stroke: "#4a4f58" }, slot);
+  WII_FRETS.forEach((c, i) => {
+    touch[c] = el("rect", { x: 151, y: 211 + i * 10, width: 18, height: 8, rx: 2, fill: WII_FRET_COLOUR[c], opacity: 0 }, slot);
+  });
+  wiiShape(slot, "M160,262 C206,262 214,286 246,290 C290,296 304,332 298,366 C290,412 236,428 160,428 " +
+                 "C84,428 30,412 22,366 C16,332 30,296 74,290 C106,286 114,262 160,262 Z", "#c4262c");
+  const strum = el("g", {}, slot);
+  el("rect", { x: 112, y: 300, width: 96, height: 18, rx: 8, fill: "url(#wiiGrey)", stroke: "#6f747c" }, strum);
+  const whammy = el("g", {}, slot);
+  el("line", { x1: 236, y1: 376, x2: 296, y2: 420, stroke: "#c9ccd2", "stroke-width": 5, "stroke-linecap": "round" }, whammy);
+  const plus = wiiDisc(slot, 178, 352, 8, "+"), minus = wiiDisc(slot, 142, 352, 8, "−");
+  const stick = wiiThumb(slot, 92, 360, 10);
+  engrave(slot, 160, 400, "Guitar", 11, "middle", 600, true);
+  return {
+    update(f, kind) {
+      for (const c of WII_FRETS) {
+        press[c](f["fret" + c]);
+        touch[c].setAttribute("opacity", f["touch" + c] ? .9 : 0);
+      }
+      strum.setAttribute("transform", f.strumUp ? "translate(0,-6)" : f.strumDown ? "translate(0,6)" : "");
+      whammy.setAttribute("transform", `rotate(${(wiiUnit(kind, "whammyBar", f.whammyBar) * 28).toFixed(1)},236,376)`);
+      plus(f.buttonPlus); minus(f.buttonMinus);
+      wiiStickOf(stick, f, kind);
+    },
+  };
+};
+
+// Guitar Hero World Tour drums from above: three pads, two cymbals, the kick
+// pedal, and the Wii Remote's cradle with + − and the stick.
+WII_ART.Drums = slot => {
+  wiiCable(slot, 160, 92);
+  const hit = {};
+  const pad = (name, cx, cy, r, colour, cymbal) => {
+    el("circle", { cx: cx + 4, cy: cy + 7, r, fill: "#000", "fill-opacity": .4 }, slot);
+    el("circle", { cx, cy, r, fill: cymbal ? "#c9a84a" : "#26282d", stroke: "#111" }, slot);
+    el("circle", { cx, cy, r: r - 7, fill: colour, opacity: cymbal ? .55 : .35 }, slot);
+    const lit = el("circle", { cx, cy, r: r - 7, fill: colour, opacity: 0 }, slot);
+    hit[name] = on => lit.setAttribute("opacity", on ? .95 : 0);
+  };
+  el("rect", { x: 110, y: 40, width: 100, height: 56, rx: 10, fill: "url(#wiiGrey)", stroke: "#6f747c" }, slot);
+  const minus = wiiDisc(slot, 128, 64, 7, "−"), plus = wiiDisc(slot, 192, 64, 7, "+");
+  const stick = wiiThumb(slot, 160, 70, 9);
+  pad("cymbalYellow", 100, 150, 40, "#f2cf2e", true);
+  pad("cymbalOrange", 224, 150, 40, "#f08a24", true);
+  pad("drumRed", 62, 252, 44, "#e8423a");
+  pad("drumBlue", 160, 282, 44, "#3a7ee8");
+  pad("drumGreen", 258, 252, 44, "#36c45a");
+  el("rect", { x: 132, y: 344, width: 56, height: 46, rx: 8, fill: "#26282d", stroke: "#111" }, slot);
+  const kick = el("rect", { x: 138, y: 350, width: 44, height: 34, rx: 6, fill: "#ffb23e", opacity: 0 }, slot);
+  engrave(slot, 160, 410, "Drums", 11, "middle", 600, true);
+  return {
+    update(f, kind) {
+      for (const n of Object.keys(hit)) hit[n](f[n]);
+      kick.setAttribute("opacity", f.bassPedal ? .9 : 0);
+      plus(f.buttonPlus); minus(f.buttonMinus);
+      wiiStickOf(stick, f, kind);
+    },
+  };
+};
+
+// DJ Hero turntable: both platters turn by their own turntable() speeds; each
+// has its green, red and blue buttons. Crossfader, effects dial, euphoria,
+// + −, stick.
+WII_ART.Turntable = slot => {
+  wiiCable(slot, 24, 300);
+  wiiShape(slot, "M30,96 L290,96 Q304,96 304,110 L304,372 Q304,386 290,386 L30,386 Q16,386 16,372 L16,110 Q16,96 30,96 Z", "#2b2e34");
+  const deck = {};
+  for (const [side, cx] of [["left", 88], ["right", 232]]) {
+    el("circle", { cx, cy: 196, r: 62, fill: "#111215", stroke: "#3a3f48" }, slot);
+    const disc = el("g", {}, slot);
+    for (let r = 56; r > 18; r -= 6) el("circle", { cx, cy: 196, r, fill: "none", stroke: "#24262b", "stroke-width": 2 }, disc);
+    el("rect", { x: cx - 3, y: 136, width: 6, height: 22, rx: 2, fill: "#d9dce1" }, disc);
+    deck[side] = {
+      disc, cx, angle: 0,
+      Green: wiiDisc(slot, cx - 20, 196, 9, "", "#36c45a", "#1d4f2b"),
+      Red: wiiDisc(slot, cx, 196, 9, "", "#e8423a", "#5a1f1c"),
+      Blue: wiiDisc(slot, cx + 20, 196, 9, "", "#3a7ee8", "#1f3a63"),
+    };
+  }
+  el("rect", { x: 110, y: 330, width: 100, height: 10, rx: 5, fill: "#111215" }, slot);
+  const fader = el("rect", { x: 152, y: 322, width: 16, height: 26, rx: 3, fill: "url(#wiiGrey)" }, slot);
+  el("circle", { cx: 160, cy: 286, r: 18, fill: "url(#wiiGrey)", stroke: "#6f747c" }, slot);
+  const knob = el("line", { x1: 160, y1: 286, x2: 160, y2: 270, stroke: "#2b2e34", "stroke-width": 3, "stroke-linecap": "round" }, slot);
+  const euphoria = wiiDisc(slot, 160, 120, 11, "", "#e83ad8", "#4a1f47");
+  const minus = wiiDisc(slot, 40, 360, 7, "−"), plus = wiiDisc(slot, 280, 360, 7, "+");
+  const stick = wiiThumb(slot, 260, 300, 9);
+  engrave(slot, 160, 412, "Turntable", 11, "middle", 600, true);
+  return {
+    update(f, kind) {
+      for (const side of ["left", "right"]) {
+        const d = deck[side];
+        d.angle = (d.angle + f[side + ".turntable"] * 3) % 360;   // 3 degrees per count per report: a choice
+        d.disc.setAttribute("transform", `rotate(${d.angle.toFixed(1)},${d.cx},196)`);
+        for (const c of ["Green", "Red", "Blue"]) d[c](f[side + ".button" + c]);
+      }
+      fader.setAttribute("x", 104 + wiiUnit(kind, "crossfadeSlider", f.crossfadeSlider) * 96);
+      knob.setAttribute("transform", `rotate(${(wiiUnit(kind, "effectDial", f.effectDial) * 360).toFixed(1)},160,286)`);
+      euphoria(f.buttonEuphoria); plus(f.buttonPlus); minus(f.buttonMinus);
+      wiiStickOf(stick, f, kind);
+    },
+  };
+};
+
+// A tablet's drawing surface: the pen's place and pressure while the
+// library's penDetected() is 1, and a short trail behind it. penX and penY
+// are scaled by the smallest and largest seen since the surface was drawn,
+// because the library gives each getter's width and no active area; which
+// way y runs it does not say, and no tablet has been tried here, so larger y
+// is drawn higher as a guess.
+function wiiPen(slot, x0, y0, w, h) {
+  const trail = el("polyline", { points: "", fill: "none", stroke: "#7dffb0", "stroke-opacity": .5, "stroke-width": 2 }, slot);
+  const pen = el("circle", { cx: 0, cy: 0, r: 4, fill: "#7dffb0", opacity: 0 }, slot);
+  const seen = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+  const pts = [];
+  const unit = (v, lo, hi) => hi > lo ? (v - lo) / (hi - lo) : .5;
+  return (f, kind) => {
+    if (!f.penDetected) { pen.setAttribute("opacity", 0); return; }
+    seen.x0 = Math.min(seen.x0, f.penX); seen.x1 = Math.max(seen.x1, f.penX);
+    seen.y0 = Math.min(seen.y0, f.penY); seen.y1 = Math.max(seen.y1, f.penY);
+    const x = x0 + unit(f.penX, seen.x0, seen.x1) * w, y = y0 + h - unit(f.penY, seen.y0, seen.y1) * h;
+    pen.setAttribute("cx", x.toFixed(1)); pen.setAttribute("cy", y.toFixed(1));
+    pen.setAttribute("r", (3 + wiiUnit(kind, "penPressure", f.penPressure) * 9).toFixed(1));
+    pen.setAttribute("opacity", .95);
+    pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+    if (pts.length > 40) pts.shift();
+    trail.setAttribute("points", pts.join(" "));
+  };
+}
+
+// uDraw GameTablet: the drawing surface and the two side buttons.
+WII_ART.uDraw = slot => {
+  wiiCable(slot, 24, 230);
+  wiiShape(slot, "M40,60 L290,60 Q304,60 304,74 L304,386 Q304,400 290,400 L40,400 Q26,400 26,386 L26,74 Q26,60 40,60 Z");
+  el("rect", { x: 56, y: 84, width: 232, height: 260, rx: 6, fill: "#1d2027", stroke: "#3a3f48" }, slot);
+  const pen = wiiPen(slot, 56, 84, 232, 260);
+  const lower = wiiKey(slot, { tag: "rect", attrs: { x: 32, y: 250, width: 16, height: 34, rx: 5 } }, null);
+  const upper = wiiKey(slot, { tag: "rect", attrs: { x: 32, y: 206, width: 16, height: 34, rx: 5 } }, null);
+  engrave(slot, 172, 372, "uDraw", 11, "middle");
+  return { update(f, kind) { lower(f.buttonLower); upper(f.buttonUpper); pen(f, kind); } };
+};
+
+// Drawsome tablet: the drawing surface.
+WII_ART.Drawsome = slot => {
+  wiiCable(slot, 24, 230);
+  wiiShape(slot, "M40,60 L290,60 Q304,60 304,74 L304,386 Q304,400 290,400 L40,400 Q26,400 26,386 L26,74 Q26,60 40,60 Z", "#e6e1d6");
+  el("rect", { x: 56, y: 84, width: 232, height: 260, rx: 6, fill: "#1d2027", stroke: "#3a3f48" }, slot);
+  const pen = wiiPen(slot, 56, 84, 232, 260);
+  engrave(slot, 172, 372, "Drawsome", 11, "middle");
+  return { update(f, kind) { pen(f, kind); } };
+};
+
+// A type the library does not know: its identity, and the six bytes the
+// library read for it, as bits.
+WII_ART.Unknown = slot => {
+  el("rect", { x: 20, y: 60, width: 280, height: 300, rx: 18, fill: "#1b1e24", stroke: "#3a3f48", "stroke-dasharray": "6 5" }, slot);
+  engrave(slot, 160, 96, "UNKNOWN EXTENSION", 13, "middle", 700, true);
+  engrave(slot, 160, 118, wii.id ? wii.id.map(b => b.toString(16).padStart(2, "0")).join(" ") : "", 11, "middle", 500, true);
+  const bits = wiiBits(slot, 92, 170, 6);
+  return { update(f) { bits([f.b0, f.b1, f.b2, f.b3, f.b4, f.b5]); } };
+};
+
+/* ============================================================
+   7. What the board says
+   ============================================================ */
+let lastSeq = null, dropped = 0, frames = 0, lastRateAt = performance.now();
+
+function onFrame(bytes) {
+  let pkt; try { pkt = decodePacket(bytes); } catch { return; }
+  const msgs = messagesOf(pkt);
+
+  if (msgs.some(m => m.address === "/enq")) { onHello(msgs); return; }
+
+  let state = null, wiiArgs = null;
+  for (const m of msgs) {
+    const a = m.address;
+    if (a === "/state") state = m.args;
+    else if (a === "/i2c") onI2c(m.args[0]);
+    else if (a === "/i2c/pull") continue;   // always bare from this board: its own pull-ups (see Wiring)
+    else if (a === "/i2c/scan") {
+      bus.scan = m.args.slice();
+      renderBus();
+      logLine("", "/i2c/scan " + (m.args.map(x => "0x" + x.toString(16)).join(" ") || "nothing answered"));
+    } else if (a === "/wii/id") {
+      onWiiKind(m.args.length ? m.args[0] : null, m.args.length ? m.args.slice(1) : null);
+      $("wiiIdOut").textContent = m.args.length
+        ? m.args[0] + " · " + m.args.slice(1).map(b => b.toString(16).padStart(2, "0")).join(" ") : "nothing at 0x52";
+    } else if (a === "/wii") {
+      wiiArgs = m.args;
+    } else if (a === "/rate") {
+      $("rate").value = String(m.args[0]);
+      logLine("", "/rate " + m.args[0]);
+    } else {
+      logLine("", a + " " + m.args.map(String).join(" "));
+    }
+  }
+  if (state) {
+    if (lastSeq !== null && state[0] !== lastSeq + 1) dropped += Math.max(0, state[0] - lastSeq - 1);
+    lastSeq = state[0];
+    frames++;
+    $("rig").classList.remove("stale");
+  }
+  if (wiiArgs) renderWii(wiiArgs);
+}
+
+// The board's /i2c: 1 while the bus runs. An /i2c 1 asks what is on the bus
+// now; an /i2c 0 leaves nothing on it to draw.
+function onI2c(on) {
+  busOn = !!on;
+  if (!busOn && wii.kind) onWiiKind(null, null);
+  renderBus();
+  if (busOn && writer) {
+    send("/i2c/scan", []);
+    send("/wii/id", []);
+  }
+}
+
+function onHello(msgs) {
+  const name = msgs.find(m => m.address === "/enq").args[0];
+  const enq = {};
+  for (const m of msgs) if (m.address.startsWith("/enq/")) enq[m.address.slice(5)] = m.args;
+  const diag = msgs.filter(m => m.address === "/diag").map(m => m.args.join(" "));
+  const what = enq.wii ? "Wii " + enq.wii[0] : "no Wii extension";
+  if (!enq.wii && wii.kind) onWiiKind(null, null);
+  $("status").textContent = `${name} · ${what}` +
+                            (diag.length ? " · " + diag.join(" ") : "");
+  logLine("", `hello from ${name}: ` + Object.entries(enq)
+    .map(([k, a]) => k + (a.length ? " " + a.join(" ") : "")).join(", "));
+  for (const d of diag) logLine("", d);
+  if (name !== "KB2040Oscuino") logLine("warn", `this page is for KB2040Oscuino; the board says ${name}`);
+  // The board sends a hello whenever the extension or the bus changes, so ask
+  // which: the /i2c that comes back asks for the scan and the identity.
+  if (writer) send("/i2c", []);
+}
+
+function markStale() {
+  $("rig").classList.add("stale");
+}
+
+function setConnected(on) {
+  $("connect").disabled = on;
+  $("disconnect").disabled = !on;
+  $("led").classList.toggle("on", on);
+  $("status").textContent = on ? "connected" : "not connected";
+  if (!on) { lastSeq = null; busOn = null; }
+  renderBus();
+}
+
+function logLine(cls, text) {
+  const d = document.createElement("div");
+  if (cls) d.className = cls;
+  d.textContent = new Date().toLocaleTimeString() + "  " + text;
+  $("log").appendChild(d);
+  $("log").scrollTop = $("log").scrollHeight;
+}
+
+setInterval(() => {
+  const now = performance.now(), dt = (now - lastRateAt) / 1000;
+  if (dt >= 1) {
+    $("rateOut").textContent = `${(frames / dt).toFixed(0)} reports/s   dropped ${dropped}`;
+    frames = 0; lastRateAt = now;
+  }
+}, 1000);
+
+/* ============================================================
+   8. Wiring
+   ============================================================ */
+buildBoards();
+buildBus();
+buildShelf();
+buildFieldTable();
+markStale();
+
+if (!("serial" in navigator)) {
+  logLine("warn", "This browser has no Web Serial. Use Chrome or Edge over http://localhost.");
+  $("connect").disabled = true;
+} else {
+  // Fired at the port that went, bubbling here (Web Serial, "ondisconnect"):
+  // another serial device unplugged is not this board.
+  navigator.serial.addEventListener("disconnect", e => { if (port && e.target === port) disconnect(); });
+}
+
+$("busToggle").onclick = () => send("/i2c", [busOn ? 0 : 1]);
+$("i2cScan").onclick = () => send("/i2c/scan", []);
+$("wiiId").onclick = () => send("/wii/id", []);
+$("connect").onclick = () => connect().catch(e => logLine("warn", e.message));
+$("disconnect").onclick = () => disconnect();
+$("clearLog").onclick = () => $("log").textContent = "";
+$("rate").onchange = e => send("/rate", [+e.target.value]);
+
+// For looking at the drawing with no board: ?demo animates a Wii extension,
+// &wii=<kind> choosing which, and a click on the shelf shows another.
+let demoTimer = null;
+// Synthetic fields for one kind: each multi-bit field swings through its
+// range on its own phase, and each one-bit field blinks.
+function startWiiDemo(name) {
+  const kind = wiiKindByName(name);
+  if (!kind) return;
+  busOn = true;
+  bus.scan = [0x52];
+  renderBus();
+  onWiiKind(name, null);
+  $("rig").classList.remove("stale");
+  let t = 0;
+  clearInterval(demoTimer);
+  demoTimer = setInterval(() => {
+    t += 0.05;
+    renderWii(kind.fields.map((f, i) => {
+      const [lo, hi] = wiiRange(f);
+      if (hi - lo === 1) return Math.sin(t * 1.3 + i * 1.7) > 0.55 ? 1 : 0;
+      const v = lo + (hi - lo) * (0.5 + 0.45 * Math.sin(t * 0.9 + i * 0.8));
+      return f[3] === "f" ? v : Math.round(v);
+    }));
+  }, 50);
+}
+
+const demoParams = new URLSearchParams(location.search);
+if (demoParams.has("demo")) {
+  startWiiDemo(wiiKindByName(demoParams.get("wii")) ? demoParams.get("wii") : "Nunchuk");
+  logLine("", "demo: synthetic Wii fields, not a board; click a device on the shelf to show it");
+}
+</script>
+</body>
+</html>

@@ -3,12 +3,18 @@
 
 contractprobe drives itself from what a board announces, so its logic can be
 exercised without a board -- by a fake that speaks the contract over a
-pseudo-terminal. Two fakes run here:
+pseudo-terminal. Three fakes run here:
 
-  * a CONFORMANT board, which must pass every check; and
+  * a CONFORMANT board, which must pass every check; its `/wii` is a
+    Nunchuk's, seven ints and two floats, as ADDRESSES.md's `/wii <i|f>…`
+    and its wii fields table allow;
   * a BROKEN board, which announces `/enq/imu 6` and then answers with three
     ints. A probe that passes this one is not checking anything, so the
-    negative case is the real test of the test.
+    negative case is the real test of the test; and
+  * a board whose `/wii` carries a string, which no wii field is.
+
+Each broken board must fail on its own row, a FAIL line naming it, not
+merely exit non-zero.
 
 Run: python3 test/hardware/test_contractprobe.py     (no arguments, seconds)
 """
@@ -42,11 +48,12 @@ def f32(x):
 
 
 class FakeBoard(threading.Thread):
-    """Answers the contract over a pty master. `broken` flips one promise."""
+    """Answers the contract over a pty master. `broken` names the one promise
+    it breaks: 'imu' or 'wii'."""
 
     daemon = True
 
-    def __init__(self, fd, broken=False):
+    def __init__(self, fd, broken=None):
         super().__init__()
         self.fd = fd
         self.broken = broken
@@ -67,12 +74,20 @@ class FakeBoard(threading.Thread):
                 ('/enq/temp', ()),
                 ('/enq/rgb', (1,)),
                 ('/enq/buzz', ()),
+                ('/enq/wii', ('Nunchuk',)),
                 ('/enq/touch', (240, 240))]      # passive: must be skipped
 
     def imu(self):
-        if self.broken:
+        if self.broken == 'imu':
             return ('/imu', (1, 2, 3))           # ints, and only three
         return ('/imu', tuple(f32(v) for v in (0.01, -0.02, 0.99, 0.0, 0.1, -0.1)))
+
+    def wii(self):
+        if self.broken == 'wii':
+            return ('/wii', (123, 129, 'x'))     # a string is no field's type
+        # joyX joyY accelX accelY accelZ buttonC buttonZ, then rollAngle and
+        # pitchAngle, the two floats in ADDRESSES.md's Nunchuk row
+        return ('/wii', (123, 129, 584, 655, 641, 0, 0, f32(29.3), f32(-47.9)))
 
     # --- inbound --------------------------------------------------------
     def handle(self, addr, args):
@@ -97,6 +112,8 @@ class FakeBoard(threading.Thread):
             return [('/rgb', tuple(args))]
         if addr == '/buzz':
             return [('/buzz', tuple(args))]
+        if addr == '/wii':
+            return [self.wii()]
         return []                                 # retired addresses: silence
 
     def run(self):
@@ -147,7 +164,7 @@ class FakeBoard(threading.Thread):
         return frames + [tail]
 
 
-def run_case(label, broken, expect_fail):
+def run_case(label, broken, expect_fail, expect_text=None):
     master, slave = pty.openpty()
     board = FakeBoard(master, broken=broken)
     board.start()
@@ -162,7 +179,9 @@ def run_case(label, broken, expect_fail):
     except OSError:
         pass
     failed = r.returncode != 0
-    ok = failed == expect_fail
+    named = expect_text is None or any(line.strip().startswith('FAIL') and expect_text in line
+                                       for line in r.stdout.splitlines())
+    ok = failed == expect_fail and named
     print(f"\n=== {label}: exit {r.returncode} "
           f"({'as expected' if ok else 'NOT as expected'})")
     for line in r.stdout.splitlines():
@@ -175,7 +194,10 @@ def run_case(label, broken, expect_fail):
 
 
 if __name__ == '__main__':
-    good = run_case('conformant board must pass', broken=False, expect_fail=False)
-    bad = run_case('broken board must be caught', broken=True, expect_fail=True)
-    print(f"\nself-test: {'PASS' if good and bad else 'FAIL'}")
-    sys.exit(0 if good and bad else 1)
+    good = run_case('conformant board must pass', broken=None, expect_fail=False)
+    bad = run_case('broken board must be caught', broken='imu', expect_fail=True,
+                   expect_text='/imu carries 6 value(s) as announced')
+    bad_wii = run_case('a /wii carrying a string must be caught', broken='wii', expect_fail=True,
+                       expect_text='every value is a i|f')
+    print(f"\nself-test: {'PASS' if good and bad and bad_wii else 'FAIL'}")
+    sys.exit(0 if good and bad and bad_wii else 1)

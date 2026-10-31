@@ -100,7 +100,13 @@ over a photograph of the board with a tab per library, and an I2C tab that
 gives D4 and D5 to the bus and draws a Wii extension controller read by
 NintendoExtensionCtrl (`/i2c`, `/wii`; "wii fields"). Besides FreeTouch it
 needs CapacitiveSensor and Nintendo Extension Ctrl from the Library Manager
-and FastTouch from github.com/adrianfreed/FastTouch.
+and FastTouch from github.com/adrianfreed/FastTouch. `KB2040Oscuino` is that
+I2C tab on its own, on an Adafruit KB2040 with a STEMMA QT cable from its port
+to Adafruit's Wii Nunchuck Breakout Adapter, both boards drawn from their own
+board files; `make test` holds its Wii code and page to the XIAO's and its
+drawing to the numbers read from those files (`kb2040-boards.json`), which
+keep the files' CC BY-SA 3.0 licence, as its CREDITS.md says. It needs
+Nintendo Extension Ctrl.
 
 ## One address space
 

@@ -118,9 +118,9 @@
  *   /i2c/pull             -> /i2c/pull <sda> <scl>, 1 where something outside
  *                            the board held the line HIGH against the SAMD21's
  *                            own pull-down, read when the bus was switched on
- *   /wii                  -> /wii <i>..., the extension's fields in its kind's
- *                            order (ADDRESSES.md "wii fields"); no reply when
- *                            none is plugged in
+ *   /wii                  -> /wii <i|f>..., the extension's fields in its
+ *                            kind's order (ADDRESSES.md "wii fields"); no
+ *                            reply when none is plugged in
  *   /wii/raw              -> /wii/raw <i>..., the bytes the library read, and
  *                            the /wii from that same update()
  *   /wii/id               -> /wii/id <s> <i>x6, the kind and the six identity

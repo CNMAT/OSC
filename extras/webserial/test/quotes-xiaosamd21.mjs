@@ -1,13 +1,16 @@
 /* Checks the quotations XiaoSamd21Oscuino's I2C tab attributes to a source
    (14373d4 on: the page's I2C pane and Nunchuk notes, the sketch's WII
-   EXTENSIONS notes, WiiExtension.h, ADDRESSES.md's wii fields) against that
-   source, verbatim: NintendoExtensionCtrl's installed files, and two web
-   pages, fetched. The /cap tab's quotations (99b4d17) are not in this table.
+   EXTENSIONS notes, WiiExtension.h, ADDRESSES.md's wii fields), and those of
+   KB2040Oscuino's page and sketch, which carry that work to another board,
+   against that source, verbatim: NintendoExtensionCtrl's installed files, and
+   two web pages, fetched. The XIAO's /cap tab's quotations (99b4d17) are not
+   in this table.
 
    Each entry is the quotation exactly as written between its marks (<q> and
    </q>, or double quotes), and it must stand between those marks in every
    file the entry names, so a quotation edited in a file and not here fails.
-   Every <q> in the I2C pane must have an entry, and every quoted comment in
+   Every <q> in either page's I2C pane must have an entry, and every quoted
+   comment in
    WiiExtension.h, a run of comment lines read as one, is checked against
    the library's files. Text is compared with entities decoded, curly quotes
    made straight and whitespace runs made one space; tags are removed from
@@ -26,7 +29,8 @@ import { join } from "node:path";
 const ROOT = new URL("../../../", import.meta.url).pathname;
 const HTML = "examples/XiaoSamd21Oscuino/XiaoSamd21Oscuino.html",
       INO = "examples/XiaoSamd21Oscuino/XiaoSamd21Oscuino.ino",
-      WII = "examples/XiaoSamd21Oscuino/WiiExtension.h", MD = "ADDRESSES.md";
+      WII = "examples/XiaoSamd21Oscuino/WiiExtension.h", MD = "ADDRESSES.md",
+      KHTML = "examples/KB2040Oscuino/KB2040Oscuino.html", KINO = "examples/KB2040Oscuino/KB2040Oscuino.ino";
 const NXC = process.env.NXC_SRC ||
   join(homedir(), "Documents", "Arduino", "libraries", "Nintendo_Extension_Ctrl", "src", "controllers");
 const ADAFRUIT = "https://learn.adafruit.com/adafruit-wii-nunchuck-breakout-adapter/pinouts";
@@ -35,15 +39,16 @@ const LIB = "the library's src/controllers", PROPS = "the library's library.prop
 
 // [the quotation as written, the files that make it, its source]
 const QUOTES = [
-  ["give it the same power as the logic level of your microcontroller", [HTML], ADAFRUIT],
+  ["give it the same power as the logic level of your microcontroller", [HTML, KHTML, KINO], ADAFRUIT],
   ["the same power as the logic level of your microcontroller", [HTML], ADAFRUIT],
   ["the 3.3V output from the voltage regulator", [HTML], ADAFRUIT],
-  ["either version 3 of the License, or (at your option) any later version", [HTML], LIB],
+  ["notched side of the connector U goes on the side that says Notch Up", [KHTML], ADAFRUIT],
+  ["either version 3 of the License, or (at your option) any later version", [HTML, KHTML], LIB],
   ["Voltage input connected to general I/O pins may cause chip damage if it' higher than 3.3V",
    [HTML, INO], SEEED],
-  ["6 bits, -30-29", [HTML, MD, WII], LIB],
+  ["6 bits, -30-29", [HTML, MD, WII, KHTML], LIB],
   ["Inverted so pulling back is a positive pitch", [HTML], LIB],
-  ["Nintendo Extension Ctrl", [INO, WII], PROPS],
+  ["Nintendo Extension Ctrl", [INO, WII, KINO], PROPS],
 ];
 
 const ENT = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", rsquo: "'", lsquo: "'",
@@ -64,7 +69,7 @@ const ok = (name, cond, got = "") => {
 };
 
 const repo = {};
-for (const f of [HTML, INO, WII, MD]) repo[f] = fromRepo(readFileSync(join(ROOT, f), "utf8"));
+for (const f of [HTML, INO, WII, MD, KHTML, KINO]) repo[f] = fromRepo(readFileSync(join(ROOT, f), "utf8"));
 
 const sources = {};
 async function fetchText(url) {
@@ -94,12 +99,14 @@ for (const [q, files, src] of QUOTES) {
   if (sources[src]) ok(`  in ${src}`, inSource(src, q), "not found");
 }
 
-console.log("every <q> in the I2C pane has an entry:");
-const raw = readFileSync(join(ROOT, HTML), "utf8");
-const at = raw.indexOf('<div class="i2cpane"'), end = raw.indexOf('<div class="panel">', at);
-const pane = [...raw.slice(at, end).matchAll(/<q>([\s\S]*?)<\/q>/g)].map(m => plain(m[1]));
-ok(`the pane found, with ${pane.length} quotations`, at >= 0 && end > at && pane.length > 0);
-for (const q of pane) ok(`"${q}"`, QUOTES.some(e => e[0] === q), "no entry");
+console.log("every <q> in each page's I2C pane has an entry:");
+for (const [file, opener] of [[HTML, '<div class="i2cpane"'], [KHTML, '<div class="panel params" id="wiiPane">']]) {
+  const raw = readFileSync(join(ROOT, file), "utf8");
+  const at = raw.indexOf(opener), end = raw.indexOf('<div class="panel">', at);
+  const pane = [...raw.slice(at, end).matchAll(/<q>([\s\S]*?)<\/q>/g)].map(m => plain(m[1]));
+  ok(`${file.split("/").pop()}: the pane found, with ${pane.length} quotations`, at >= 0 && end > at && pane.length > 0);
+  for (const q of pane) ok(`"${q}"`, QUOTES.some(e => e[0] === q && e[1].includes(file)), "no entry naming this file");
+}
 
 console.log("every quoted comment in WiiExtension.h, in the library's files:");
 const runs = [];   // consecutive lines' comments, joined, so a quotation may run on
