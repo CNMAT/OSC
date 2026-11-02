@@ -1484,6 +1484,19 @@ function buildBus() {
   wire(g, HOLE_X.i, xiao("3V3"), HOLE_X.i, pinY("VIN"), "#d8362b");
   wire(g, HOLE_X.a, xiao("D5"), HOLE_X.i, pinY("SCL"), "#e9c21c", true);
   wire(g, HOLE_X.a, xiao("D4"), HOLE_X.i, pinY("SDA"), "#2f6fd6", true);
+  // The pads those jumpers start from, and the 5V beside them, named on a dark
+  // plate inboard of each pad, as the board's photo shows no pin names. Each
+  // plate is edged in its jumper's colour, GND's black lightened to show on
+  // the plate; 5V (VBUS, the USB's 5 V) is edged grey, as no jumper goes to it.
+  for (const [name, label, edge] of [["VBUS", "5V", "#6b717b"], ["GND", "GND", "#9aa0a8"], ["3V3", "3V3", "#d8362b"],
+                                     ["D5", "D5", "#e9c21c"], ["D4", "D4", "#2f6fd6"]]) {
+    const [, , side, px, py] = PINS.find(r => r[0] === name);
+    const x = side === "R" ? px - 25 : px + 25;
+    el("rect", { x: x - 14, y: py - 7.5, width: 28, height: 15, rx: 3, fill: "#0e1014", "fill-opacity": ".88",
+                 stroke: edge, "stroke-width": 1.4 }, g);
+    el("text", { x, y: py + 3.5, "font-size": 9.5, "text-anchor": "middle", fill: "#eef0f3", "font-weight": 700,
+                 "font-family": "system-ui,sans-serif" }, g).textContent = label;
+  }
 
   // The device's own place on the right bench.
   wiiSlot = el("g", { transform: `translate(${SLOT.x},${SLOT.y})` }, g);
